@@ -1,0 +1,102 @@
+@startuml
+title VOPC - UC-04 View Deployment Result
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "Boundary/UI" {
+  class "Web UI" as WebUI <<boundary>> {
+    -selectedDeploymentId: String
+    +showDeploymentHistory()
+    +showDeploymentResult()
+  }
+  class "Deployment Query API / Controller" as API <<control>> {
+    -queryService: QueryService
+    +listDeployments(applicationId)
+    +getDeploymentDetail(deploymentId)
+  }
+}
+
+package "Application services" {
+  class "Deployment Query Service" as QueryService <<control>> {
+    -deploymentRepository: DeploymentRepo
+    -resourceRepository: ResourceRepo
+    +listDeployments(applicationId)
+    +getDeploymentDetail(deploymentId)
+  }
+}
+
+package "Domain components" {
+  class "Deployment Result Aggregator" as Aggregator <<control>> {
+    -viewModel: Object
+    +aggregate(deploymentRecord, progress, images, infrastructureStatus, cdStatus, workloadStatus, endpoints)
+  }
+}
+
+package "Integration abstractions" {
+  interface "CD Integration / CD Status Provider" as CDStatusProvider <<interface>> {
+    -deliveryReference: String
+    +getCDStatus(deliveryReference)
+  }
+  interface "Workload Status Provider / Kubernetes Adapter" as WorkloadProvider <<interface>> {
+    -target: String
+    +getWorkloadStatus(target, workloads)
+    +getDeploymentEndpoints(target, workloads)
+  }
+}
+
+package "Integration implementations" {
+  class "Concrete CD Provider" as CDProvider <<control>> {
+    -providerType: String
+    -endpoint: String
+    +getStatus(deliveryReference)
+  }
+}
+
+package "External systems" {
+  class "CD System" as CDSystem <<boundary>> {
+    -systemType: String
+    -endpoint: String
+    +queryDeploymentStatus(deliveryReference)
+  }
+  class "Kubernetes Cluster" as Kubernetes <<boundary>> {
+    -clusterId: String
+    -apiEndpoint: String
+    +queryWorkloadHealthAndEndpoints(target, workloads)
+    +queryExposedEndpoints(target, workloads)
+  }
+}
+
+package "Persistence" {
+  class "Deployment Repository" as DeploymentRepo <<entity>> {
+    -deploymentRecords: Collection
+    +findByApplication(applicationId)
+    +getDeploymentDetail(deploymentId)
+    +getDeploymentProgress(deploymentId)
+    +getDeploymentImages(deploymentId)
+  }
+  class "Resource Instance Repository" as ResourceRepo <<entity>> {
+    -resourceInstances: Collection
+    +getInfrastructureStatus(infrastructureReferences)
+  }
+}
+
+WebUI "1" --> "1" API
+API "1" --> "1" QueryService
+QueryService "1" --> "1" DeploymentRepo
+QueryService "1" --> "1" ResourceRepo
+QueryService ..> CDStatusProvider
+QueryService ..> WorkloadProvider
+QueryService ..> Aggregator
+CDStatusProvider <|.. CDProvider
+CDProvider ..> CDSystem
+WorkloadProvider ..> Kubernetes
+
+note right of WorkloadProvider
+  UC-04 source models the provider and
+  Kubernetes adapter as one participant.
+end note
+
+@enduml

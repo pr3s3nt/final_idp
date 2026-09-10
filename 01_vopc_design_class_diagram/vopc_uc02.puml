@@ -1,0 +1,89 @@
+@startuml
+title VOPC - UC-02 Configure Application Environment
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "Boundary/UI" {
+  class "Web UI" as WebUI <<boundary>> {
+    -selectedEnvironment: String
+    +showConfigurationRequirements()
+    +showValidResourceOutputs()
+    +showValidWorkloadOutputs()
+  }
+  class "Environment Configuration API / Controller" as API <<control>> {
+    -configurationService: ConfigurationService
+    +selectEnvironment(applicationId, environment)
+    +setDirectConfigurationValue(item, value)
+    +requestResourceOutputs(resource)
+    +requestWorkloadOutputs(workload)
+    +bindResourceOutput(item, resource, output)
+    +bindWorkloadOutput(variable, workload, output)
+    +saveEnvironmentConfiguration(configuration)
+  }
+}
+
+package "Application services" {
+  class "Environment Configuration Service" as ConfigurationService <<control>> {
+    -configurationDraft: Object
+    +selectEnvironment(applicationId, environment)
+    +setDirectConfigurationValue(item, value)
+    +requestResourceOutputs(resource)
+    +requestWorkloadOutputs(workload)
+    +bindResourceOutput(item, resource, output)
+    +bindWorkloadOutput(variable, workload, output)
+    +saveEnvironmentConfiguration(configuration)
+  }
+}
+
+package "Domain components" {
+  class "Resource Output Catalog / Resource Definition Query" as ResourceCatalog <<control>> {
+    -resourceDefinitions: List
+    +listValidOutputs(resource)
+    +listValidSensitiveOutputs(resource)
+  }
+  class "Workload Output Catalog" as WorkloadCatalog <<control>> {
+    -workloadDefinitions: List
+    +listValidOutputs(workload)
+  }
+  class "Environment Configuration Validator" as Validator <<control>> {
+    -validationRules: List
+    +validateEnvironmentConfiguration(configuration)
+  }
+}
+
+package "Integration abstractions" {
+  interface "Secret Store / Secret Management Adapter" as SecretStore <<interface>> {
+    -secretNamespace: String
+    +storeSecret(applicationId, environment, secretValue)
+  }
+}
+
+package "Persistence" {
+  class "Application Query / Application Repository" as AppQuery <<entity>> {
+    -applicationDefinitions: Collection
+    +loadConfigurationRequirements(applicationId)
+  }
+  class "Environment Configuration Repository" as ConfigRepo <<entity>> {
+    -environmentConfigurations: Collection
+    +save(configurationWithValueReferences)
+  }
+}
+
+WebUI "1" --> "1" API
+API "1" --> "1" ConfigurationService
+ConfigurationService "1" --> "1" AppQuery
+ConfigurationService ..> ResourceCatalog
+ConfigurationService ..> WorkloadCatalog
+ConfigurationService ..> Validator
+ConfigurationService ..> SecretStore
+ConfigurationService "1" --> "1" ConfigRepo
+
+note right of SecretStore
+  Concrete secret backend is not selected
+  in UC-02.
+end note
+
+@enduml

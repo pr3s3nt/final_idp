@@ -1,0 +1,333 @@
+@startuml
+title Step 1 - VOPC / Consolidated Design Class Diagram
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "Boundary/UI" {
+  class "Web UI" as WebUI <<boundary>> {
+    -currentApplicationId: String
+    -selectedEnvironment: String
+    -selectedTarget: String
+    -selectedImages: Map
+    -selectedDeploymentId: String
+    +showApplicationEditor()
+    +showApplicationOverview()
+    +showConfigurationRequirements()
+    +showValidResourceOutputs()
+    +showValidWorkloadOutputs()
+    +showDeploymentForm()
+    +showInfrastructurePlan()
+    +showDeploymentTracking()
+    +showDeploymentHistory()
+    +showDeploymentResult()
+  }
+  class "Application API / Controller" as ApplicationAPI <<control>> {
+    -applicationService: ApplicationService
+    +createApplication(name, description)
+    +updateApplication(applicationId)
+    +addResourceRequirement(applicationId, resources)
+    +addWorkload(applicationId, workloads)
+    +defineConfigurationRequirement(applicationId, requirements)
+    +defineDependency(applicationId, dependencies)
+    +saveApplicationDefinition(applicationDefinition)
+  }
+  class "Environment Configuration API / Controller" as EnvironmentAPI <<control>> {
+    -configurationService: EnvironmentConfigurationService
+    +selectEnvironment(applicationId, environment)
+    +setDirectConfigurationValue(item, value)
+    +requestResourceOutputs(resource)
+    +requestWorkloadOutputs(workload)
+    +bindResourceOutput(item, resource, output)
+    +bindWorkloadOutput(variable, workload, output)
+    +saveEnvironmentConfiguration(configuration)
+  }
+  class "Deployment API / Controller" as DeploymentAPI <<control>> {
+    -orchestrator: DeploymentOrchestrator
+    +loadDeploymentForm(applicationId, environment, target)
+    +createDeployment(applicationId, environment, target, images, context)
+    +confirmDeployment(deploymentId, overrides)
+  }
+  class "Deployment Query API / Controller" as DeploymentQueryAPI <<control>> {
+    -queryService: DeploymentQueryService
+    +listDeployments(applicationId)
+    +getDeploymentDetail(deploymentId)
+  }
+}
+
+package "Application services" {
+  class "Application Service" as ApplicationService <<control>> {
+    -applicationRepository: ApplicationRepository
+    -specificationRepository: SpecificationRepository
+    +createApplication(name, description)
+    +updateApplication(applicationId)
+    +addResourceRequirement(applicationId, resources)
+    +addWorkload(applicationId, workloads)
+    +defineConfigurationRequirement(applicationId, requirements)
+    +defineDependency(applicationId, dependencies)
+    +saveApplicationDefinition(applicationDefinition)
+  }
+  class "Environment Configuration Service" as EnvironmentConfigurationService <<control>> {
+    -applicationQuery: ApplicationQueryRepository
+    -configurationRepository: EnvironmentConfigurationRepository
+    +selectEnvironment(applicationId, environment)
+    +setDirectConfigurationValue(item, value)
+    +requestResourceOutputs(resource)
+    +requestWorkloadOutputs(workload)
+    +bindResourceOutput(item, resource, output)
+    +bindWorkloadOutput(variable, workload, output)
+    +saveEnvironmentConfiguration(configuration)
+  }
+  class "Deployment Orchestrator" as DeploymentOrchestrator <<control>> {
+    -deploymentId: String
+    -deploymentContext: Object
+    +loadDeploymentContext(applicationId, environment, target)
+    +createDeployment(applicationId, environment, target, images, context)
+    +validateDeploymentInput()
+    +applyInfrastructureOverrides(deploymentId, overrides)
+    +confirmDeployment(deploymentId)
+  }
+  class "Deployment Query Service" as DeploymentQueryService <<control>> {
+    -deploymentRepository: DeploymentRepository
+    -resourceRepository: ResourceInstanceRepository
+    +listDeployments(applicationId)
+    +getDeploymentDetail(deploymentId)
+  }
+}
+
+package "Domain components" {
+  class "Application Definition Validator" as ApplicationDefinitionValidator <<control>> {
+    -validationRules: List
+    +validateApplicationDefinition(applicationDefinition)
+  }
+  class "Application Specification Generator" as ApplicationSpecificationGenerator <<control>> {
+    -specificationFormat: String
+    +generateApplicationSpecification(applicationDefinition)
+  }
+  class "Resource Output Catalog / Resource Definition Query" as ResourceOutputCatalog <<control>> {
+    -resourceDefinitions: List
+    +listValidOutputs(resource)
+    +listValidSensitiveOutputs(resource)
+  }
+  class "Workload Output Catalog" as WorkloadOutputCatalog <<control>> {
+    -workloadDefinitions: List
+    +listValidOutputs(workload)
+  }
+  class "Environment Configuration Validator" as EnvironmentConfigurationValidator <<control>> {
+    -validationRules: List
+    +validateEnvironmentConfiguration(configuration)
+  }
+  class "Deployment Graph Builder" as DeploymentGraphBuilder <<control>> {
+    -graph: Object
+    +buildDeploymentGraph(applicationDefinition, configuration, images, context)
+  }
+  class "Resource Definition Resolver" as ResourceDefinitionResolver <<control>> {
+    -resolvedDefinitions: List
+    +resolveResourceDefinitions(graph, context)
+  }
+  class "Infrastructure Planner" as InfrastructurePlanner <<control>> {
+    -plan: Object
+    -allowedOverrides: Map
+    +planInfrastructureChanges(graph, resolvedDefinitions, currentInstances)
+    +loadInfrastructureOverrides(plan)
+    +applyInfrastructureOverrides(plan, overrides)
+  }
+  class "Infrastructure Reconciler" as InfrastructureReconciler <<control>> {
+    -infrastructureReferences: List
+    +reconcileInfrastructure(finalPlan)
+  }
+  class "Resource Output Resolver / Collector" as ResourceOutputCollector <<control>> {
+    -resourceOutputs: Map
+    +collectResourceOutputs(infrastructureReferences)
+  }
+  class "Environment Configuration Resolver" as EnvironmentConfigurationResolver <<control>> {
+    -resolvedConfiguration: Map
+    +resolveEnvironmentConfiguration(configuration, resourceOutputs, workloadOutputs)
+  }
+  class "Resolved Specification Generator" as ResolvedSpecificationGenerator <<control>> {
+    -resolvedSpecification: Object
+    +generateResolvedApplicationSpecification(applicationDefinition, images, resolvedConfiguration)
+  }
+  class "Manifest Generator / Score Renderer" as ManifestGenerator <<control>> {
+    -baseManifest: Object
+    +generateKubernetesManifest(resolvedSpecification)
+  }
+  class "Target Manifest Adapter" as TargetManifestAdapter <<control>> {
+    -target: String
+    +adaptManifestForTarget(baseManifest, target)
+  }
+  class "Environment Configuration Materializer" as EnvironmentConfigurationMaterializer <<control>> {
+    -resolvedEnvironmentVariables: Map
+    +materializeEnvironmentConfiguration(targetAdaptedManifest, resolvedEnvironmentVariables)
+  }
+  class "Secret Materializer" as SecretMaterializer <<control>> {
+    -resolvedSecrets: Map
+    +materializeSecretConfiguration(manifest, resolvedSecrets)
+  }
+  class "Deployment Result Aggregator" as DeploymentResultAggregator <<control>> {
+    -viewModel: Object
+    +aggregate(deploymentRecord, progress, images, infrastructureStatus, cdStatus, workloadStatus, endpoints)
+  }
+}
+
+package "Integration abstractions" {
+  interface "Secret Store / Secret Management Adapter" as SecretStore <<interface>> {
+    -secretNamespace: String
+    +storeSecret(applicationId, environment, secretValue)
+  }
+  interface "Provisioner Adapter / Provisioner Interface" as ProvisionerAdapter <<interface>> {
+    -provisioningContext: Object
+    +reconcile(finalPlan)
+  }
+  interface "CD Integration / CD Provider Interface" as CDIntegration <<interface>> {
+    -deliveryReference: String
+    +publishDesiredDeploymentState(desiredState)
+  }
+  interface "CD Integration / CD Status Provider" as CDStatusProvider <<interface>> {
+    -deliveryReference: String
+    +getCDStatus(deliveryReference)
+  }
+  interface "Workload Status Provider / Kubernetes Adapter" as WorkloadStatusProvider <<interface>> {
+    -target: String
+    +getWorkloadStatus(target, workloads)
+    +getDeploymentEndpoints(target, workloads)
+  }
+}
+
+package "Integration implementations" {
+  class "Concrete CD Provider" as ConcreteCDProvider <<control>> {
+    -providerType: String
+    -endpoint: String
+    +publish(desiredState)
+    +getStatus(deliveryReference)
+  }
+}
+
+package "External systems" {
+  class "Terraform/OpenTofu Runner" as IaCRunner <<boundary>> {
+    -moduleSource: String
+    -workspace: String
+    +applyInfrastructureModules(finalPlan)
+  }
+  class "score-k8s" as ScoreK8s <<boundary>> {
+    -rendererVersion: String
+    +render(resolvedSpecification)
+  }
+  class "CD System" as CDSystem <<boundary>> {
+    -systemType: String
+    -endpoint: String
+    +synchronize(desiredState)
+    +queryDeploymentStatus(deliveryReference)
+  }
+  class "Kubernetes Cluster" as KubernetesCluster <<boundary>> {
+    -clusterId: String
+    -apiEndpoint: String
+    +deployWorkloadsAndConfiguration(desiredState)
+    +queryWorkloadHealthAndEndpoints(target, workloads)
+    +queryExposedEndpoints(target, workloads)
+  }
+}
+
+package "Persistence" {
+  class "Application Repository" as ApplicationRepository <<entity>> {
+    -applicationDefinitions: Collection
+    +findById(applicationId)
+    +save(applicationDefinition)
+  }
+  class "Specification Repository / Config Repo Service" as SpecificationRepository <<entity>> {
+    -applicationSpecifications: Collection
+    +save(applicationSpecification)
+  }
+  class "Application Query / Application Repository" as ApplicationQueryRepository <<entity>> {
+    -applicationDefinitions: Collection
+    +loadConfigurationRequirements(applicationId)
+  }
+  class "Environment Configuration Repository" as EnvironmentConfigurationRepository <<entity>> {
+    -environmentConfigurations: Collection
+    +save(configurationWithValueReferences)
+    +findByApplicationAndEnvironment(applicationId, environment)
+  }
+  class "Resource Instance Repository" as ResourceInstanceRepository <<entity>> {
+    -resourceInstances: Collection
+    +findResourceInstances(resolvedResources, target)
+    +saveResourceInstances(resourceState)
+    +loadResourceOutputs(infrastructureReferences)
+    +getInfrastructureStatus(infrastructureReferences)
+  }
+  class "Deployment Repository" as DeploymentRepository <<entity>> {
+    -deploymentRecords: Collection
+    +saveDeploymentRecord(environment, target, images, infrastructureReferences, deliveryStatus)
+    +findByApplication(applicationId)
+    +getDeploymentDetail(deploymentId)
+    +getDeploymentProgress(deploymentId)
+    +getDeploymentImages(deploymentId)
+  }
+}
+
+WebUI "1" --> "1" ApplicationAPI : UC-01
+WebUI "1" --> "1" EnvironmentAPI : UC-02
+WebUI "1" --> "1" DeploymentAPI : UC-03
+WebUI "1" --> "1" DeploymentQueryAPI : UC-04
+
+ApplicationAPI "1" --> "1" ApplicationService
+ApplicationService ..> ApplicationDefinitionValidator
+ApplicationService "1" --> "1" ApplicationRepository
+ApplicationService ..> ApplicationSpecificationGenerator
+ApplicationService "1" --> "1" SpecificationRepository
+
+EnvironmentAPI "1" --> "1" EnvironmentConfigurationService
+EnvironmentConfigurationService "1" --> "1" ApplicationQueryRepository
+EnvironmentConfigurationService ..> ResourceOutputCatalog
+EnvironmentConfigurationService ..> WorkloadOutputCatalog
+EnvironmentConfigurationService ..> EnvironmentConfigurationValidator
+EnvironmentConfigurationService ..> SecretStore
+EnvironmentConfigurationService "1" --> "1" EnvironmentConfigurationRepository
+
+DeploymentAPI "1" --> "1" DeploymentOrchestrator
+DeploymentOrchestrator "1" --> "1" ApplicationRepository
+DeploymentOrchestrator "1" --> "1" EnvironmentConfigurationRepository
+DeploymentOrchestrator ..> DeploymentGraphBuilder
+DeploymentOrchestrator ..> ResourceDefinitionResolver
+DeploymentOrchestrator ..> InfrastructurePlanner
+DeploymentOrchestrator ..> InfrastructureReconciler
+DeploymentOrchestrator ..> ResourceOutputCollector
+DeploymentOrchestrator ..> EnvironmentConfigurationResolver
+DeploymentOrchestrator ..> ResolvedSpecificationGenerator
+DeploymentOrchestrator ..> ManifestGenerator
+DeploymentOrchestrator ..> TargetManifestAdapter
+DeploymentOrchestrator ..> EnvironmentConfigurationMaterializer
+DeploymentOrchestrator ..> SecretMaterializer
+DeploymentOrchestrator ..> CDIntegration
+DeploymentOrchestrator "1" --> "1" DeploymentRepository
+DeploymentOrchestrator "1" --> "1" ResourceInstanceRepository
+InfrastructureReconciler ..> ProvisionerAdapter
+InfrastructureReconciler "1" --> "1" ResourceInstanceRepository
+ResourceOutputCollector "1" --> "1" ResourceInstanceRepository
+ManifestGenerator ..> ScoreK8s
+CDIntegration <|.. ConcreteCDProvider
+ProvisionerAdapter ..> IaCRunner : reconcile() delegates applyInfrastructureModules()
+ConcreteCDProvider ..> CDSystem
+CDSystem ..> KubernetesCluster
+
+DeploymentQueryAPI "1" --> "1" DeploymentQueryService
+DeploymentQueryService "1" --> "1" DeploymentRepository
+DeploymentQueryService "1" --> "1" ResourceInstanceRepository
+DeploymentQueryService ..> CDStatusProvider
+DeploymentQueryService ..> WorkloadStatusProvider
+DeploymentQueryService ..> DeploymentResultAggregator
+CDStatusProvider <|.. ConcreteCDProvider
+WorkloadStatusProvider ..> KubernetesCluster
+
+note right of SecretStore
+  Concrete secret backend is not selected
+  in the source realization.
+end note
+
+note right of WorkloadStatusProvider
+  The source names the abstraction and
+  Kubernetes adapter as one participant.
+end note
+
+@enduml

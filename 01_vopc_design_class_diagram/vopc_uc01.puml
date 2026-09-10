@@ -1,0 +1,70 @@
+@startuml
+title VOPC - UC-01 Create / Configure Application
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "Boundary/UI" {
+  class "Web UI" as WebUI <<boundary>> {
+    -currentApplicationId: String
+    +showApplicationEditor()
+    +showApplicationOverview()
+  }
+  class "Application API / Controller" as ApplicationAPI <<control>> {
+    -applicationService: ApplicationService
+    +createApplication(name, description)
+    +updateApplication(applicationId)
+    +addResourceRequirement(applicationId, resources)
+    +addWorkload(applicationId, workloads)
+    +defineConfigurationRequirement(applicationId, requirements)
+    +defineDependency(applicationId, dependencies)
+    +saveApplicationDefinition(applicationDefinition)
+  }
+}
+
+package "Application services" {
+  class "Application Service" as ApplicationService <<control>> {
+    -applicationDraft: Object
+    +createApplication(name, description)
+    +updateApplication(applicationId)
+    +addResourceRequirement(applicationId, resources)
+    +addWorkload(applicationId, workloads)
+    +defineConfigurationRequirement(applicationId, requirements)
+    +defineDependency(applicationId, dependencies)
+    +saveApplicationDefinition(applicationDefinition)
+  }
+}
+
+package "Domain components" {
+  class "Application Definition Validator" as Validator <<control>> {
+    -validationRules: List
+    +validateApplicationDefinition(applicationDefinition)
+  }
+  class "Application Specification Generator" as SpecGenerator <<control>> {
+    -specificationFormat: String
+    +generateApplicationSpecification(applicationDefinition)
+  }
+}
+
+package "Persistence" {
+  class "Application Repository" as AppRepo <<entity>> {
+    -applicationDefinitions: Collection
+    +findById(applicationId)
+    +save(applicationDefinition)
+  }
+  class "Specification Repository / Config Repo Service" as SpecRepo <<entity>> {
+    -applicationSpecifications: Collection
+    +save(applicationSpecification)
+  }
+}
+
+WebUI "1" --> "1" ApplicationAPI
+ApplicationAPI "1" --> "1" ApplicationService
+ApplicationService ..> Validator
+ApplicationService "1" --> "1" AppRepo
+ApplicationService ..> SpecGenerator
+ApplicationService "1" --> "1" SpecRepo
+
+@enduml
