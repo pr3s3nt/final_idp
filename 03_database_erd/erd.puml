@@ -1,0 +1,275 @@
+@startuml
+title Step 3 - Database / ERD
+
+hide circle
+skinparam linetype ortho
+skinparam packageStyle rectangle
+
+package "Application Repository" {
+  entity "application_definition" as application_definition {
+    * application_id : UUID <<PK>>
+    --
+    * name : VARCHAR(255) <<NOT NULL, UNIQUE>>
+    description : TEXT
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+
+  entity "workload" as workload {
+    * workload_id : UUID <<PK>>
+    --
+    * application_id : UUID <<FK, NOT NULL>>
+    * name : VARCHAR(255) <<NOT NULL>>
+    * type : VARCHAR(100) <<NOT NULL>>
+    * image_repository : VARCHAR(1024) <<NOT NULL>>
+    port : INT
+    * exposed_outputs : JSONB <<NOT NULL>>
+  }
+
+  entity "resource_requirement" as resource_requirement {
+    * resource_requirement_id : UUID <<PK>>
+    --
+    * application_id : UUID <<FK, NOT NULL>>
+    * name : VARCHAR(255) <<NOT NULL>>
+    * resource_type : VARCHAR(100) <<NOT NULL>>
+  }
+
+  entity "environment_variable_definition" as environment_variable_definition {
+    * variable_definition_id : UUID <<PK>>
+    --
+    * workload_id : UUID <<FK, NOT NULL>>
+    * name : VARCHAR(255) <<NOT NULL>>
+    * required : BOOLEAN <<NOT NULL>>
+  }
+
+  entity "secret_definition" as secret_definition {
+    * secret_definition_id : UUID <<PK>>
+    --
+    * workload_id : UUID <<FK, NOT NULL>>
+    * name : VARCHAR(255) <<NOT NULL>>
+    * required : BOOLEAN <<NOT NULL>>
+  }
+
+  entity "dependency" as dependency {
+    * dependency_id : UUID <<PK>>
+    --
+    * application_id : UUID <<FK, NOT NULL>>
+    * source_workload_id : UUID <<FK, NOT NULL>>
+    * target_type : ENUM(WORKLOAD, RESOURCE) <<NOT NULL>>
+    target_workload_id : UUID <<FK>>
+    target_resource_requirement_id : UUID <<FK>>
+  }
+}
+
+package "Specification Repository / Config Repo Service" {
+  entity "application_specification" as application_specification {
+    * specification_id : UUID <<PK>>
+    --
+    * application_id : UUID <<FK, NOT NULL, UNIQUE>>
+    * format : VARCHAR(50) <<NOT NULL>>
+    * content : TEXT <<NOT NULL>>
+    * version : VARCHAR(100) <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+}
+
+package "Environment Configuration Repository" {
+  entity "environment_configuration" as environment_configuration {
+    * environment_configuration_id : UUID <<PK>>
+    --
+    * application_id : UUID <<FK, NOT NULL>>
+    * environment : VARCHAR(100) <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+
+  entity "environment_variable" as environment_variable {
+    * environment_variable_id : UUID <<PK>>
+    --
+    * environment_configuration_id : UUID <<FK, NOT NULL>>
+    * workload_id : UUID <<FK, NOT NULL>>
+    * variable_definition_id : UUID <<FK, NOT NULL>>
+    * variable_name : VARCHAR(255) <<NOT NULL>>
+  }
+
+  entity "configuration_value" as configuration_value {
+    * configuration_value_id : UUID <<PK>>
+    --
+    * environment_configuration_id : UUID <<FK, NOT NULL>>
+    * environment_variable_id : UUID <<FK, NOT NULL, UNIQUE>>
+    * value_source : ENUM(DIRECT, RESOURCE_OUTPUT, WORKLOAD_OUTPUT) <<NOT NULL>>
+    direct_value : TEXT
+    resource_requirement_id : UUID <<FK>>
+    resource_output_name : VARCHAR(255)
+    workload_id : UUID <<FK>>
+    workload_output_name : VARCHAR(255)
+  }
+
+  entity "secret" as secret {
+    * secret_id : UUID <<PK>>
+    --
+    * environment_configuration_id : UUID <<FK, NOT NULL>>
+    * workload_id : UUID <<FK, NOT NULL>>
+    * secret_definition_id : UUID <<FK, NOT NULL>>
+    * secret_name : VARCHAR(255) <<NOT NULL>>
+    * value_source : ENUM(SECRET_REF, RESOURCE_OUTPUT) <<NOT NULL>>
+    secret_ref : VARCHAR(2048)
+    resource_requirement_id : UUID <<FK>>
+    resource_output_name : VARCHAR(255)
+  }
+}
+
+package "Platform Resource Definition Catalog" {
+  entity "resource_definition" as resource_definition {
+    * resource_definition_id : UUID <<PK>>
+    --
+    * name : VARCHAR(255) <<NOT NULL, UNIQUE>>
+    * resource_type : VARCHAR(100) <<NOT NULL>>
+    * provisioner_reference : VARCHAR(2048) <<NOT NULL>>
+    * supported_contexts : JSONB <<NOT NULL>>
+    * exposed_outputs : JSONB <<NOT NULL>>
+    * sensitive_outputs : JSONB <<NOT NULL>>
+  }
+}
+
+package "Resource Instance Repository" {
+  entity "resource_instance" as resource_instance {
+    * resource_instance_id : UUID <<PK>>
+    --
+    * resource_definition_id : UUID <<FK, NOT NULL>>
+    * deployment_target : VARCHAR(255) <<NOT NULL>>
+    * infrastructure_reference : VARCHAR(2048) <<NOT NULL, UNIQUE>>
+    provider_state_reference : VARCHAR(2048)
+    * status : ENUM <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+}
+
+package "Deployment Repository" {
+  entity "deployment" as deployment {
+    * deployment_id : UUID <<PK>>
+    --
+    * application_id : UUID <<FK, NOT NULL>>
+    * environment_configuration_id : UUID <<FK, NOT NULL>>
+    * environment : VARCHAR(100) <<NOT NULL>>
+    * deployment_target : VARCHAR(255) <<NOT NULL>>
+    * status : ENUM <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+
+  entity "workload_deployment" as workload_deployment {
+    * workload_deployment_id : UUID <<PK>>
+    --
+    * deployment_id : UUID <<FK, NOT NULL>>
+    * workload_id : UUID <<FK, NOT NULL>>
+    * image_repository : VARCHAR(1024) <<NOT NULL>>
+    * image_version : VARCHAR(255) <<NOT NULL>>
+  }
+
+  entity "deployment_context" as deployment_context {
+    * deployment_context_id : UUID <<PK>>
+    --
+    * deployment_id : UUID <<FK, NOT NULL, UNIQUE>>
+    cloud_provider : VARCHAR(100)
+    region : VARCHAR(100)
+    * target_specific_input : JSONB <<NOT NULL>>
+  }
+
+  entity "deployment_record" as deployment_record {
+    * deployment_record_id : UUID <<PK>>
+    --
+    * deployment_id : UUID <<FK, NOT NULL, UNIQUE>>
+    * environment : VARCHAR(100) <<NOT NULL>>
+    * deployment_target : VARCHAR(255) <<NOT NULL>>
+    delivery_reference : VARCHAR(2048)
+    * status : ENUM <<NOT NULL>>
+    error_summary : TEXT
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+
+  entity "deployment_step" as deployment_step {
+    * deployment_step_id : UUID <<PK>>
+    --
+    * deployment_id : UUID <<FK, NOT NULL>>
+    * deployment_record_id : UUID <<FK, NOT NULL>>
+    * sequence_number : INT <<NOT NULL>>
+    * step_name : VARCHAR(255) <<NOT NULL>>
+    * status : ENUM <<NOT NULL>>
+    related_component_reference : VARCHAR(2048)
+    error_summary : TEXT
+    started_at : TIMESTAMP
+    completed_at : TIMESTAMP
+  }
+
+  entity "deployment_record_resource_instance" as deployment_record_resource_instance {
+    * deployment_record_resource_instance_id : UUID <<PK>>
+    --
+    * deployment_record_id : UUID <<FK, NOT NULL>>
+    * resource_instance_id : UUID <<FK, NOT NULL>>
+  }
+}
+
+application_definition ||--|{ workload : owns
+application_definition ||--o{ resource_requirement : owns
+workload ||--o{ environment_variable_definition : defines
+workload ||--o{ secret_definition : defines
+application_definition ||--o{ dependency : owns
+workload ||--o{ dependency : source
+workload |o--o{ dependency : target workload
+resource_requirement |o--o{ dependency : target resource
+application_definition ||--o| application_specification : generates
+
+application_definition ||--o{ environment_configuration : configured for
+environment_configuration ||--o{ environment_variable : contains
+environment_configuration ||--o{ secret : contains
+environment_configuration ||--o{ configuration_value : stores value sources
+workload ||--o{ environment_variable : configured workload
+environment_variable_definition ||--o{ environment_variable : binding
+workload ||--o{ secret : configured workload
+secret_definition ||--o{ secret : binding
+environment_variable ||--|| configuration_value : has
+resource_requirement |o--o{ configuration_value : referenced resource output
+workload |o--o{ configuration_value : referenced workload output
+resource_requirement |o--o{ secret : referenced sensitive output
+
+resource_definition ||--o{ resource_instance : instantiated as
+
+application_definition ||--o{ deployment : deploys
+environment_configuration ||--o{ deployment : used by
+deployment ||--|{ workload_deployment : snapshots images
+workload ||--o{ workload_deployment : deployed as
+deployment ||--|| deployment_context : has
+deployment ||--o| deployment_record : produces
+deployment ||--o{ deployment_step : has steps
+deployment_record ||--|{ deployment_step : progress
+deployment_record ||--o{ deployment_record_resource_instance : references
+resource_instance ||--o{ deployment_record_resource_instance : used by
+
+note right of dependency
+  CHECK: target_type selects exactly one target FK.
+end note
+
+note right of configuration_value
+  Subtype value objects are embedded in this row.
+  CHECK by value_source permits exactly one payload:
+  DIRECT -> direct_value;
+  RESOURCE_OUTPUT -> resource_requirement_id + resource_output_name;
+  WORKLOAD_OUTPUT -> workload_id + workload_output_name.
+  No resolved runtime value is stored.
+end note
+
+note right of secret
+  CHECK permits exactly one source:
+  SECRET_REF -> secret_ref, or
+  RESOURCE_OUTPUT -> resource_requirement_id + resource_output_name.
+  There is no plaintext secret column.
+end note
+
+note bottom of resource_instance
+  Resource Output is TRANSIENT; therefore no resource_output table exists.
+end note
+
+@enduml
