@@ -1,0 +1,67 @@
+@startuml
+title UC-01 - Create / Configure Application (Main Flow)
+
+autonumber
+hide footbox
+
+actor Developer
+boundary "Web UI" as UI
+control "Application API / Controller" as API
+control "Application Service" as Service
+control "Application Definition Validator" as Validator
+entity "Application Repository" as AppRepo
+control "Application Specification Generator" as SpecGenerator
+entity "Specification Repository /\nConfig Repo Service" as SpecRepo
+
+Developer -> UI: Select Create Application\nor open an existing application
+
+alt Create a new application
+    UI -> API: createApplication(name, description)
+    API -> Service: createApplication(name, description)
+    Service --> API: Application draft
+    API --> UI: Display application editor
+else Update an existing application
+    UI -> API: updateApplication(applicationId)
+    API -> Service: updateApplication(applicationId)
+    Service -> AppRepo: findById(applicationId)
+    AppRepo --> Service: Application Definition
+    Service --> API: Editable Application Definition draft
+    API --> UI: Display application editor
+end
+
+Developer -> UI: Add resource requirements
+UI -> API: addResourceRequirement(applicationId, resources)
+API -> Service: addResourceRequirement(applicationId, resources)
+
+Developer -> UI: Add workloads\n(type, image repository, port)
+UI -> API: addWorkload(applicationId, workloads)
+API -> Service: addWorkload(applicationId, workloads)
+
+Developer -> UI: Define environment variables and secrets\nfor each workload
+UI -> API: defineConfigurationRequirement(applicationId, requirements)
+API -> Service: defineConfigurationRequirement(applicationId, requirements)
+
+Developer -> UI: Define dependencies
+UI -> API: defineDependency(applicationId, dependencies)
+API -> Service: defineDependency(applicationId, dependencies)
+
+Service --> API: Updated Application Definition draft
+API --> UI: Display topology and configuration summary
+UI --> Developer: Show application overview
+
+Developer -> UI: Select Save Application
+UI -> API: saveApplicationDefinition(applicationDefinition)
+API -> Service: saveApplicationDefinition(applicationDefinition)
+Service -> Validator: validateApplicationDefinition(applicationDefinition)
+Validator --> Service: Validation successful
+Service -> AppRepo: save(applicationDefinition)
+AppRepo --> Service: Saved Application Definition
+Service -> SpecGenerator: generateApplicationSpecification(applicationDefinition)
+SpecGenerator --> Service: Application specification (for example, score.yaml)
+Service -> SpecRepo: save(applicationSpecification)
+SpecRepo --> Service: Specification saved
+Service --> API: Application saved
+API --> UI: Show save confirmation
+UI --> Developer: Application Definition and specification saved
+
+@enduml

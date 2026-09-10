@@ -1,0 +1,126 @@
+@startuml
+title UC-03 - Deploy Application (Main Flow)
+
+autonumber
+hide footbox
+
+actor Developer
+boundary "Web UI" as UI
+control "Deployment API / Controller" as API
+control "Deployment Orchestrator" as Orchestrator
+entity "Application Repository" as AppRepo
+entity "Environment Configuration Repository" as ConfigRepo
+control "Deployment Graph Builder" as GraphBuilder
+control "Resource Definition Resolver" as ResourceResolver
+control "Infrastructure Planner" as InfraPlanner
+entity "Resource Instance Repository" as ResourceRepo
+control "Infrastructure Reconciler" as InfraReconciler
+participant "Provisioner Adapter" as Provisioner <<interface>>
+participant "Terraform/OpenTofu Runner" as IaCRunner
+control "Resource Output Resolver / Collector" as OutputCollector
+control "Environment Configuration Resolver" as ConfigResolver
+control "Resolved Specification Generator" as SpecGenerator
+control "Manifest Generator / Score Renderer" as ManifestGenerator
+participant "score-k8s" as ScoreK8s
+control "Target Manifest Adapter" as TargetAdapter
+control "Environment Configuration Materializer" as ConfigMaterializer
+control "Secret Materializer" as SecretMaterializer
+participant "CD Integration / CD Provider Interface" as CDIntegration <<interface>>
+control "Concrete CD Provider" as CDProvider
+participant "CD System" as CDSystem
+participant "Kubernetes Cluster" as Kubernetes
+entity "Deployment Repository" as DeploymentRepo
+
+Developer -> UI: Select Deploy Application
+Developer -> UI: Select environment and deployment target
+UI -> API: loadDeploymentForm(applicationId, environment, target)
+API -> Orchestrator: loadDeploymentContext(applicationId, environment, target)
+Orchestrator -> AppRepo: findById(applicationId)
+AppRepo --> Orchestrator: Application Definition and workloads
+Orchestrator --> API: Workloads and image repositories
+API --> UI: Display workloads and image repositories
+
+Developer -> UI: Select or confirm image version\nfor each workload
+Developer -> UI: Enter remaining deployment context
+UI -> API: createDeployment(applicationId, environment,\ntarget, images, context)
+API -> Orchestrator: createDeployment(applicationId, environment,\ntarget, images, context)
+Orchestrator -> ConfigRepo: findByApplicationAndEnvironment(applicationId, environment)
+ConfigRepo --> Orchestrator: Environment Configuration
+Orchestrator -> Orchestrator: validateDeploymentInput()
+
+Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinition,\nconfiguration, images, context)
+GraphBuilder --> Orchestrator: Deployment graph
+Orchestrator -> ResourceResolver: resolveResourceDefinitions(graph, context)
+ResourceResolver --> Orchestrator: Resolved Resource Definitions
+Orchestrator -> ResourceRepo: findResourceInstances(resolvedResources, target)
+ResourceRepo --> Orchestrator: Current resource instances
+Orchestrator -> InfraPlanner: planInfrastructureChanges(graph,\nresolvedDefinitions, currentInstances)
+InfraPlanner --> Orchestrator: Infrastructure plan (create/update/reuse)
+Orchestrator -> InfraPlanner: loadInfrastructureOverrides(plan)
+InfraPlanner --> Orchestrator: Allowed override parameters
+Orchestrator --> API: Infrastructure plan and allowed overrides
+API --> UI: Display infrastructure plan and overrides
+
+Developer -> UI: Set permitted overrides and select Deploy
+UI -> API: confirmDeployment(deploymentId, overrides)
+API -> Orchestrator: applyInfrastructureOverrides(deploymentId, overrides)
+Orchestrator -> InfraPlanner: applyInfrastructureOverrides(plan, overrides)
+InfraPlanner --> Orchestrator: Final infrastructure plan
+Orchestrator -> Orchestrator: confirmDeployment(deploymentId)
+
+Orchestrator -> InfraReconciler: reconcileInfrastructure(finalPlan)
+InfraReconciler -> Provisioner: reconcile(finalPlan)
+Provisioner -> IaCRunner: apply infrastructure modules
+IaCRunner --> Provisioner: Infrastructure ready and raw outputs
+Provisioner --> InfraReconciler: Resource state and outputs
+InfraReconciler -> ResourceRepo: saveResourceInstances(resourceState)
+ResourceRepo --> InfraReconciler: Resource instances saved
+InfraReconciler --> Orchestrator: Infrastructure references
+
+Orchestrator -> OutputCollector: collectResourceOutputs(infrastructureReferences)
+OutputCollector -> ResourceRepo: loadResourceOutputs(infrastructureReferences)
+ResourceRepo --> OutputCollector: Resource outputs
+OutputCollector --> Orchestrator: Collected Resource Outputs
+
+Orchestrator -> ConfigResolver: resolveEnvironmentConfiguration(configuration,\nresourceOutputs, workloadOutputs)
+note right of ConfigResolver
+  workloadOutputs are logical outputs obtained from
+  the deployment graph; they do not require a separate
+  output collection step in this sequence.
+end note
+ConfigResolver --> Orchestrator: Resolved configuration and dependencies
+Orchestrator -> SpecGenerator: generateResolvedApplicationSpecification(\napplicationDefinition, images, resolvedConfiguration)
+SpecGenerator --> Orchestrator: Resolved application specification
+
+Orchestrator -> ManifestGenerator: generateKubernetesManifest(resolvedSpecification)
+ManifestGenerator -> ScoreK8s: render(resolvedSpecification)
+ScoreK8s --> ManifestGenerator: Base Kubernetes manifest
+ManifestGenerator --> Orchestrator: Base Kubernetes manifest
+Orchestrator -> TargetAdapter: adaptManifestForTarget(baseManifest, target)
+TargetAdapter --> Orchestrator: Target-adapted manifest
+Orchestrator -> ConfigMaterializer: materializeEnvironmentConfiguration(\ntargetAdaptedManifest, resolvedEnvironmentVariables)
+ConfigMaterializer --> Orchestrator: Manifest with environment configuration
+Orchestrator -> SecretMaterializer: materializeSecretConfiguration(\nmanifestWithEnvironmentConfiguration, resolvedSecrets)
+SecretMaterializer --> Orchestrator: Desired deployment state
+note over ConfigMaterializer, SecretMaterializer
+  The target-adapted manifest becomes Desired Deployment State
+  only after resolved environment variables and secret values
+  or secret references have been fully materialized.
+end note
+
+Orchestrator -> CDIntegration: publishDesiredDeploymentState(desiredState)
+CDIntegration -> CDProvider: publish(desiredState)
+CDProvider -> CDSystem: synchronize(desiredState)
+CDSystem -> Kubernetes: Deploy workloads and configuration
+Kubernetes --> CDSystem: Deployment accepted
+CDSystem --> CDProvider: Synchronization started
+CDProvider --> CDIntegration: Delivery reference and status
+CDIntegration --> Orchestrator: Delivery reference and status
+
+Orchestrator -> DeploymentRepo: saveDeploymentRecord(environment, target, images,\ninfrastructureReferences, deliveryStatus)
+DeploymentRepo --> Orchestrator: Deployment Record saved
+Orchestrator --> API: Deployment created
+API --> UI: Display deployment tracking information
+UI --> Developer: Deployment submitted
+
+@enduml

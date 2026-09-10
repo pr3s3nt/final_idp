@@ -1,0 +1,61 @@
+@startuml
+title UC-04 - View Deployment Result (Main Flow)
+
+autonumber
+hide footbox
+
+actor Developer
+boundary "Web UI" as UI
+control "Deployment Query API / Controller" as API
+control "Deployment Query Service" as QueryService
+entity "Deployment Repository" as DeploymentRepo
+entity "Resource Instance Repository" as ResourceRepo
+participant "CD Integration / CD Status Provider" as CDStatusProvider <<interface>>
+control "Concrete CD Provider" as CDProvider
+participant "CD System" as CDSystem
+participant "Workload Status Provider /\nKubernetes Adapter" as WorkloadProvider <<interface>>
+participant "Kubernetes Cluster" as Kubernetes
+control "Deployment Result Aggregator" as Aggregator
+
+Developer -> UI: Open application and select Deployments
+UI -> API: listDeployments(applicationId)
+API -> QueryService: listDeployments(applicationId)
+QueryService -> DeploymentRepo: findByApplication(applicationId)
+DeploymentRepo --> QueryService: Deployment history
+QueryService --> API: Deployment history
+API --> UI: Display deployment history
+
+Developer -> UI: Select a deployment
+UI -> API: getDeploymentDetail(deploymentId)
+API -> QueryService: getDeploymentDetail(deploymentId)
+
+QueryService -> DeploymentRepo: getDeploymentDetail(deploymentId)
+DeploymentRepo --> QueryService: Deployment Record and target
+QueryService -> DeploymentRepo: getDeploymentProgress(deploymentId)
+DeploymentRepo --> QueryService: Deployment progress
+QueryService -> DeploymentRepo: getDeploymentImages(deploymentId)
+DeploymentRepo --> QueryService: Actual workload images and versions
+QueryService -> ResourceRepo: getInfrastructureStatus(infrastructureReferences)
+ResourceRepo --> QueryService: Infrastructure status
+QueryService -> CDStatusProvider: getCDStatus(deliveryReference)
+CDStatusProvider -> CDProvider: getStatus(deliveryReference)
+CDProvider -> CDSystem: Query deployment/sync status
+CDSystem --> CDProvider: CD status
+CDProvider --> CDStatusProvider: CD status
+CDStatusProvider --> QueryService: CD status
+QueryService -> WorkloadProvider: getWorkloadStatus(target, workloads)
+WorkloadProvider -> Kubernetes: Query workload health and endpoints
+Kubernetes --> WorkloadProvider: Workload status
+WorkloadProvider --> QueryService: Workload health
+QueryService -> WorkloadProvider: getDeploymentEndpoints(target, workloads)
+WorkloadProvider -> Kubernetes: Query exposed endpoints
+Kubernetes --> WorkloadProvider: Endpoints
+WorkloadProvider --> QueryService: Deployment endpoints
+
+QueryService -> Aggregator: aggregate(deploymentRecord, progress, images,\ninfrastructureStatus, cdStatus, workloadStatus, endpoints)
+Aggregator --> QueryService: Deployment result view model
+QueryService --> API: Deployment result
+API --> UI: Display environment, target, images, progress,\ninfrastructure, CD status, workload health and endpoints
+UI --> Developer: Show deployment result
+
+@enduml
