@@ -1,0 +1,281 @@
+@startuml
+title Step 2 - Domain Model & Persistence Classification
+
+left to right direction
+skinparam classAttributeIconSize 0
+hide methods
+
+class "Application Definition" as ApplicationDefinition <<aggregate root>> {
+  applicationId: String
+  name: String
+  description: String
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+class "Workload" as Workload <<entity>> {
+  workloadId: String
+  name: String
+  type: String
+  imageRepository: String
+  port: Integer [0..1]
+  exposedOutputs: List<String>
+}
+
+class "Resource Requirement" as ResourceRequirement <<entity>> {
+  resourceRequirementId: String
+  name: String
+  resourceType: String
+}
+
+class "Environment Variable Definition" as EnvironmentVariableDefinition <<entity>> {
+  variableDefinitionId: String
+  name: String
+  required: Boolean
+}
+
+class "Secret Definition" as SecretDefinition <<entity>> {
+  secretDefinitionId: String
+  name: String
+  required: Boolean
+}
+
+class "Dependency" as Dependency <<entity>> {
+  dependencyId: String
+  sourceWorkloadId: String
+  targetType: WORKLOAD | RESOURCE
+  targetId: String
+}
+
+class "Application Specification" as ApplicationSpecification <<artifact>> {
+  specificationId: String
+  applicationId: String
+  format: String
+  content: Text
+  version: String
+  updatedAt: DateTime
+}
+
+class "Environment Configuration" as EnvironmentConfiguration <<aggregate root>> {
+  environmentConfigurationId: String
+  applicationId: String
+  environment: String
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+class "Environment Variable" as EnvironmentVariable <<entity>> {
+  environmentVariableId: String
+  workloadId: String
+  variableName: String
+}
+
+class "Secret" as Secret <<entity>> {
+  secretId: String
+  workloadId: String
+  secretName: String
+  secretReference: String [0..1]
+}
+
+abstract class "Configuration Value" as ConfigurationValue <<value object>> {
+  valueSourceType: DIRECT | RESOURCE_OUTPUT | WORKLOAD_OUTPUT
+}
+
+class "Direct Configuration Value" as DirectConfigurationValue <<value object>> {
+  value: String
+}
+
+class "Resource Output Reference" as ResourceOutputReference <<value object>> {
+  resourceRequirementId: String
+  outputName: String
+}
+
+class "Workload Output Reference" as WorkloadOutputReference <<value object>> {
+  workloadId: String
+  outputName: String
+}
+
+class "Resource Definition" as ResourceDefinition <<entity>> {
+  resourceDefinitionId: String
+  name: String
+  resourceType: String
+  provisionerReference: String
+  supportedContexts: Map
+  exposedOutputs: List<String>
+  sensitiveOutputs: List<String>
+}
+
+class "Deployment" as Deployment <<aggregate root>> {
+  deploymentId: String
+  applicationId: String
+  environment: String
+  deploymentTarget: String
+  status: String
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+class "Workload Deployment" as WorkloadDeployment <<entity>> {
+  workloadDeploymentId: String
+  workloadId: String
+  imageRepository: String
+  imageVersion: String
+}
+
+class "Deployment Context" as DeploymentContext <<value object>> {
+  cloudProvider: String [0..1]
+  region: String [0..1]
+  targetSpecificInput: Map
+}
+
+class "Deployment Graph" as DeploymentGraph <<transient>> {
+  deploymentId: String
+  workloadIds: List<String>
+  resourceRequirementIds: List<String>
+  dependencyIds: List<String>
+  configurationReferenceIds: List<String>
+}
+
+class "Resource Resolution" as ResourceResolution <<transient>> {
+  resourceRequirementId: String
+  resourceDefinitionId: String
+  resolutionStatus: String
+  reason: String [0..1]
+}
+
+class "Resource Instance" as ResourceInstance <<aggregate root>> {
+  resourceInstanceId: String
+  resourceDefinitionId: String
+  deploymentTarget: String
+  infrastructureReference: String
+  providerStateReference: String [0..1]
+  status: String
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+class "Resource Output" as ResourceOutput <<transient>> {
+  resourceInstanceId: String
+  outputName: String
+  resolvedValue: String
+  sensitive: Boolean
+}
+
+class "Resolved Configuration" as ResolvedConfiguration <<transient>> {
+  deploymentId: String
+  resolvedEnvironmentVariables: Map
+  resolvedSecrets: Map
+  resolvedDependencies: Map
+}
+
+class "Resolved Specification" as ResolvedSpecification <<transient>> {
+  deploymentId: String
+  format: String
+  workloadImages: Map
+  resolvedDependencies: Map
+  generatedAt: DateTime
+}
+
+class "Deployment Record" as DeploymentRecord <<entity>> {
+  deploymentRecordId: String
+  environment: String
+  deploymentTarget: String
+  infrastructureReferences: List<String>
+  deliveryReference: String [0..1]
+  status: String
+  errorSummary: String [0..1]
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+class "Deployment Step" as DeploymentStep <<entity>> {
+  deploymentStepId: String
+  sequenceNumber: Integer
+  stepName: String
+  status: String
+  relatedComponentReference: String [0..1]
+  errorSummary: String [0..1]
+  startedAt: DateTime [0..1]
+  completedAt: DateTime [0..1]
+}
+
+' Application Definition aggregate
+ApplicationDefinition "1" *-- "1..*" Workload : workloads
+ApplicationDefinition "1" *-- "0..*" ResourceRequirement : resource requirements
+ApplicationDefinition "1" *-- "0..*" Dependency : dependencies
+ApplicationDefinition "1" *-- "0..1" ApplicationSpecification : generated specification
+Workload "1" *-- "0..*" EnvironmentVariableDefinition : variable definitions
+Workload "1" *-- "0..*" SecretDefinition : secret definitions
+Dependency "0..*" --> "1" Workload : source
+Dependency "0..*" --> "0..1" Workload : target workload
+Dependency "0..*" --> "0..1" ResourceRequirement : target resource
+
+note right of Dependency
+  Exactly one target is set:
+  Workload or Resource Requirement.
+end note
+
+' Environment Configuration aggregate
+EnvironmentConfiguration "0..*" --> "1" ApplicationDefinition : configures
+EnvironmentConfiguration "1" *-- "0..*" EnvironmentVariable : variables
+EnvironmentConfiguration "1" *-- "0..*" Secret : secrets
+EnvironmentVariable "0..*" --> "1" Workload : belongs to
+EnvironmentVariable "0..*" --> "1" EnvironmentVariableDefinition : configures
+Secret "0..*" --> "1" Workload : belongs to
+Secret "0..*" --> "1" SecretDefinition : configures
+EnvironmentVariable "1" *-- "1" ConfigurationValue : value source
+Secret "1" *-- "0..1" ResourceOutputReference : sensitive output binding
+
+ConfigurationValue <|-- DirectConfigurationValue
+ConfigurationValue <|-- ResourceOutputReference
+ConfigurationValue <|-- WorkloadOutputReference
+ResourceOutputReference "0..*" --> "1" ResourceRequirement : references
+WorkloadOutputReference "0..*" --> "1" Workload : references
+ResourceOutputReference "0..*" ..> "0..1" ResourceOutput : resolves to at deployment
+
+note right of Secret
+  A Secret has exactly one source: secretReference
+  returned by Secret Store, or a sensitive
+  Resource Output Reference. Plaintext is never stored.
+end note
+
+' Deployment aggregate and execution-time objects
+Deployment "0..*" --> "1" ApplicationDefinition : deploys
+Deployment "0..*" --> "1" EnvironmentConfiguration : uses
+Deployment "1" *-- "1..*" WorkloadDeployment : workload images
+Deployment "1" *-- "1" DeploymentContext : context
+Deployment "1" *-- "0..1" DeploymentRecord : produces
+WorkloadDeployment "0..*" --> "1" Workload : deploys
+DeploymentRecord "1" *-- "1..*" DeploymentStep : progress
+DeploymentRecord "1" --> "1..*" WorkloadDeployment : records actual images
+DeploymentRecord "0..*" --> "0..*" ResourceInstance : infrastructure references
+
+Deployment "1" ..> "0..1" DeploymentGraph : builds
+DeploymentGraph "1" --> "1" DeploymentContext : includes
+DeploymentGraph "1" --> "1..*" Workload : includes
+DeploymentGraph "1" --> "0..*" ResourceRequirement : includes
+DeploymentGraph "1" --> "0..*" Dependency : includes
+DeploymentGraph "1" --> "0..*" ConfigurationValue : includes references
+
+Deployment "1" ..> "0..*" ResourceResolution : resolves resources
+ResourceResolution "0..*" --> "1" ResourceRequirement : resolves
+ResourceResolution "0..*" --> "1" ResourceDefinition : selects
+ResourceResolution "0..*" --> "0..1" ResourceInstance : create, update, or reuse
+ResourceInstance "0..*" --> "1" ResourceDefinition : instantiated from
+ResourceInstance ..> ResourceOutput : exposes at runtime
+
+Deployment "1" ..> "0..1" ResolvedConfiguration : resolves
+ResolvedConfiguration "1" --> "1" EnvironmentConfiguration : derived from
+ResolvedConfiguration "1" --> "0..*" ResourceOutput : consumes
+Deployment "1" ..> "0..1" ResolvedSpecification : generates
+ResolvedSpecification "1" *-- "1" ResolvedConfiguration : embeds
+
+legend right
+  <<aggregate root>> Persisted aggregate root
+  <<entity>>          Domain entity
+  <<value object>>    Owned domain value
+  <<artifact>>        Generated, versioned domain artifact
+  <<transient>>       Exists only during one deployment execution
+endlegend
+
+@enduml
