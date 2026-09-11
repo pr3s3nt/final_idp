@@ -14,12 +14,13 @@ state "Failed\n(FAILED)" as FAILED
 
 [*] --> CREATED : createDeployment / initialize deployment attempt
 
-CREATED --> AWAITING_CONFIRMATION : validateDeploymentInput [valid] /\nbuildDeploymentGraph; resolveResourceDefinitions;\nplanInfrastructureChanges; persist Deployment
+CREATED --> AWAITING_CONFIRMATION : validateDeploymentInput [valid] /\nbuildDeploymentGraph; resolveResourceDefinitions;\nplanInfrastructureChanges; computePlanFingerprint; persist Deployment
 CREATED --> REJECTED : validateDeploymentInput [invalid, A1] /\nreturn validation error; rollback attempt
 REJECTED --> [*]
 
 AWAITING_CONFIRMATION --> AWAITING_CONFIRMATION : confirmDeployment [invalid override, A1] /\nreturn validation error; keep AWAITING_CONFIRMATION
-AWAITING_CONFIRMATION --> CONFIRMED : confirmDeployment [valid overrides] /\napplyInfrastructureOverrides
+AWAITING_CONFIRMATION --> AWAITING_CONFIRMATION : confirmDeployment [PLAN_CHANGED: fingerprint mismatch] /\nrefresh fingerprint; re-present rebuilt plan; no reconcile
+AWAITING_CONFIRMATION --> CONFIRMED : confirmDeployment [fingerprint match; valid overrides; CAS succeeds] /\napplyInfrastructureOverrides; atomic status compare-and-swap
 
 CONFIRMED --> INFRASTRUCTURE_READY : reconcileInfrastructure [success] /\npersist create/update/reuse Resource Instances
 CONFIRMED --> FAILED : reconcileInfrastructure [failure, A2] /\nsaveDeploymentRecord(failed step, error summary)
@@ -44,6 +45,13 @@ note right of REJECTED
   Contract 4 A1 rolls back deployment, workload_deployment and
   deployment_context rows; no Deployment Record or Deployment
   Step exists for the rejected attempt.
+end note
+
+note right of AWAITING_CONFIRMATION
+  A concurrent confirm that loses the atomic
+  AWAITING_CONFIRMATION -> CONFIRMED compare-and-swap
+  returns DEPLOYMENT_ALREADY_CONFIRMED and causes
+  no state transition or infrastructure reconcile.
 end note
 
 note right of FAILED

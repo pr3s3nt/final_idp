@@ -154,6 +154,8 @@ package "Deployment Repository" {
     * environment_configuration_id : UUID <<FK, NOT NULL>>
     * environment : VARCHAR(100) <<NOT NULL>>
     * deployment_target : VARCHAR(255) <<NOT NULL>>
+    * plan_fingerprint : CHAR(64) <<NOT NULL>>
+    * plan_fingerprint_algo : VARCHAR(32) <<NOT NULL>>
     * status : ENUM <<NOT NULL>>
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>

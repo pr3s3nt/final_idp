@@ -110,6 +110,8 @@ class "Deployment" as Deployment <<aggregate root>> {
   applicationId: String
   environment: String
   deploymentTarget: String
+  planFingerprint: String
+  planFingerprintAlgo: String
   status: String
   createdAt: DateTime
   updatedAt: DateTime
@@ -263,6 +265,12 @@ ResourceResolution "0..*" --> "1" ResourceDefinition : selects
 ResourceResolution "0..*" --> "0..1" ResourceInstance : create, update, or reuse
 ResourceInstance "0..*" --> "1" ResourceDefinition : instantiated from
 ResourceInstance ..> ResourceOutput : exposes at runtime
+
+note right of Deployment
+  Infrastructure Plan remains TRANSIENT.
+  Only planFingerprint and planFingerprintAlgo
+  are persistent on the Deployment.
+end note
 
 Deployment "1" ..> "0..1" ResolvedConfiguration : resolves
 ResolvedConfiguration "1" --> "1" EnvironmentConfiguration : derived from

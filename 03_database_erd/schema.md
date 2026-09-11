@@ -189,6 +189,8 @@ Không có table `resource_output`: `Resource Output` là runtime view `TRANSIEN
 | `environment_configuration_id` | UUID | FK → `environment_configuration.environment_configuration_id`, NOT NULL | Environment Configuration được dùng làm source references. |
 | `environment` | VARCHAR(100) | NOT NULL | Environment snapshot của deployment. |
 | `deployment_target` | VARCHAR(255) | NOT NULL | Kubernetes/deployment target đã chọn. |
+| `plan_fingerprint` | CHAR(64) | NOT NULL | SHA-256 fingerprint dạng hex của Infrastructure Plan đã canonicalize để phát hiện plan thay đổi khi confirm; không chứa chính plan. |
+| `plan_fingerprint_algo` | VARCHAR(32) | NOT NULL | Phiên bản thuật toán canonicalization + hashing của fingerprint, ví dụ `sha256-v1`, dùng lại khi rebuild plan. |
 | `status` | ENUM | NOT NULL | Lifecycle status của Deployment. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo deployment. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
@@ -268,6 +270,7 @@ Constraint bổ sung: `UNIQUE (deployment_record_id, resource_instance_id)`.
 - Resource binding lưu `resource_requirement_id` + `resource_output_name`; workload binding lưu `workload_id` + `workload_output_name`. Tên component được lấy từ table target, tránh denormalized name không có referential integrity.
 - Schema không có `resolved_value`, resolved host/port/endpoint/credential trong `configuration_value`, `secret`, `deployment` hoặc `deployment_record`.
 - Không tạo table cho `resource_output`, `resolved_configuration` hay `resolved_specification`; các giá trị này chỉ tồn tại trong deployment execution.
+- Infrastructure Plan cũng giữ nguyên là `TRANSIENT` và được rebuild khi confirm; `deployment` chỉ persist `plan_fingerprint` cùng `plan_fingerprint_algo`, không persist plan hoặc resolved plan payload.
 
 ### Secret reference, không phải plaintext
 
@@ -312,6 +315,7 @@ Constraint bổ sung: `UNIQUE (deployment_record_id, resource_instance_id)`.
 |---|---|
 | Deployment Graph | Dựng lại cho từng execution từ persistent sources. |
 | Resource Resolution | Quyết định trung gian; durable outcome là Resource Instance/reference. |
+| Infrastructure Plan | Plan được rebuild khi confirm; chỉ SHA-256 fingerprint và algorithm version của canonical plan được persist trên `deployment`. |
 | Resource Output | Runtime output được collector nạp in-memory sau khi resource ready. |
 | Resolved Configuration | In-memory snapshot của values đã resolve. |
 | Resolved Specification | Execution artifact dùng làm input cho `score-k8s`, không phải versioned source specification. |

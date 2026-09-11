@@ -2,7 +2,7 @@
 
 Tài liệu này đặc tả các system operation quan trọng của UC-01 đến UC-03 theo kiểu Larman. Tên domain object dùng đúng Step 2; tên table/column `snake_case` dùng đúng Step 3. Các nhãn như `AWAITING_CONFIRMATION`, `CONFIRMED`, `INFRASTRUCTURE_READY`, `CONFIGURATION_RESOLVED`, `SUBMITTED` và `FAILED` mô tả **logical state** của thuộc tính `status`; ERD hiện chỉ chốt kiểu `ENUM`, chưa chốt tập literal vật lý.
 
-Các execution-scoped object `Deployment Graph`, `Resource Resolution`, `Resource Output`, `Resolved Configuration` và `Resolved Specification` là `TRANSIENT`; postcondition có thể tạo chúng trong execution hiện tại nhưng không tạo table/row tương ứng. Mọi postcondition bên dưới mô tả state sau khi operation hoàn tất, không mô tả trình tự gọi component.
+Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastructure Plan, `Resource Output`, `Resolved Configuration` và `Resolved Specification` là `TRANSIENT`; postcondition có thể tạo chúng trong execution hiện tại nhưng không tạo table/row tương ứng. Mọi postcondition bên dưới mô tả state sau khi operation hoàn tất, không mô tả trình tự gọi component.
 
 ## 1. `saveApplicationDefinition()`
 
@@ -81,34 +81,40 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, `Resourc
   - `target` được platform hỗ trợ; `context` chứa `cloudProvider`, `region` và `targetSpecificInput` bắt buộc đối với target đó.
   - Mọi Dependency thuộc cùng Application Definition và có thể resolve; với mỗi `Resource Requirement` trong graph, Platform Resource Definition Catalog có một `Resource Definition` phù hợp với `resourceType` và `supportedContexts`, cùng `provisionerReference` hợp lệ.
 - **Postconditions**:
-  - Một instance `Deployment` được tạo; một row `deployment` được tạo với `deployment_id`, `application_id`, `environment_configuration_id`, `environment`, `deployment_target`, `created_at`, `updated_at`, và `status` mang logical state `AWAITING_CONFIRMATION`.
+  - Một instance `Deployment` được tạo; một row `deployment` được tạo với `deployment_id`, `application_id`, `environment_configuration_id`, `environment`, `deployment_target`, `plan_fingerprint`, `plan_fingerprint_algo`, `created_at`, `updated_at`, và `status` mang logical state `AWAITING_CONFIRMATION`.
   - Association `Deployment` → `Application Definition` và `Deployment` → `Environment Configuration` được hình thành qua `application_id` và `environment_configuration_id`; environment của configuration, snapshot `deployment.environment` và input `environment` bằng nhau.
   - Với mỗi Workload được deploy, đúng một instance `Workload Deployment` và một row `workload_deployment` được tạo; association tới Deployment và Workload được hình thành qua `deployment_id`, `workload_id`; `image_repository` là repository thực tế và `image_version` là version thực tế từ `images`.
   - Đúng một instance `Deployment Context` và một row `deployment_context` được tạo cho Deployment; association 1:1 được hình thành qua `deployment_id`, và `cloud_provider`, `region`, `target_specific_input` phản ánh `context`.
   - Một instance `Deployment Graph` `TRANSIENT` được tạo cho execution hiện tại với `deploymentId`, `workloadIds`, `resourceRequirementIds`, `dependencyIds`, `configurationReferenceIds`; association execution-scoped tới Deployment Context, Workload, Resource Requirement, Dependency và Configuration Value tương ứng được hình thành.
   - Với mỗi Resource Requirement trong graph, một instance `Resource Resolution` `TRANSIENT` được tạo và liên kết tới đúng `Resource Definition`; execution state chứa infrastructure plan phân loại mỗi resource là create, update hoặc reuse và danh sách override được phép.
+  - Infrastructure plan được canonicalize bằng stable resource/key ordering và canonical JSON, normalize unit/number, đồng thời loại timestamps và auto-generated ID không mang ý nghĩa nghiệp vụ. Fingerprint domain bao phủ action `CREATE`/`UPDATE`/`REUSE` của từng resource, toàn bộ Resource Definition liên quan bao gồm catalog version, Resource Instance identity được tham chiếu, provisioner reference, resolved parameters, allowed-overrides definition (tập key được phép cùng min-max/enum), và deployment target.
+  - `Deployment.planFingerprint`/`deployment.plan_fingerprint` được gán SHA-256 hex của canonical plan; `Deployment.planFingerprintAlgo`/`deployment.plan_fingerprint_algo` được gán phiên bản thuật toán tương ứng, ví dụ `sha256-v1`. Cả hai được persist atomically cùng aggregate, và infrastructure plan + allowed overrides + fingerprint + algorithm version được trả về UI.
   - Chưa có `Resource Instance` nào bị create/update/reuse bởi operation này; chưa có `Deployment Record`, `Deployment Step`, desired deployment state hay CD delivery reference nào được tạo.
 - **Exceptions / Guarantees**:
   - A1: nếu image version, required configuration, dependency, output reference, Resource Definition hoặc context không hợp lệ, không aggregate `Deployment` hoàn chỉnh nào tồn tại; các row `deployment`, `workload_deployment`, `deployment_context` phát sinh trong attempt được rollback và infrastructure không thay đổi.
-  - Không có row độc lập cho `Deployment Graph`, `Resource Resolution` hoặc infrastructure plan; các object này chỉ tồn tại trong execution state.
+  - Không có row độc lập cho `Deployment Graph`, `Resource Resolution` hoặc infrastructure plan; các object này chỉ tồn tại trong execution state. Chỉ `plan_fingerprint` và `plan_fingerprint_algo`, không phải plan payload, được persist trên `deployment`.
 
 ## 5. `confirmDeployment()`
 
 - **Operation**: `confirmDeployment(deploymentId, overrides)`
 - **Cross References**: UC-03 – Deploy Application, bước Developer đặt permitted overrides và chọn Deploy; A1 – Deployment input hoặc dependency không hợp lệ.
 - **Preconditions**:
-  - Một `Deployment` với `deploymentId` tồn tại, có `status` mang logical state `AWAITING_CONFIRMATION`, có đúng một `Deployment Context` và ít nhất một `Workload Deployment`.
-  - Execution hiện tại còn giữ infrastructure plan được tạo cho chính Deployment này và tập allowed override parameters đã hiển thị cho Developer.
-  - Mọi key trong `overrides` thuộc tập allowed override parameters; value có type/range hợp lệ và không thay đổi Resource Definition, dependency topology hoặc deployment target ngoài phạm vi được phép.
-  - Deployment chưa được confirm trước đó và chưa có infrastructure reconcile đang chạy cho cùng confirmation attempt.
+  - Một `Deployment` với `deploymentId` tồn tại, có `status` mang logical state `AWAITING_CONFIRMATION`, có đúng một `Deployment Context`, ít nhất một `Workload Deployment`, và có `planFingerprint`/`planFingerprintAlgo` đã persist.
+  - Các input bền vững để rebuild plan còn tồn tại và nhất quán: Application Definition được tham chiếu, Environment Configuration, snapshot Workload Deployment/images, Deployment Context và deployment target; Resource Definition Catalog cùng current Resource Instance state có thể được đọc lại.
+  - Không giả định execution của request `createDeployment()` hoặc infrastructure plan in-memory còn tồn tại. `overrides` là candidate values từ confirm request và chỉ được validate sau khi rebuilt-plan fingerprint khớp fingerprint đã lưu.
 - **Postconditions**:
-  - Infrastructure plan trong execution state được thay bằng final infrastructure plan chứa đúng các override hợp lệ; các parameter không được override giữ giá trị đã plan.
-  - Thuộc tính `status` của `Deployment` được sửa từ logical state `AWAITING_CONFIRMATION` thành `CONFIRMED`; column `deployment.status` và `deployment.updated_at` được cập nhật tương ứng.
+  - Infrastructure plan được rebuild từ persisted inputs và current state bằng cùng chuỗi `buildDeploymentGraph()` → `resolveResourceDefinitions()` → `findResourceInstances()` → `planInfrastructureChanges()`; allowed-overrides definition được load lại và fingerprint được tính lại bằng đúng canonicalization/hash version trong `planFingerprintAlgo`.
+  - Khi rebuilt fingerprint khớp `planFingerprint`, `overrides` được validate theo allowed-overrides definition hiện hành; infrastructure plan trong execution state được thay bằng final infrastructure plan chứa đúng các override hợp lệ, còn parameter không được override giữ giá trị rebuilt plan.
+  - Sau khi fingerprint khớp và overrides hợp lệ, `deployment.status` được đổi bằng một atomic compare-and-swap có predicate `deployment_id = deploymentId AND status = AWAITING_CONFIRMATION`; khi CAS ảnh hưởng đúng một row, `Deployment.status`/`deployment.status` trở thành `CONFIRMED` và `updatedAt`/`updated_at` được cập nhật.
+  - Chỉ sau CAS thành công, Orchestrator mới gọi `reconcileInfrastructure(finalPlan)`; không có reconcile nào được khởi động trước guard này.
   - Association của Deployment với `Application Definition`, `Environment Configuration`, `Workload Deployment` và `Deployment Context` không đổi; image version, environment và deployment target đã snapshot không đổi.
-  - Không `Resource Instance` nào được tạo/cập nhật và không desired deployment state nào được publish chỉ bởi operation này.
 - **Exceptions / Guarantees**:
-  - A1: nếu override không được phép/không hợp lệ, Deployment giữ logical state `AWAITING_CONFIRMATION`, final infrastructure plan không được hình thành và toàn bộ persistent state giữ nguyên.
-  - Một confirmation lặp lại không tạo Deployment hoặc Workload Deployment mới; request xung đột với deployment đã confirm/running bị từ chối.
+  - `PLAN_CHANGED`: nếu rebuilt fingerprint khác `deployment.plan_fingerprint`, không apply overrides và không reconcile infrastructure; Deployment giữ `AWAITING_CONFIRMATION`. Hệ thống atomically refresh fingerprint lưu trên Deployment cho rebuilt plan khi stored fingerprint vẫn là giá trị vừa so sánh, rồi trả error cùng rebuilt plan, allowed overrides và rebuilt fingerprint để Developer review và re-confirm; nếu refresh cạnh tranh thất bại, request vẫn không reconcile và lần confirm sau sẽ rebuild/compare lại.
+  - A1: nếu plan không rebuild được hoặc override không được phép/không hợp lệ sau khi fingerprint khớp, Deployment giữ logical state `AWAITING_CONFIRMATION`, final infrastructure plan không được hình thành, CAS không chạy và infrastructure không thay đổi.
+  - `DEPLOYMENT_ALREADY_CONFIRMED`: nếu status ban đầu không còn là `AWAITING_CONFIRMATION`, hoặc atomic status CAS ảnh hưởng zero rows do confirmation đồng thời đã thắng, request bị từ chối, không tạo Deployment/Workload Deployment mới và không gọi reconcile từ losing request.
+- **Scope boundaries**:
+  - Fingerprint bao phủ **allowed-overrides definition** (tập parameter được phép cùng min-max/enum), không bao phủ các override value Developer chọn; các value này chỉ đến trong confirm request và được validate sau khi fingerprint khớp.
+  - Fingerprint là application-level defense-in-depth guard: nó thu hẹp nhưng không loại bỏ TOCTOU. Contention trên shared Resource Instance giữa các deployment và drift trong lúc reconcile cần cơ chế bổ sung như Resource-Instance-level version/optimistic lock hoặc per-resource reconcile lock, cùng provisioner idempotency (ví dụ Terraform refresh + plan); các cơ chế bổ sung này nằm ngoài phạm vi fingerprint.
 
 ## 6. `reconcileInfrastructure()`
 

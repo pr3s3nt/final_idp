@@ -58,21 +58,63 @@ Orchestrator -> InfraPlanner: planInfrastructureChanges(graph,\nresolvedDefiniti
 InfraPlanner --> Orchestrator: Infrastructure plan (create/update/reuse)
 Orchestrator -> InfraPlanner: loadInfrastructureOverrides(plan)
 InfraPlanner --> Orchestrator: Allowed override parameters
-Orchestrator -> DeploymentRepo: persistDeployment(deployment, workloadDeployments,\ndeploymentContext, AWAITING_CONFIRMATION)
+Orchestrator -> Orchestrator: computePlanFingerprint(plan, allowedOverrides, "sha256-v1")
+note right of Orchestrator
+  Canonicalize with stable resource/key ordering and canonical JSON;
+  normalize units/numbers; exclude timestamps and non-semantic generated ids.
+  Fingerprint domain: CREATE/UPDATE/REUSE action, Resource Definition
+  including catalog version, referenced Resource Instance identity,
+  provisioner reference, resolved parameters, allowed-override definition
+  (permitted set/min-max/enum), and deployment target.
+end note
+Orchestrator -> DeploymentRepo: persistDeployment(deployment, workloadDeployments,\ndeploymentContext, planFingerprint, planFingerprintAlgo,\nAWAITING_CONFIRMATION)
 DeploymentRepo --> Orchestrator: Deployment aggregate persisted
-Orchestrator --> API: Infrastructure plan and allowed overrides
-API --> UI: Display infrastructure plan and overrides
+Orchestrator --> API: Infrastructure plan, allowed overrides, fingerprint, and algorithm
+API --> UI: Display infrastructure plan, overrides, fingerprint, and algorithm
 
 Developer -> UI: Set permitted overrides and select Deploy
 UI -> API: confirmDeployment(deploymentId, overrides)
-API -> Orchestrator: applyInfrastructureOverrides(deploymentId, overrides)
-Orchestrator -> InfraPlanner: applyInfrastructureOverrides(plan, overrides)
-InfraPlanner --> Orchestrator: Final infrastructure plan
-Orchestrator -> Orchestrator: confirmDeployment(deploymentId)
-Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, CONFIRMED)
-DeploymentRepo --> Orchestrator: Deployment status persisted
+API -> Orchestrator: confirmDeployment(deploymentId, overrides)
+Orchestrator -> DeploymentRepo: findByIdWithPersistedInputs(deploymentId)
+DeploymentRepo --> Orchestrator: Deployment, workload images, context,\nstored fingerprint and algorithm
+Orchestrator -> Orchestrator: check status = AWAITING_CONFIRMATION
 
-Orchestrator -> InfraReconciler: reconcileInfrastructure(finalPlan)
+alt [status != AWAITING_CONFIRMATION]
+  Orchestrator --> API: Error DEPLOYMENT_ALREADY_CONFIRMED
+  API --> UI: Display confirmation conflict
+else [status = AWAITING_CONFIRMATION]
+  Orchestrator -> AppRepo: findById(deployment.applicationId)
+  AppRepo --> Orchestrator: Current Application Definition and workloads
+  Orchestrator -> ConfigRepo: findById(deployment.environmentConfigurationId)
+  ConfigRepo --> Orchestrator: Persisted Environment Configuration
+  Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinition,\nconfiguration, workloadImages, context)
+  GraphBuilder --> Orchestrator: Rebuilt deployment graph
+  Orchestrator -> ResourceResolver: resolveResourceDefinitions(graph, context)
+  ResourceResolver --> Orchestrator: Current resolved Resource Definitions
+  Orchestrator -> ResourceRepo: findResourceInstances(resolvedResources,\ndeployment.deploymentTarget)
+  ResourceRepo --> Orchestrator: Current resource instances
+  Orchestrator -> InfraPlanner: planInfrastructureChanges(graph,\nresolvedDefinitions, currentInstances)
+  InfraPlanner --> Orchestrator: Rebuilt infrastructure plan
+  Orchestrator -> InfraPlanner: loadInfrastructureOverrides(rebuiltPlan)
+  InfraPlanner --> Orchestrator: Current allowed override parameters
+  Orchestrator -> Orchestrator: computePlanFingerprint(rebuiltPlan,\nallowedOverrides, storedFingerprintAlgo)
+
+  alt [rebuiltPlanFingerprint != storedFingerprint]
+    Orchestrator -> DeploymentRepo: compareAndSetPlanFingerprint(deploymentId,\nAWAITING_CONFIRMATION, storedFingerprint, rebuiltPlanFingerprint)
+    DeploymentRepo --> Orchestrator: Fingerprint refresh result
+    Orchestrator --> API: Error PLAN_CHANGED, rebuilt plan, allowed overrides,\nand rebuilt fingerprint; status remains AWAITING_CONFIRMATION
+    API --> UI: Re-present changed plan for review and re-confirmation
+  else [rebuiltPlanFingerprint = storedFingerprint]
+    Orchestrator -> InfraPlanner: applyInfrastructureOverrides(rebuiltPlan, overrides)\n(validate permitted set/type/range first)
+    InfraPlanner --> Orchestrator: Final infrastructure plan
+    Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId,\nAWAITING_CONFIRMATION, CONFIRMED) <<atomic CAS>>
+    DeploymentRepo --> Orchestrator: Affected row count
+
+    alt [affected rows = 0]
+      Orchestrator --> API: Error DEPLOYMENT_ALREADY_CONFIRMED
+      API --> UI: Display confirmation conflict
+    else [affected rows = 1]
+      Orchestrator -> InfraReconciler: reconcileInfrastructure(finalPlan)
 InfraReconciler -> Provisioner: reconcile(finalPlan)
 Provisioner -> IaCRunner: apply infrastructure modules
 IaCRunner --> Provisioner: Infrastructure ready and raw outputs
@@ -97,14 +139,14 @@ end note
 ConfigResolver --> Orchestrator: Resolved configuration and dependencies
 Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, CONFIGURATION_RESOLVED)
 DeploymentRepo --> Orchestrator: Deployment status persisted
-Orchestrator -> SpecGenerator: generateResolvedApplicationSpecification(\napplicationDefinition, images, resolvedConfiguration)
+Orchestrator -> SpecGenerator: generateResolvedApplicationSpecification(\napplicationDefinition, workloadImages, resolvedConfiguration)
 SpecGenerator --> Orchestrator: Resolved application specification
 
 Orchestrator -> ManifestGenerator: generateKubernetesManifest(resolvedSpecification)
 ManifestGenerator -> ScoreK8s: render(resolvedSpecification)
 ScoreK8s --> ManifestGenerator: Base Kubernetes manifest
 ManifestGenerator --> Orchestrator: Base Kubernetes manifest
-Orchestrator -> TargetAdapter: adaptManifestForTarget(baseManifest, target)
+Orchestrator -> TargetAdapter: adaptManifestForTarget(baseManifest,\ndeployment.deploymentTarget)
 TargetAdapter --> Orchestrator: Target-adapted manifest
 Orchestrator -> ConfigMaterializer: materializeEnvironmentConfiguration(\ntargetAdaptedManifest, resolvedEnvironmentVariables)
 ConfigMaterializer --> Orchestrator: Manifest with environment configuration
@@ -127,10 +169,14 @@ CDIntegration --> Orchestrator: Delivery reference and status
 Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, SUBMITTED)
 DeploymentRepo --> Orchestrator: Deployment status persisted
 
-Orchestrator -> DeploymentRepo: saveDeploymentRecord(environment, target, images,\ninfrastructureReferences, deliveryStatus)
+Orchestrator -> DeploymentRepo: saveDeploymentRecord(deployment.environment,\ndeployment.deploymentTarget, workloadImages,\ninfrastructureReferences, deliveryStatus)
 DeploymentRepo --> Orchestrator: Deployment Record saved
 Orchestrator --> API: Deployment created
 API --> UI: Display deployment tracking information
 UI --> Developer: Deployment submitted
+
+    end
+  end
+end
 
 @enduml
