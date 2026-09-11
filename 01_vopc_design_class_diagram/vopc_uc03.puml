@@ -143,6 +143,8 @@ package "Persistence" {
   }
   class "Deployment Repository" as DeploymentRepo <<entity>> {
     -deploymentRecords: Collection
+    +persistDeployment(deployment, workloadDeployments, deploymentContext, status)
+    +updateDeploymentStatus(deploymentId, status)
     +saveDeploymentRecord(environment, target, images, infrastructureReferences, deliveryStatus)
   }
 }

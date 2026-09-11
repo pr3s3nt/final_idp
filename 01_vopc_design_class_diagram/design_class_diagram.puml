@@ -54,6 +54,7 @@ package "Boundary/UI" {
     -queryService: DeploymentQueryService
     +listDeployments(applicationId)
     +getDeploymentDetail(deploymentId)
+    +getDeploymentFailureDetail(deploymentId)
   }
 }
 
@@ -94,6 +95,7 @@ package "Application services" {
     -resourceRepository: ResourceInstanceRepository
     +listDeployments(applicationId)
     +getDeploymentDetail(deploymentId)
+    +getDeploymentFailureDetail(deploymentId)
   }
 }
 
@@ -258,9 +260,12 @@ package "Persistence" {
   }
   class "Deployment Repository" as DeploymentRepository <<entity>> {
     -deploymentRecords: Collection
+    +persistDeployment(deployment, workloadDeployments, deploymentContext, status)
+    +updateDeploymentStatus(deploymentId, status)
     +saveDeploymentRecord(environment, target, images, infrastructureReferences, deliveryStatus)
     +findByApplication(applicationId)
     +getDeploymentDetail(deploymentId)
+    +getDeploymentFailureDetail(deploymentId)
     +getDeploymentProgress(deploymentId)
     +getDeploymentImages(deploymentId)
   }

@@ -58,6 +58,8 @@ Orchestrator -> InfraPlanner: planInfrastructureChanges(graph,\nresolvedDefiniti
 InfraPlanner --> Orchestrator: Infrastructure plan (create/update/reuse)
 Orchestrator -> InfraPlanner: loadInfrastructureOverrides(plan)
 InfraPlanner --> Orchestrator: Allowed override parameters
+Orchestrator -> DeploymentRepo: persistDeployment(deployment, workloadDeployments,\ndeploymentContext, AWAITING_CONFIRMATION)
+DeploymentRepo --> Orchestrator: Deployment aggregate persisted
 Orchestrator --> API: Infrastructure plan and allowed overrides
 API --> UI: Display infrastructure plan and overrides
 
@@ -67,6 +69,8 @@ API -> Orchestrator: applyInfrastructureOverrides(deploymentId, overrides)
 Orchestrator -> InfraPlanner: applyInfrastructureOverrides(plan, overrides)
 InfraPlanner --> Orchestrator: Final infrastructure plan
 Orchestrator -> Orchestrator: confirmDeployment(deploymentId)
+Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, CONFIRMED)
+DeploymentRepo --> Orchestrator: Deployment status persisted
 
 Orchestrator -> InfraReconciler: reconcileInfrastructure(finalPlan)
 InfraReconciler -> Provisioner: reconcile(finalPlan)
@@ -76,6 +80,8 @@ Provisioner --> InfraReconciler: Resource state and outputs
 InfraReconciler -> ResourceRepo: saveResourceInstances(resourceState)
 ResourceRepo --> InfraReconciler: Resource instances saved
 InfraReconciler --> Orchestrator: Infrastructure references
+Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, INFRASTRUCTURE_READY)
+DeploymentRepo --> Orchestrator: Deployment status persisted
 
 Orchestrator -> OutputCollector: collectResourceOutputs(infrastructureReferences)
 OutputCollector -> ResourceRepo: loadResourceOutputs(infrastructureReferences)
@@ -89,6 +95,8 @@ note right of ConfigResolver
   output collection step in this sequence.
 end note
 ConfigResolver --> Orchestrator: Resolved configuration and dependencies
+Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, CONFIGURATION_RESOLVED)
+DeploymentRepo --> Orchestrator: Deployment status persisted
 Orchestrator -> SpecGenerator: generateResolvedApplicationSpecification(\napplicationDefinition, images, resolvedConfiguration)
 SpecGenerator --> Orchestrator: Resolved application specification
 
@@ -116,6 +124,8 @@ Kubernetes --> CDSystem: Deployment accepted
 CDSystem --> CDProvider: Synchronization started
 CDProvider --> CDIntegration: Delivery reference and status
 CDIntegration --> Orchestrator: Delivery reference and status
+Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, SUBMITTED)
+DeploymentRepo --> Orchestrator: Deployment status persisted
 
 Orchestrator -> DeploymentRepo: saveDeploymentRecord(environment, target, images,\ninfrastructureReferences, deliveryStatus)
 DeploymentRepo --> Orchestrator: Deployment Record saved

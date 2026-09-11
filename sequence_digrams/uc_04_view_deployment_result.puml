@@ -56,6 +56,16 @@ QueryService -> Aggregator: aggregate(deploymentRecord, progress, images,\ninfra
 Aggregator --> QueryService: Deployment result view model
 QueryService --> API: Deployment result
 API --> UI: Display environment, target, images, progress,\ninfrastructure, CD status, workload health and endpoints
+
+opt Deployment failed (A1)
+  UI -> API: getDeploymentFailureDetail(deploymentId)
+  API -> QueryService: getDeploymentFailureDetail(deploymentId)
+  QueryService -> DeploymentRepo: getDeploymentFailureDetail(deploymentId)
+  DeploymentRepo --> QueryService: Failed deployment_step rows (status,\nrelated_component_reference, error_summary)\nand deployment_record.error_summary
+  QueryService --> API: Deployment failure detail
+  API --> UI: Failed step, related component and error summary
+end
+
 UI --> Developer: Show deployment result
 
 @enduml
