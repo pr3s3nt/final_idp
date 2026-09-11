@@ -101,6 +101,8 @@ class "Resource Definition" as ResourceDefinition <<entity>> {
   resourceType: String
   provisionerReference: String
   supportedContexts: Map
+  defaultParameters: Map
+  allowedOverrides: Map
   exposedOutputs: List<String>
   sensitiveOutputs: List<String>
 }

@@ -57,18 +57,19 @@ ResourceRepo --> Orchestrator: Current resource instances
 Orchestrator -> InfraPlanner: planInfrastructureChanges(graph,\nresolvedDefinitions, currentInstances)
 InfraPlanner --> Orchestrator: Infrastructure plan (create/update/reuse)
 Orchestrator -> InfraPlanner: loadInfrastructureOverrides(plan)
-InfraPlanner --> Orchestrator: Allowed override parameters
+InfraPlanner --> Orchestrator: Allowed override parameters from\nresource_definition.allowed_overrides
 Orchestrator -> Orchestrator: computePlanFingerprint(plan, allowedOverrides, "sha256-v1")
 note right of Orchestrator
   Canonicalize with stable resource/key ordering and canonical JSON;
   normalize units/numbers; exclude timestamps and non-semantic generated ids.
   Fingerprint domain: each resource's CREATE/UPDATE/REUSE action;
   referenced Resource Definition identity and its plan-affecting fields
-  (provisioner_reference, supported_contexts, and resolved parameters/defaults
-  derived from the definition); referenced Resource Instance identity;
-  provisioner reference; resolved parameters; allowed-override definition
-  (permitted key set/min-max/enum); and deployment target. Changes to those
-  Resource Definition fields change the fingerprint directly; no version column is used.
+  (provisioner_reference, supported_contexts, default_parameters, and
+  allowed_overrides); resolved parameters derived from default_parameters
+  plus deployment context; allowed-override definition derived from
+  allowed_overrides; referenced Resource Instance identity; and deployment
+  target. Changes to those Resource Definition fields change the fingerprint
+  directly; no version column is used.
 end note
 Orchestrator -> DeploymentRepo: persistDeployment(deployment, workloadDeployments,\ndeploymentContext, planFingerprint, planFingerprintAlgo,\nAWAITING_CONFIRMATION)
 DeploymentRepo --> Orchestrator: Deployment aggregate persisted
@@ -99,7 +100,7 @@ else [status = AWAITING_CONFIRMATION]
   Orchestrator -> InfraPlanner: planInfrastructureChanges(graph,\nresolvedDefinitions, currentInstances)
   InfraPlanner --> Orchestrator: Rebuilt infrastructure plan
   Orchestrator -> InfraPlanner: loadInfrastructureOverrides(rebuiltPlan)
-  InfraPlanner --> Orchestrator: Current allowed override parameters
+  InfraPlanner --> Orchestrator: Current allowed override parameters from\nresource_definition.allowed_overrides
   Orchestrator -> Orchestrator: computePlanFingerprint(rebuiltPlan,\nallowedOverrides, storedFingerprintAlgo)
 
   alt [rebuiltPlanFingerprint != storedFingerprint]

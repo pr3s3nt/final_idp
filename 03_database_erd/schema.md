@@ -158,6 +158,8 @@ Constraint bổ sung: `UNIQUE (environment_configuration_id, secret_definition_i
 | `resource_type` | VARCHAR(100) | NOT NULL | Loại logical resource được definition hỗ trợ. |
 | `provisioner_reference` | VARCHAR(2048) | NOT NULL | Reference tới provisioner/module; không phải execution result. |
 | `supported_contexts` | JSONB | NOT NULL | Các deployment context được hỗ trợ. |
+| `default_parameters` | JSONB | NOT NULL | Giá trị mặc định và schema của các provisioning parameter do definition cung cấp, ví dụ default cho `instanceClass` và `storageGb`; là nguồn bền vững để plan resolve parameter theo deployment context. |
+| `allowed_overrides` | JSONB | NOT NULL | Policy override do definition cung cấp: các parameter key Developer được phép override cùng tập giá trị, khoảng min-max hoặc enum hợp lệ. |
 | `exposed_outputs` | JSONB | NOT NULL | Danh sách normal outputs hợp lệ. |
 | `sensitive_outputs` | JSONB | NOT NULL | Danh sách sensitive outputs hợp lệ. |
 

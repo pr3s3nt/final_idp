@@ -127,6 +127,8 @@ package "Platform Resource Definition Catalog" {
     * resource_type : VARCHAR(100) <<NOT NULL>>
     * provisioner_reference : VARCHAR(2048) <<NOT NULL>>
     * supported_contexts : JSONB <<NOT NULL>>
+    * default_parameters : JSONB <<NOT NULL>>
+    * allowed_overrides : JSONB <<NOT NULL>>
     * exposed_outputs : JSONB <<NOT NULL>>
     * sensitive_outputs : JSONB <<NOT NULL>>
   }
