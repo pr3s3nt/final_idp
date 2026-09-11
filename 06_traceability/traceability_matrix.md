@@ -82,7 +82,7 @@ Quy ước đọc matrix:
 | Deployment Query API / Controller | Nhận `listDeployments()`, `getDeploymentDetail()`, `getDeploymentFailureDetail()` | PASS |
 | Application Service | Xử lý các system operation UC-01 | PASS |
 | Environment Configuration Service | Xử lý select/set/bind/save của UC-02 | PASS |
-| Deployment Orchestrator | Nhận/tự gọi create, validate, apply override và confirm trong UC-03 | PASS |
+| Deployment Orchestrator | `createDeployment(...)`, `validateDeploymentInput()`, `computePlanFingerprint(plan, allowedOverrides, algo)`, `confirmDeployment(deploymentId, overrides)`; điều phối `Infrastructure Planner.applyInfrastructureOverrides(plan, overrides)` sau fingerprint match | PASS |
 | Deployment Query Service | Điều phối `listDeployments()`, `getDeploymentDetail()`, `getDeploymentFailureDetail()` | PASS |
 | Application Definition Validator | `validateApplicationDefinition()` | PASS |
 | Application Specification Generator | `generateApplicationSpecification()` | PASS |
@@ -114,9 +114,9 @@ Quy ước đọc matrix:
 | Application Repository | Persistence holder: internal `findById()`, `save()` | PASS |
 | Specification Repository / Config Repo Service | Persistence holder: internal `save()` | PASS |
 | Application Query / Application Repository | `loadConfigurationRequirements()` | PASS |
-| Environment Configuration Repository | Persistence holder: internal `save()`, `findByApplicationAndEnvironment()`, `findById()` | PASS |
+| Environment Configuration Repository | Persistence holder: internal `save()`, `findByApplicationAndEnvironment(applicationId, environment)`, `findById(environmentConfigurationId)` | PASS |
 | Resource Instance Repository | `getInfrastructureStatus()` và internal find/save/load output operations | PASS |
-| Deployment Repository | `persistDeployment()`, `findByIdWithPersistedInputs()`, `compareAndSetPlanFingerprint()`, atomic `updateDeploymentStatus()`, `saveDeploymentRecord()`, `getDeploymentDetail()`, `getDeploymentFailureDetail()`, `getDeploymentProgress()`, `getDeploymentImages()` và internal `findByApplication()` | PASS |
+| Deployment Repository | `persistDeployment(deployment, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)`, `findByIdWithPersistedInputs(deploymentId)`, `compareAndSetPlanFingerprint(deploymentId, expectedStatus, expectedFingerprint, newFingerprint)`, atomic CAS `updateDeploymentStatus(deploymentId, expectedStatus, newStatus)`, 2-arg `updateDeploymentStatus(deploymentId, status)`, `saveDeploymentRecord()`, `getDeploymentDetail()`, `getDeploymentFailureDetail()`, `getDeploymentProgress()`, `getDeploymentImages()` và internal `findByApplication()` | PASS |
 
 **Kết luận B2: PASS.** Toàn bộ 42 class hợp nhất trong VOPC có operation cụ thể hoặc có justification rõ ràng là presentation/persistence holder, integration implementation hay external participant; `getDeploymentFailureDetail()` hiện có owner ở Controller, Service và Repository.
 
@@ -185,7 +185,7 @@ Quy ước đọc matrix:
 1. **RESOLVED — UC-04 orphan operation:** `getDeploymentFailureDetail()` đã có nhánh A1 UI → Controller → Service → Repository, đọc failure fields từ `deployment_step` và `deployment_record`, đồng thời được khai báo trong VOPC/design class diagram.
 2. **ACCEPTED SCOPE BOUNDARY — NOT RESOLVED BY DESIGN:** `Resource Definition` là catalog `PERSISTENT (platform-managed)` nhưng không có Step-2 operation create/update/import trong bốn Developer use case. Writer thuộc platform administration ngoài phạm vi hiện tại; không bổ sung writer giả vào các UC này.
 3. **RESOLVED — UC-03 Deployment persistence:** Sequence/VOPC đã có `persistDeployment(..., AWAITING_CONFIRMATION)` cho aggregate ban đầu và `updateDeploymentStatus()` tại các transition `CONFIRMED`, `INFRASTRUCTURE_READY`, `CONFIGURATION_RESOLVED`, `SUBMITTED`; `saveDeploymentRecord()` tiếp tục persist delivery/progress/failure như trước.
-4. **RESOLVED — Gap 4, transient Infrastructure Plan across requests:** `createDeployment()` canonicalize/hash plan và persist chỉ `plan_fingerprint` + algorithm; `confirmDeployment()` rebuild từ persisted inputs + current catalog/Resource Instance state, trả `PLAN_CHANGED` để review lại khi mismatch, và chỉ apply overrides + atomic status CAS + reconcile khi match. Scope: fingerprint bao phủ allowed-overrides **definition**, không bao phủ Developer-selected values (validate sau match); đây chỉ là application-level defense-in-depth, còn shared-resource contention/drift cần Resource-Instance-level version/optimistic lock hoặc per-resource reconcile lock, cộng provisioner idempotency (ví dụ Terraform refresh + plan), đều ngoài phạm vi fingerprint.
+4. **RESOLVED — Gap 4, transient Infrastructure Plan across requests:** `createDeployment()` canonicalize/hash plan và persist chỉ `plan_fingerprint` + algorithm; `confirmDeployment()` rebuild từ persisted inputs + current catalog/Resource Instance state, trả `PLAN_CHANGED` để review lại khi mismatch, và chỉ apply overrides + atomic status CAS + reconcile khi match. Fingerprint hash trực tiếp action của từng resource, Resource Definition identity cùng `provisioner_reference`, `supported_contexts` và resolved parameters/defaults suy ra từ definition, referenced Resource Instance identity, provisioner reference, resolved parameters, allowed-overrides **definition** và deployment target; không cần cột version trên `resource_definition`. Scope: fingerprint không bao phủ Developer-selected override values (validate sau match); đây chỉ là application-level defense-in-depth, còn shared-resource contention/drift cần Resource-Instance-level version/optimistic lock hoặc per-resource reconcile lock, cộng provisioner idempotency (ví dụ Terraform refresh + plan), đều ngoài phạm vi fingerprint.
 
 ### Notes
 

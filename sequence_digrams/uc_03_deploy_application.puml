@@ -62,10 +62,13 @@ Orchestrator -> Orchestrator: computePlanFingerprint(plan, allowedOverrides, "sh
 note right of Orchestrator
   Canonicalize with stable resource/key ordering and canonical JSON;
   normalize units/numbers; exclude timestamps and non-semantic generated ids.
-  Fingerprint domain: CREATE/UPDATE/REUSE action, Resource Definition
-  including catalog version, referenced Resource Instance identity,
-  provisioner reference, resolved parameters, allowed-override definition
-  (permitted set/min-max/enum), and deployment target.
+  Fingerprint domain: each resource's CREATE/UPDATE/REUSE action;
+  referenced Resource Definition identity and its plan-affecting fields
+  (provisioner_reference, supported_contexts, and resolved parameters/defaults
+  derived from the definition); referenced Resource Instance identity;
+  provisioner reference; resolved parameters; allowed-override definition
+  (permitted key set/min-max/enum); and deployment target. Changes to those
+  Resource Definition fields change the fingerprint directly; no version column is used.
 end note
 Orchestrator -> DeploymentRepo: persistDeployment(deployment, workloadDeployments,\ndeploymentContext, planFingerprint, planFingerprintAlgo,\nAWAITING_CONFIRMATION)
 DeploymentRepo --> Orchestrator: Deployment aggregate persisted

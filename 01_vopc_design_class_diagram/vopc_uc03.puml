@@ -30,8 +30,8 @@ package "Application services" {
     +loadDeploymentContext(applicationId, environment, target)
     +createDeployment(applicationId, environment, target, images, context)
     +validateDeploymentInput()
-    +applyInfrastructureOverrides(deploymentId, overrides)
-    +confirmDeployment(deploymentId)
+    +computePlanFingerprint(plan, allowedOverrides, algo)
+    +confirmDeployment(deploymentId, overrides)
   }
 }
 
@@ -134,6 +134,7 @@ package "Persistence" {
   class "Environment Configuration Repository" as ConfigRepo <<entity>> {
     -environmentConfigurations: Collection
     +findByApplicationAndEnvironment(applicationId, environment)
+    +findById(environmentConfigurationId)
   }
   class "Resource Instance Repository" as ResourceRepo <<entity>> {
     -resourceInstances: Collection
@@ -143,7 +144,10 @@ package "Persistence" {
   }
   class "Deployment Repository" as DeploymentRepo <<entity>> {
     -deploymentRecords: Collection
-    +persistDeployment(deployment, workloadDeployments, deploymentContext, status)
+    +persistDeployment(deployment, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
+    +findByIdWithPersistedInputs(deploymentId)
+    +compareAndSetPlanFingerprint(deploymentId, expectedStatus, expectedFingerprint, newFingerprint)
+    +updateDeploymentStatus(deploymentId, expectedStatus, newStatus)
     +updateDeploymentStatus(deploymentId, status)
     +saveDeploymentRecord(environment, target, images, infrastructureReferences, deliveryStatus)
   }
