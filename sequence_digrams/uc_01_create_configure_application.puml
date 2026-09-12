@@ -1,9 +1,7 @@
 @startuml
-title UC-01 - Create / Configure Application (Main Flow)
-
+title UC-01 - Create / Configure Application (client-owned draft)
 autonumber
 hide footbox
-
 actor Developer
 boundary "Web UI" as UI
 control "Application API / Controller" as API
@@ -13,55 +11,54 @@ entity "Application Repository" as AppRepo
 control "Application Specification Generator" as SpecGenerator
 entity "Specification Repository /\nConfig Repo Service" as SpecRepo
 
-Developer -> UI: Select Create Application\nor open an existing application
-
-alt Create a new application
-    UI -> API: createApplication(name, description)
-    API -> Service: createApplication(name, description)
-    Service --> API: Application draft
-    API --> UI: Display application editor
-else Update an existing application
-    UI -> API: updateApplication(applicationId)
-    API -> Service: updateApplication(applicationId)
-    Service -> AppRepo: findById(applicationId)
-    AppRepo --> Service: Application Definition
-    Service --> API: Editable Application Definition draft
-    API --> UI: Display application editor
+note over UI, Service
+  ApplicationDefinitionDraft is owned by Web UI. Every edit request carries
+  the complete draft and returns its replacement. API and Service retain no
+  applicationDraft between requests.
+end note
+Developer -> UI: Create application or open existing application
+alt Create
+  UI -> API: createApplication(name, description)
+  API -> Service: createApplication(name, description)
+  Service --> API: ApplicationDefinitionDraft
+else Update
+  UI -> API: updateApplication(applicationId)
+  API -> Service: updateApplication(applicationId)
+  Service -> AppRepo: findById(applicationId)
+  AppRepo --> Service: Application Definition
+  Service --> API: ApplicationDefinitionDraft
 end
+API --> UI: Store draft locally
 
-Developer -> UI: Add resource requirements
-UI -> API: addResourceRequirement(applicationId, resources)
-API -> Service: addResourceRequirement(applicationId, resources)
+Developer -> UI: Edit resources, workloads, definitions and dependencies
+UI -> API: addResourceRequirement(applicationDraft, resources)
+API -> Service: addResourceRequirement(applicationDraft, resources)
+Service --> API: Updated ApplicationDefinitionDraft
+API --> UI: Replace local draft
+UI -> API: addWorkload(applicationDraft, workloads)
+API -> Service: addWorkload(applicationDraft, workloads)
+Service --> API: Updated ApplicationDefinitionDraft
+API --> UI: Replace local draft
+UI -> API: defineConfigurationRequirement(applicationDraft, requirements)
+API -> Service: defineConfigurationRequirement(applicationDraft, requirements)
+Service --> API: Updated ApplicationDefinitionDraft
+API --> UI: Replace local draft
+UI -> API: defineDependency(applicationDraft, dependencies)
+API -> Service: defineDependency(applicationDraft, dependencies)
+Service --> API: Updated ApplicationDefinitionDraft
+API --> UI: Display topology from local draft
 
-Developer -> UI: Add workloads\n(type, image repository, port)
-UI -> API: addWorkload(applicationId, workloads)
-API -> Service: addWorkload(applicationId, workloads)
-
-Developer -> UI: Define environment variables and secrets\nfor each workload
-UI -> API: defineConfigurationRequirement(applicationId, requirements)
-API -> Service: defineConfigurationRequirement(applicationId, requirements)
-
-Developer -> UI: Define dependencies
-UI -> API: defineDependency(applicationId, dependencies)
-API -> Service: defineDependency(applicationId, dependencies)
-
-Service --> API: Updated Application Definition draft
-API --> UI: Display topology and configuration summary
-UI --> Developer: Show application overview
-
-Developer -> UI: Select Save Application
-UI -> API: saveApplicationDefinition(applicationDefinition)
-API -> Service: saveApplicationDefinition(applicationDefinition)
-Service -> Validator: validateApplicationDefinition(applicationDefinition)
-Validator --> Service: Validation successful
+Developer -> UI: Save Application
+UI -> API: saveApplicationDefinition(applicationDraft)
+API -> Service: saveApplicationDefinition(applicationDraft)
+Service -> Validator: validateApplicationDefinition(applicationDraft)
+Validator --> Service: Valid
 Service -> AppRepo: save(applicationDefinition)
-AppRepo --> Service: Saved Application Definition
+AppRepo --> Service: Saved definition
 Service -> SpecGenerator: generateApplicationSpecification(applicationDefinition)
-SpecGenerator --> Service: Application specification (for example, score.yaml)
+SpecGenerator --> Service: Application specification
 Service -> SpecRepo: save(applicationSpecification)
-SpecRepo --> Service: Specification saved
+SpecRepo --> Service: Saved
 Service --> API: Application saved
-API --> UI: Show save confirmation
-UI --> Developer: Application Definition and specification saved
-
+API --> UI: Show confirmation
 @enduml

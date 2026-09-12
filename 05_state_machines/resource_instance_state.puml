@@ -1,33 +1,26 @@
 @startuml
 title Step 5 - Resource Instance State Machine
-
 hide empty description
-
 state "Planned\n(PLANNED)" as PLANNED
 state "Provisioning\n(PROVISIONING)" as PROVISIONING
 state "Ready\n(READY)" as READY
 state "Failed\n(FAILED)" as FAILED
+state "Retired\n(RETIRED)" as RETIRED
 
-[*] --> PLANNED : planInfrastructureChanges [create] /\nresolve Resource Definition and target
-
-PLANNED --> PROVISIONING : reconcileInfrastructure [create or update] /\ninvoke provisioner apply
-PROVISIONING --> READY : provisioner apply success /\npersist infrastructure and provider-state references
-PROVISIONING --> FAILED : provisioner apply failure /\npersist actual provider state and failure status
-
-READY --> PLANNED : planInfrastructureChanges [update] /\nretain Resource Instance identity
-READY --> READY : reconcileInfrastructure [reuse] /\nconfirm or refresh provider state
-READY --> READY : collectResourceOutputs /\nexpose transient Resource Output values
-
-note right of PLANNED
-  For create, planning precedes creation of the durable row.
-  The Resource Instance is persisted when provider state and an
-  infrastructure reference exist; PLANNED still names the
-  lifecycle phase/status defined by the infrastructure plan.
-end note
+[*] --> PLANNED : planner chooses CREATE
+PLANNED --> PROVISIONING : reconcile create/update
+PROVISIONING --> READY : provider success / persist references
+PROVISIONING --> FAILED : provider failure / persist actual state
+READY --> PLANNED : planner chooses UPDATE / retain identity
+READY --> READY : scope-safe REUSE / refresh state
+READY --> READY : collectResourceOutputs / transient outputs
+READY --> RETIRED : retire instance and active bindings / exclude from reuse
+FAILED --> PLANNED : explicit retry/update
+RETIRED --> [*]
 
 note right of READY
-  Reuse is a reconciliation decision/transition, not a separate
-  Resource Instance status. Resource Output remains TRANSIENT.
+  Canonical reuse starts from exact active ResourceInstanceBinding tuple.
+  Owner columns are original ownership only, never an alternate read path.
+  Cross-boundary reuse requires EXPLICIT_SHARED + matching key/policy.
 end note
-
 @enduml

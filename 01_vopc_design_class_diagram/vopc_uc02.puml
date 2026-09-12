@@ -9,6 +9,7 @@ hide empty members
 package "Boundary/UI" {
   class "Web UI" as WebUI <<boundary>> {
     -selectedEnvironment: String
+    -configurationDraft: ConfigurationDefinitionDraft
     +showConfigurationRequirements()
     +showValidResourceOutputs()
     +showValidWorkloadOutputs()
@@ -16,25 +17,26 @@ package "Boundary/UI" {
   class "Environment Configuration API / Controller" as API <<control>> {
     -configurationService: ConfigurationService
     +selectEnvironment(applicationId, environment)
-    +setDirectConfigurationValue(item, value)
+    +setDirectConfigurationValue(configurationDraft, item, valueOrOpaqueReference)
     +requestResourceOutputs(resource)
     +requestWorkloadOutputs(workload)
-    +bindResourceOutput(item, resource, output)
-    +bindWorkloadOutput(variable, workload, output)
-    +saveEnvironmentConfiguration(configuration)
+    +bindResourceOutput(configurationDraft, item, resource, output)
+    +bindWorkloadOutput(configurationDraft, variable, workload, output)
+    +stageSecret(applicationId, environment, secretDefinitionId, secretValue, idempotencyKey)
+    +saveEnvironmentConfiguration(configurationDraft)
   }
 }
 
 package "Application services" {
   class "Environment Configuration Service" as ConfigurationService <<control>> {
-    -configurationDraft: Object
     +selectEnvironment(applicationId, environment)
-    +setDirectConfigurationValue(item, value)
+    +setDirectConfigurationValue(configurationDraft, item, valueOrOpaqueReference)
     +requestResourceOutputs(resource)
     +requestWorkloadOutputs(workload)
-    +bindResourceOutput(item, resource, output)
-    +bindWorkloadOutput(variable, workload, output)
-    +saveEnvironmentConfiguration(configuration)
+    +bindResourceOutput(configurationDraft, item, resource, output)
+    +bindWorkloadOutput(configurationDraft, variable, workload, output)
+    +stageSecret(applicationId, environment, secretDefinitionId, secretValue, idempotencyKey)
+    +saveEnvironmentConfiguration(configurationDraft)
   }
 }
 
@@ -46,18 +48,20 @@ package "Domain components" {
   }
   class "Workload Output Catalog" as WorkloadCatalog <<control>> {
     -workloadDefinitions: List
-    +listValidOutputs(workload)
+    +listValidPlanTimeOutputs(workload)
   }
   class "Environment Configuration Validator" as Validator <<control>> {
     -validationRules: List
-    +validateEnvironmentConfiguration(configuration)
+    +validateEnvironmentConfiguration(configurationDraft)
   }
 }
 
 package "Integration abstractions" {
   interface "Secret Store / Secret Management Adapter" as SecretStore <<interface>> {
     -secretNamespace: String
-    +storeSecret(applicationId, environment, secretValue)
+    +stageSecret(applicationId, environment, secretDefinitionId, secretValue, ttl, idempotencyKey)
+    +promoteStagedSecrets(stagedReferences)
+    +revokeStagedSecrets(stagedReferences)
   }
 }
 
@@ -82,8 +86,13 @@ ConfigurationService ..> SecretStore
 ConfigurationService "1" --> "1" ConfigRepo
 
 note right of SecretStore
-  Concrete secret backend is not selected
-  in UC-02.
+  Returns opaque idempotent references. Staging TTL plus
+  promote/revoke compensation bounds cross-system failures.
+end note
+
+note right of ConfigurationService
+  Stateless across requests; every mutation consumes and returns
+  the complete Web-UI-owned draft. It never returns secret plaintext.
 end note
 
 @enduml

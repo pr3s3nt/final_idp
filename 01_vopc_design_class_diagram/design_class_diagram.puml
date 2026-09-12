@@ -13,6 +13,8 @@ package "Boundary/UI" {
     -selectedTarget: String
     -selectedImages: Map
     -selectedDeploymentId: String
+    -applicationDraft: ApplicationDefinitionDraft
+    -configurationDraft: ConfigurationDefinitionDraft
     +showApplicationEditor()
     +showApplicationOverview()
     +showConfigurationRequirements()
@@ -28,27 +30,28 @@ package "Boundary/UI" {
     -applicationService: ApplicationService
     +createApplication(name, description)
     +updateApplication(applicationId)
-    +addResourceRequirement(applicationId, resources)
-    +addWorkload(applicationId, workloads)
-    +defineConfigurationRequirement(applicationId, requirements)
-    +defineDependency(applicationId, dependencies)
-    +saveApplicationDefinition(applicationDefinition)
+    +addResourceRequirement(applicationDraft, resources)
+    +addWorkload(applicationDraft, workloads)
+    +defineConfigurationRequirement(applicationDraft, requirements)
+    +defineDependency(applicationDraft, dependencies)
+    +saveApplicationDefinition(applicationDraft)
   }
   class "Environment Configuration API / Controller" as EnvironmentAPI <<control>> {
     -configurationService: EnvironmentConfigurationService
     +selectEnvironment(applicationId, environment)
-    +setDirectConfigurationValue(item, value)
+    +setDirectConfigurationValue(configurationDraft, item, valueOrOpaqueReference)
     +requestResourceOutputs(resource)
     +requestWorkloadOutputs(workload)
-    +bindResourceOutput(item, resource, output)
-    +bindWorkloadOutput(variable, workload, output)
-    +saveEnvironmentConfiguration(configuration)
+    +bindResourceOutput(configurationDraft, item, resource, output)
+    +bindWorkloadOutput(configurationDraft, variable, workload, output)
+    +stageSecret(applicationId, environment, secretDefinitionId, secretValue, idempotencyKey)
+    +saveEnvironmentConfiguration(configurationDraft)
   }
   class "Deployment API / Controller" as DeploymentAPI <<control>> {
     -orchestrator: DeploymentOrchestrator
     +loadDeploymentForm(applicationId, environment, target)
     +createDeployment(applicationId, environment, target, images, context)
-    +confirmDeployment(deploymentId, overrides)
+    +confirmDeployment(deploymentId, overrides, idempotencyKey)
   }
   class "Deployment Query API / Controller" as DeploymentQueryAPI <<control>> {
     -queryService: DeploymentQueryService
@@ -64,31 +67,35 @@ package "Application services" {
     -specificationRepository: SpecificationRepository
     +createApplication(name, description)
     +updateApplication(applicationId)
-    +addResourceRequirement(applicationId, resources)
-    +addWorkload(applicationId, workloads)
-    +defineConfigurationRequirement(applicationId, requirements)
-    +defineDependency(applicationId, dependencies)
-    +saveApplicationDefinition(applicationDefinition)
+    +addResourceRequirement(applicationDraft, resources)
+    +addWorkload(applicationDraft, workloads)
+    +defineConfigurationRequirement(applicationDraft, requirements)
+    +defineDependency(applicationDraft, dependencies)
+    +saveApplicationDefinition(applicationDraft)
   }
   class "Environment Configuration Service" as EnvironmentConfigurationService <<control>> {
     -applicationQuery: ApplicationQueryRepository
     -configurationRepository: EnvironmentConfigurationRepository
     +selectEnvironment(applicationId, environment)
-    +setDirectConfigurationValue(item, value)
+    +setDirectConfigurationValue(configurationDraft, item, valueOrOpaqueReference)
     +requestResourceOutputs(resource)
     +requestWorkloadOutputs(workload)
-    +bindResourceOutput(item, resource, output)
-    +bindWorkloadOutput(variable, workload, output)
-    +saveEnvironmentConfiguration(configuration)
+    +bindResourceOutput(configurationDraft, item, resource, output)
+    +bindWorkloadOutput(configurationDraft, variable, workload, output)
+    +stageSecret(applicationId, environment, secretDefinitionId, secretValue, idempotencyKey)
+    +saveEnvironmentConfiguration(configurationDraft)
   }
   class "Deployment Orchestrator" as DeploymentOrchestrator <<control>> {
-    -deploymentId: String
-    -deploymentContext: Object
     +loadDeploymentContext(applicationId, environment, target)
     +createDeployment(applicationId, environment, target, images, context)
-    +validateDeploymentInput()
-    +computePlanFingerprint(plan, allowedOverrides, algo)
-    +confirmDeployment(deploymentId, overrides)
+    +validateDeploymentInput(applicationDefinition, configuration, images, context)
+    +canonicalizePlan(plan, overrideDefinitions, algo)
+    +computePlanFingerprint(canonicalBytes)
+    +confirmDeployment(deploymentId, overrides, idempotencyKey)
+  }
+  class "Deployment Worker" as DeploymentWorker <<control>> {
+    +executeDeploymentJob(jobId)
+    +retryOrFail(jobId, error)
   }
   class "Deployment Query Service" as DeploymentQueryService <<control>> {
     -deploymentRepository: DeploymentRepository
@@ -102,7 +109,7 @@ package "Application services" {
 package "Domain components" {
   class "Application Definition Validator" as ApplicationDefinitionValidator <<control>> {
     -validationRules: List
-    +validateApplicationDefinition(applicationDefinition)
+    +validateApplicationDefinition(applicationDraft)
   }
   class "Application Specification Generator" as ApplicationSpecificationGenerator <<control>> {
     -specificationFormat: String
@@ -115,11 +122,11 @@ package "Domain components" {
   }
   class "Workload Output Catalog" as WorkloadOutputCatalog <<control>> {
     -workloadDefinitions: List
-    +listValidOutputs(workload)
+    +listValidPlanTimeOutputs(workload)
   }
   class "Environment Configuration Validator" as EnvironmentConfigurationValidator <<control>> {
     -validationRules: List
-    +validateEnvironmentConfiguration(configuration)
+    +validateEnvironmentConfiguration(configurationDraft)
   }
   class "Deployment Graph Builder" as DeploymentGraphBuilder <<control>> {
     -graph: Object
@@ -130,19 +137,42 @@ package "Domain components" {
     +resolveResourceDefinitions(graph, context)
   }
   class "Infrastructure Planner" as InfrastructurePlanner <<control>> {
-    -plan: Object
-    -allowedOverrides: Map
-    +planInfrastructureChanges(graph, resolvedDefinitions, currentInstances)
+    +planInfrastructureChanges(graph, resolutions, scopedInstances)
     +loadInfrastructureOverrides(plan)
-    +applyInfrastructureOverrides(plan, overrides)
+    +applyInfrastructureOverrides(plan, overrideValues)
+  }
+  class "Infrastructure Plan" as InfrastructurePlan <<transient>> {
+    +applicationId: String
+    +environment: String
+    +deploymentTarget: String
+    +items: InfrastructurePlanItem[]
+  }
+  class "Infrastructure Plan Item" as InfrastructurePlanItem <<transient>> {
+    +resourceRequirementId: String
+    +resourceDefinitionId: String
+    +definitionPlanFields: Map
+    +action: CREATE|UPDATE|REUSE
+    +resolvedParameters: Map
+    +ownershipScope: String
+    +sharingKey: String
+    +referencedResourceInstanceId: String
+  }
+  class "Override Definition" as OverrideDefinition <<transient>> {
+    +parameterKey: String
+    +valueType: String
+    +required: Boolean
+    +constraints: Map
   }
   class "Infrastructure Reconciler" as InfrastructureReconciler <<control>> {
     -infrastructureReferences: List
-    +reconcileInfrastructure(finalPlan)
+    +reconcileInfrastructure(finalPlan, deploymentId)
   }
   class "Resource Output Resolver / Collector" as ResourceOutputCollector <<control>> {
     -resourceOutputs: Map
     +collectResourceOutputs(infrastructureReferences)
+  }
+  class "Workload Output Resolver" as WorkloadOutputResolver <<control>> {
+    +resolvePlanTimeWorkloadOutputs(graph, context)
   }
   class "Environment Configuration Resolver" as EnvironmentConfigurationResolver <<control>> {
     -resolvedConfiguration: Map
@@ -162,7 +192,7 @@ package "Domain components" {
   }
   class "Environment Configuration Materializer" as EnvironmentConfigurationMaterializer <<control>> {
     -resolvedEnvironmentVariables: Map
-    +materializeEnvironmentConfiguration(targetAdaptedManifest, resolvedEnvironmentVariables)
+    +materializeEnvironmentConfiguration(manifest, resolvedEnvironmentVariables)
   }
   class "Secret Materializer" as SecretMaterializer <<control>> {
     -resolvedSecrets: Map
@@ -177,15 +207,17 @@ package "Domain components" {
 package "Integration abstractions" {
   interface "Secret Store / Secret Management Adapter" as SecretStore <<interface>> {
     -secretNamespace: String
-    +storeSecret(applicationId, environment, secretValue)
+    +stageSecret(applicationId, environment, secretDefinitionId, secretValue, ttl, idempotencyKey)
+    +promoteStagedSecrets(stagedReferences)
+    +revokeStagedSecrets(stagedReferences)
   }
   interface "Provisioner Adapter / Provisioner Interface" as ProvisionerAdapter <<interface>> {
     -provisioningContext: Object
-    +reconcile(finalPlan)
+    +reconcile(finalPlan, idempotencyKey)
   }
   interface "CD Integration / CD Provider Interface" as CDIntegration <<interface>> {
     -deliveryReference: String
-    +publishDesiredDeploymentState(desiredState)
+    +publishDesiredDeploymentState(desiredState, deploymentId, idempotencyKey)
   }
   interface "CD Integration / CD Status Provider" as CDStatusProvider <<interface>> {
     -deliveryReference: String
@@ -202,7 +234,7 @@ package "Integration implementations" {
   class "Concrete CD Provider" as ConcreteCDProvider <<control>> {
     -providerType: String
     -endpoint: String
-    +publish(desiredState)
+    +publish(desiredState, idempotencyKey)
     +getStatus(deliveryReference)
   }
 }
@@ -254,8 +286,8 @@ package "Persistence" {
   }
   class "Resource Instance Repository" as ResourceInstanceRepository <<entity>> {
     -resourceInstances: Collection
-    +findResourceInstances(resolvedResources, target)
-    +saveResourceInstances(resourceState)
+    +findReusableInstances(applicationId, environment, requirementIds, target, sharingPolicy)
+    +saveResourceInstancesAndBindings(ownerConsumerScopeAndState)
     +loadResourceOutputs(infrastructureReferences)
     +getInfrastructureStatus(infrastructureReferences)
   }
@@ -264,14 +296,20 @@ package "Persistence" {
     +persistDeployment(deployment, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
     +findByIdWithPersistedInputs(deploymentId)
     +compareAndSetPlanFingerprint(deploymentId, expectedStatus, expectedFingerprint, newFingerprint)
-    +updateDeploymentStatus(deploymentId, expectedStatus, newStatus)
-    +updateDeploymentStatus(deploymentId, status)
-    +saveDeploymentRecord(environment, target, images, infrastructureReferences, deliveryStatus)
+    +acceptConfirmationAndEnqueue(deploymentId, expectedStatus, newStatus, threePendingSteps, overrides, idempotencyKey)
+    +markExecutionRunning(deploymentId, jobId)
+    +recordDeploymentStep(deploymentId, stepName, status, detail)
+    +saveDeploymentRecord(deploymentId, infrastructureReferences, deliveryReference, deliveryStatus, lifecycleStatus)
     +findByApplication(applicationId)
     +getDeploymentDetail(deploymentId)
     +getDeploymentFailureDetail(deploymentId)
     +getDeploymentProgress(deploymentId)
     +getDeploymentImages(deploymentId)
+  }
+  class "Deployment Execution Job / Outbox" as DeploymentExecutionJobRepository <<entity>> {
+    +claimNextJob(lease)
+    +completeJob(jobId)
+    +retryOrFail(jobId, error)
   }
 }
 
@@ -300,17 +338,25 @@ DeploymentOrchestrator "1" --> "1" EnvironmentConfigurationRepository
 DeploymentOrchestrator ..> DeploymentGraphBuilder
 DeploymentOrchestrator ..> ResourceDefinitionResolver
 DeploymentOrchestrator ..> InfrastructurePlanner
-DeploymentOrchestrator ..> InfrastructureReconciler
-DeploymentOrchestrator ..> ResourceOutputCollector
-DeploymentOrchestrator ..> EnvironmentConfigurationResolver
-DeploymentOrchestrator ..> ResolvedSpecificationGenerator
-DeploymentOrchestrator ..> ManifestGenerator
-DeploymentOrchestrator ..> TargetManifestAdapter
-DeploymentOrchestrator ..> EnvironmentConfigurationMaterializer
-DeploymentOrchestrator ..> SecretMaterializer
-DeploymentOrchestrator ..> CDIntegration
 DeploymentOrchestrator "1" --> "1" DeploymentRepository
 DeploymentOrchestrator "1" --> "1" ResourceInstanceRepository
+InfrastructurePlanner --> InfrastructurePlan
+InfrastructurePlan *-- InfrastructurePlanItem
+InfrastructurePlanItem *-- OverrideDefinition
+DeploymentRepository --> DeploymentExecutionJobRepository : atomic enqueue
+DeploymentWorker --> DeploymentExecutionJobRepository
+DeploymentWorker --> DeploymentRepository
+DeploymentWorker ..> InfrastructurePlanner
+DeploymentWorker ..> InfrastructureReconciler
+DeploymentWorker ..> ResourceOutputCollector
+DeploymentWorker ..> WorkloadOutputResolver
+DeploymentWorker ..> EnvironmentConfigurationResolver
+DeploymentWorker ..> ResolvedSpecificationGenerator
+DeploymentWorker ..> ManifestGenerator
+DeploymentWorker ..> TargetManifestAdapter
+DeploymentWorker ..> EnvironmentConfigurationMaterializer
+DeploymentWorker ..> SecretMaterializer
+DeploymentWorker ..> CDIntegration
 InfrastructureReconciler ..> ProvisionerAdapter
 InfrastructureReconciler "1" --> "1" ResourceInstanceRepository
 ResourceOutputCollector "1" --> "1" ResourceInstanceRepository
@@ -330,8 +376,16 @@ CDStatusProvider <|.. ConcreteCDProvider
 WorkloadStatusProvider ..> KubernetesCluster
 
 note right of SecretStore
-  Concrete secret backend is not selected
-  in the source realization.
+  Opaque idempotent reference only; staging TTL plus
+  promote/revoke compensation handles cross-system failures.
+end note
+
+note right of ApplicationService
+  Stateless; consumes and returns complete client-owned drafts.
+end note
+
+note right of DeploymentExecutionJobRepository
+  Durable transactional outbox with unique keys, lease and attempts.
 end note
 
 note right of WorkloadStatusProvider

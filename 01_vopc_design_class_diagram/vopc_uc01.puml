@@ -9,6 +9,7 @@ hide empty members
 package "Boundary/UI" {
   class "Web UI" as WebUI <<boundary>> {
     -currentApplicationId: String
+    -applicationDraft: ApplicationDefinitionDraft
     +showApplicationEditor()
     +showApplicationOverview()
   }
@@ -16,31 +17,30 @@ package "Boundary/UI" {
     -applicationService: ApplicationService
     +createApplication(name, description)
     +updateApplication(applicationId)
-    +addResourceRequirement(applicationId, resources)
-    +addWorkload(applicationId, workloads)
-    +defineConfigurationRequirement(applicationId, requirements)
-    +defineDependency(applicationId, dependencies)
-    +saveApplicationDefinition(applicationDefinition)
+    +addResourceRequirement(applicationDraft, resources)
+    +addWorkload(applicationDraft, workloads)
+    +defineConfigurationRequirement(applicationDraft, requirements)
+    +defineDependency(applicationDraft, dependencies)
+    +saveApplicationDefinition(applicationDraft)
   }
 }
 
 package "Application services" {
   class "Application Service" as ApplicationService <<control>> {
-    -applicationDraft: Object
     +createApplication(name, description)
     +updateApplication(applicationId)
-    +addResourceRequirement(applicationId, resources)
-    +addWorkload(applicationId, workloads)
-    +defineConfigurationRequirement(applicationId, requirements)
-    +defineDependency(applicationId, dependencies)
-    +saveApplicationDefinition(applicationDefinition)
+    +addResourceRequirement(applicationDraft, resources)
+    +addWorkload(applicationDraft, workloads)
+    +defineConfigurationRequirement(applicationDraft, requirements)
+    +defineDependency(applicationDraft, dependencies)
+    +saveApplicationDefinition(applicationDraft)
   }
 }
 
 package "Domain components" {
   class "Application Definition Validator" as Validator <<control>> {
     -validationRules: List
-    +validateApplicationDefinition(applicationDefinition)
+    +validateApplicationDefinition(applicationDraft)
   }
   class "Application Specification Generator" as SpecGenerator <<control>> {
     -specificationFormat: String
@@ -66,5 +66,10 @@ ApplicationService ..> Validator
 ApplicationService "1" --> "1" AppRepo
 ApplicationService ..> SpecGenerator
 ApplicationService "1" --> "1" SpecRepo
+
+note right of ApplicationService
+  Stateless across HTTP requests.
+  Every edit consumes and returns the full client-owned draft.
+end note
 
 @enduml

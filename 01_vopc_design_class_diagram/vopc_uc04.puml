@@ -98,8 +98,13 @@ CDProvider ..> CDSystem
 WorkloadProvider ..> Kubernetes
 
 note right of WorkloadProvider
-  UC-04 source models the provider and
-  Kubernetes adapter as one participant.
+  Called only after a delivery reference exists and publish completed.
+  Otherwise QueryService returns PENDING or NOT_AVAILABLE.
+end note
+
+note right of Aggregator
+  Derives CD_SYNCED and APPLICATION_READY from live provider data.
+  It never persists these two view markers.
 end note
 
 @enduml

@@ -1,80 +1,41 @@
 @startuml
 title Step 5 - Deployment State Machine
-
 hide empty description
 
 state "Created / Validating\n(execution only)" as CREATED
-state "Rejected / Validation Failed\n(execution only; no persisted row)" as REJECTED
-state "Validated / Awaiting Confirmation\n(AWAITING_CONFIRMATION)" as AWAITING_CONFIRMATION
-state "Infrastructure Reconciling\n(CONFIRMED)" as CONFIRMED
-state "Infrastructure Ready\n(INFRASTRUCTURE_READY)" as INFRASTRUCTURE_READY
-state "Configuration Resolved\n(CONFIGURATION_RESOLVED)" as CONFIGURATION_RESOLVED
-state "Submitted to CD\n(SUBMITTED)" as SUBMITTED
+state "Rejected\n(no row)" as REJECTED
+state "Awaiting Confirmation\n(AWAITING_CONFIRMATION)" as AWAITING
+state "Queued\n(QUEUED)" as QUEUED
+state "Running\n(RUNNING)" as RUNNING
+state "Submitted\n(SUBMITTED)" as SUBMITTED
 state "Failed\n(FAILED)" as FAILED
 
-[*] --> CREATED : createDeployment / initialize deployment attempt
-
-CREATED --> AWAITING_CONFIRMATION : validateDeploymentInput [valid] /\nbuildDeploymentGraph; resolveResourceDefinitions;\nplanInfrastructureChanges; computePlanFingerprint; persist Deployment
-CREATED --> REJECTED : validateDeploymentInput [invalid, A1] /\nreturn validation error; rollback attempt
+[*] --> CREATED : createDeployment
+CREATED --> AWAITING : validate/build/plan/fingerprint success\n/ persist deployment
+CREATED --> REJECTED : invalid input / rollback
 REJECTED --> [*]
 
-AWAITING_CONFIRMATION --> AWAITING_CONFIRMATION : confirmDeployment [invalid override, A1] /\nreturn validation error; keep AWAITING_CONFIRMATION
-AWAITING_CONFIRMATION --> AWAITING_CONFIRMATION : confirmDeployment [PLAN_CHANGED: fingerprint mismatch] /\nrefresh fingerprint; re-present rebuilt plan; no reconcile
-AWAITING_CONFIRMATION --> CONFIRMED : confirmDeployment [fingerprint match; valid overrides; CAS succeeds] /\napplyInfrastructureOverrides; atomic status compare-and-swap
-
-CONFIRMED --> INFRASTRUCTURE_READY : reconcileInfrastructure [success] /\npersist create/update/reuse Resource Instances
-CONFIRMED --> FAILED : reconcileInfrastructure [failure, A2] /\nsaveDeploymentRecord(failed step, error summary)
-
-INFRASTRUCTURE_READY --> CONFIGURATION_RESOLVED : collectResourceOutputs;\nresolveEnvironmentConfiguration [success]
-INFRASTRUCTURE_READY --> FAILED : resolveEnvironmentConfiguration [runtime failure, A2] /\nsaveDeploymentRecord(failed step, error summary)
-
-CONFIGURATION_RESOLVED --> SUBMITTED : generateResolvedApplicationSpecification;\ngenerateKubernetesManifest; adaptManifestForTarget;\nmaterializeEnvironmentConfiguration; materializeSecretConfiguration;\npublishDesiredDeploymentState [accepted] /\nsaveDeploymentRecord(delivery reference, SUBMITTED)
-CONFIGURATION_RESOLVED --> FAILED : manifest generation/materialization or\npublishDesiredDeploymentState [failure, A2] /\nsaveDeploymentRecord(failed step, error summary)
-
+AWAITING --> AWAITING : confirmDeployment [invalid override]\n/ validation error; no job
+AWAITING --> AWAITING : confirmDeployment [PLAN_CHANGED]\n/ refresh fingerprint; no job
+AWAITING --> QUEUED : confirmDeployment [match; valid; CAS]\n/ atomic lifecycle+record+job insert; return 202
+QUEUED --> RUNNING : worker claims leased job
+RUNNING --> RUNNING : recordDeploymentStep\n(INFRASTRUCTURE_READY / CONFIGURATION_RESOLVED / MANIFEST_GENERATED)
+RUNNING --> FAILED : PLAN_STALE_AFTER_ACCEPT [fingerprint mismatch]\n/ fail INFRASTRUCTURE_READY before external side effects
+RUNNING --> SUBMITTED : CD publish accepted\n/ save delivery reference/status and lifecycle
+RUNNING --> FAILED : terminal execution failure\n/ persist error and failed internal step when applicable
 SUBMITTED --> [*]
 FAILED --> [*]
 
-note right of CREATED
-  CREATED is an execution-only attempt state.
-  createDeployment() persists a Deployment only after
-  successful validation, directly as AWAITING_CONFIRMATION.
+note right of QUEUED
+  The durable execution job is a transactional outbox.
+  Retry of the same idempotency key returns the same tracking id.
 end note
-
-note right of REJECTED
-  This outcome is not Deployment.status = FAILED.
-  Contract 4 A1 rolls back deployment, workload_deployment and
-  deployment_context rows; no Deployment Record or Deployment
-  Step exists for the rejected attempt.
+note right of RUNNING
+  Exactly three internal steps are persisted. Worker rebuilds the typed plan
+  and verifies accepted fingerprint before external side effects.
 end note
-
-note right of AWAITING_CONFIRMATION
-  A concurrent confirm that loses the atomic
-  AWAITING_CONFIRMATION -> CONFIRMED compare-and-swap
-  returns DEPLOYMENT_ALREADY_CONFIRMED and causes
-  no state transition or infrastructure reconcile.
-end note
-
-note right of FAILED
-  FAILED is only a persisted post-creation Deployment state.
-  For UC-03 A2, Deployment and Deployment Record use FAILED;
-  the failed Deployment Step stores errorSummary and
-  relatedComponentReference when identifiable.
-end note
-
 note bottom of SUBMITTED
-  UC-04 progress markers are separate deployment_step rows,
-  not mutually exclusive Deployment.status values:
-  * Infrastructure Ready
-  * Configuration Resolved
-  * Manifest Generated
-  * CD Synced
-  * Application Ready
-
-  Their individual statuses can be displayed simultaneously.
-  UC-04 reads/aggregates repository, CD and workload status;
-  it does not transition the Deployment aggregate. Under the
-  current operation contracts, the aggregate remains SUBMITTED
-  after CD acceptance (or FAILED on a contracted A2 path).
+  delivery_status is separate from lifecycle status.
+  UC-04 derives CD_SYNCED and APPLICATION_READY live and never writes.
 end note
-
 @enduml
