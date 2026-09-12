@@ -1,22 +1,26 @@
-# Persistence Classification
+# Persistence classification — MVP
 
-| Object(s) | Classification | Owner/table | Lý do |
-|---|---|---|---|
-| Application Definition, Workload, embedded Workload Output Definition, Resource Requirement, definitions, Dependency | PERSISTENT | Application Repository | Cấu trúc logic; output metadata nằm trong `workload.exposed_outputs`; referenced definitions dùng retire. |
-| Application Specification | PERSISTENT | Specification Repository | Artifact versioned. |
-| Environment Configuration, Environment Variable, Configuration Value, Secret/reference | PERSISTENT | Environment Configuration Repository | Chỉ logical/direct non-secret value và opaque reference. |
-| Resource Definition | PERSISTENT (platform-managed) | `resource_definition` | Catalog ngoài bốn Developer UC. |
-| Deployment, Workload Deployment, Deployment Context | PERSISTENT | Deployment Repository | Input snapshot, lifecycle và fingerprint. |
-| Resource Instance, Resource Instance Binding | PERSISTENT | Resource Instance Repository | Instance giữ original ownership/provider identity; exact active binding là canonical reusable lookup path. Shared-consumer binding do platform administration pre-authorize. |
-| Deployment Record, three Deployment Steps | PERSISTENT | Deployment Repository | Audit/lifecycle và ba bước nội bộ. |
-| Deployment Execution Job | PERSISTENT | `deployment_execution_job` | Transactional outbox, idempotency, lease và retry. |
-| ApplicationDefinitionDraft, ConfigurationDefinitionDraft | CLIENT-OWNED DTO | Web UI only | Không có backend draft store và không giữ qua request. |
-| Deployment Graph, Resource Resolution | TRANSIENT | Worker/request execution | Rebuild từ persisted inputs. |
-| Infrastructure Plan, Infrastructure Plan Item, Override Definition | TRANSIENT | Planner execution | Typed canonical fingerprint input; không persist payload. |
-| Resource Output, Workload Output | TRANSIENT | Output resolvers | Resource output đọc sau reconcile; workload output tính plan-time trước configuration resolution. |
-| Resolved Configuration, Resolved Specification | TRANSIENT | Worker execution | Không lưu resolved credential/endpoint. |
-| `CD_SYNCED`, `APPLICATION_READY` markers | DERIVED VIEW | UC-04 aggregator | Suy ra live từ CD/Kubernetes, không phải row. |
+| Objects | Classification | Storage / reason |
+|---|---|---|
+| Application Definition and children | PERSISTENT | Existing source tables; fixture writes atomic; retired identities remain queryable by history. |
+| Application Specification | PERSISTENT | Current source artifact in application_specification. |
+| Environment Configuration and values/references | PERSISTENT | Existing source tables; no plaintext Secret. |
+| Resource Definition | PERSISTENT, platform-managed | Catalog populated by bootstrap; shared/update features not enabled. |
+| Deployment, Workload Deployment, Deployment Context | PERSISTENT | Immutable image digests/context and lifecycle metadata. |
+| Deployment Input Snapshot | PERSISTENT | deployment_input_snapshot; immutable typed source copy, not a transient plan. |
+| Resource Instance and Binding | PERSISTENT | Provider identity/state path reserved before apply, source fingerprints/version and recovery flag; exact consumer scope. |
+| Deployment Record, Steps, resource associations | PERSISTENT | Publication intent/ack and three internal phases; associations exist before provider writes. |
+| Deployment Execution Job | PERSISTENT | Transactional outbox, one attempt, request fingerprint and worker run ownership. |
+| Deployment Scope Guard | PERSISTENT | Serialized scope gate retained during uncertain outcome. |
+| Deployment Recovery | PERSISTENT | Append-only operator/evidence audit. |
+| Source editor draft DTOs | CLIENT-OWNED, future editor | Not needed by fixture-driven MVP. |
+| Deployment Graph / Resource Resolution / Plan / Item / Override Definition | TRANSIENT | Rebuilt from immutable input + catalog + all-status resource bindings. Plan payload never stored. |
+| Resource Output / Workload Output | TRANSIENT | Non-sensitive outputs from provider state or snapshot naming policy. |
+| Resolved Configuration / Specification | TRANSIENT | Generated per fresh execution, secretKeyRef metadata only. |
+| Desired deployment manifest | EXTERNAL ARTIFACT | OCI registry; immutable digest persists in record before Argo Application write. May contain resolved non-secret config, never credential values. |
+| Terraform state | EXTERNAL DURABLE STATE | Stable scope-derived path on durable storage, state lock; state/reference survives worker crash. |
+| CD_SYNCED / APPLICATION_READY | DERIVED VIEW | UID/revision/template/generation-aware query, no DB writes. |
 
-`deployment_execution_job.override_values` chỉ chứa selected values cần để worker áp dụng lại sau khi rebuild plan; nó không chứa Infrastructure Plan, item hay override-definition schema. `accepted_plan_fingerprint` buộc worker kiểm lại plan trước side effect.
+MVP Secret bootstrap uses immutable Kubernetes Secret; source snapshot stores only target/namespace/name/UID/key. Secret staging/promote/revoke is deferred (R3). Credentials are not Terraform variables/data sources and are not encoded in OCI manifests.
 
-Secret Store nằm ngoài DB transaction. `stageSecret` tạo opaque idempotent reference có TTL; save failure gọi `revoke`, save success gọi idempotent `promote`. Crash/retry được giới hạn bằng TTL và orphan reconciliation. Đây là compensation, không phải distributed atomicity.
+See [schema](../03_database_erd/schema.md) for constraints and [contracts](../04_operation_contracts/operation_contracts.md) for atomic writers.

@@ -1,41 +1,32 @@
 @startuml
-title Step 5 - Deployment State Machine
+title MVP Deployment lifecycle and scope recovery
 hide empty description
-
-state "Created / Validating\n(execution only)" as CREATED
-state "Rejected\n(no row)" as REJECTED
-state "Awaiting Confirmation\n(AWAITING_CONFIRMATION)" as AWAITING
-state "Queued\n(QUEUED)" as QUEUED
-state "Running\n(RUNNING)" as RUNNING
-state "Submitted\n(SUBMITTED)" as SUBMITTED
-state "Failed\n(FAILED)" as FAILED
-
-[*] --> CREATED : createDeployment
-CREATED --> AWAITING : validate/build/plan/fingerprint success\n/ persist deployment
-CREATED --> REJECTED : invalid input / rollback
-REJECTED --> [*]
-
-AWAITING --> AWAITING : confirmDeployment [invalid override]\n/ validation error; no job
-AWAITING --> AWAITING : confirmDeployment [PLAN_CHANGED]\n/ refresh fingerprint; no job
-AWAITING --> QUEUED : confirmDeployment [match; valid; CAS]\n/ atomic lifecycle+record+job insert; return 202
-QUEUED --> RUNNING : worker claims leased job
-RUNNING --> RUNNING : recordDeploymentStep\n(INFRASTRUCTURE_READY / CONFIGURATION_RESOLVED / MANIFEST_GENERATED)
-RUNNING --> FAILED : PLAN_STALE_AFTER_ACCEPT [fingerprint mismatch]\n/ fail INFRASTRUCTURE_READY before external side effects
-RUNNING --> SUBMITTED : CD publish accepted\n/ save delivery reference/status and lifecycle
-RUNNING --> FAILED : terminal execution failure\n/ persist error and failed internal step when applicable
-SUBMITTED --> [*]
-FAILED --> [*]
-
-note right of QUEUED
-  The durable execution job is a transactional outbox.
-  Retry of the same idempotency key returns the same tracking id.
+state "Awaiting Confirmation\nAWAITING_CONFIRMATION" as Awaiting
+state "Queued\nQUEUED" as Queued
+state "Running\nRUNNING" as Running
+state "Submitted\nSUBMITTED" as Submitted
+state "Failed\nFAILED" as Failed
+[*] --> Awaiting : C2 valid input / persist immutable snapshot
+Awaiting --> Awaiting : C3 changed plan / invalid input\nno job; review token if plan changed
+Awaiting --> Queued : C3 client=stored=rebuilt fingerprint\natomic guard+job+record+steps
+Queued --> Running : C4 claim once under exclusive host lock\natomic CLAIMED + first step RUNNING
+Running --> Running : C5-C7 phase progress
+Running --> Submitted : C9 publication acknowledged\natomic record+job success+guard release
+Running --> Failed : C4/C10/C11 stale input, phase error\nor verified interruption
+Submitted --> [*]
+Failed --> [*]
+note right of Failed
+  Unknown external outcome retains scope RECOVERY_REQUIRED.
+  C12 verifies resource/CD state and releases scope with audit.
+  Old deployment stays FAILED; next attempt is a NEW deployment.
 end note
-note right of RUNNING
-  Exactly three internal steps are persisted. Worker rebuilds the typed plan
-  and verifies accepted fingerprint before external side effects.
+note right of Running
+  Job phase: INFRASTRUCTURE, CONFIGURATION, MANIFEST, PUBLISH.
+  No automatic replay or CLAIMED lease reclaim.
+  Three internal steps; no persisted CD_SYNCED/APPLICATION_READY.
 end note
-note bottom of SUBMITTED
-  delivery_status is separate from lifecycle status.
-  UC-04 derives CD_SYNCED and APPLICATION_READY live and never writes.
+note right of Submitted
+  Platform accepted desired-state delivery.
+  Argo Sync/Health are separate read-only observations.
 end note
 @enduml

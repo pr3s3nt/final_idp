@@ -1,5 +1,5 @@
 @startuml
-title VOPC - UC-02 Configure Application Environment
+title VOPC - UC-02 future editor (MVP uses fixture C1)
 
 left to right direction
 skinparam packageStyle rectangle
@@ -73,6 +73,7 @@ package "Persistence" {
   class "Environment Configuration Repository" as ConfigRepo <<entity>> {
     -environmentConfigurations: Collection
     +save(configurationWithValueReferences)
+    +findByApplicationAndEnvironment(applicationId, environment)
   }
 }
 

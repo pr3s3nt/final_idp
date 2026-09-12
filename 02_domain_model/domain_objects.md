@@ -1,44 +1,43 @@
-# Step 2: Domain Objects
+# Step 2: Domain objects — MVP deployment profile
 
-Các aggregate root là **Application Definition**, **Environment Configuration**, **Deployment** và **Resource Instance**. Draft chỉnh sửa UC-01/UC-02 là DTO do Web UI sở hữu; application service không giữ draft giữa các request.
+Source aggregates remain Application Definition and Environment Configuration; fixture loader replaces the full UC-01/02 editor in MVP. Domain diagram retains future source/reference types, but MVP validators reject shared consumers, staged/sensitive-output secrets and UPDATE parameters.
 
-| Object | Thuộc tính chính | Vai trò / ownership |
-|---|---|---|
-| Application Definition | `applicationId`, `name`, `description`, `retiredAt`, timestamps | Aggregate cấu trúc logic; referenced definition được retire. |
-| Workload | `workloadId`, `name`, `type`, `imageRepository`, `port`, `exposedOutputs`, `retiredAt` | Entity thuộc Application Definition. Output definition ghi availability/resolution kind; referenced workload được retire. |
-| Workload Output Definition | `outputName`, `availability`, `resolutionKind` | Value object embedded trong Workload; resolver chỉ dùng `PLAN_TIME` trong cùng deployment. |
-| Resource Requirement | `resourceRequirementId`, `name`, `resourceType`, `retiredAt` | Logical resource thuộc application; identity được giữ cho reuse/history. |
-| Environment Variable Definition | `variableDefinitionId`, `name`, `required`, `retiredAt` | Requirement thuộc Workload. |
-| Secret Definition | `secretDefinitionId`, `name`, `required`, `retiredAt` | Secret metadata thuộc Workload; không có plaintext. |
-| Dependency | source và đúng một target workload/resource | Topology thuộc Application Definition. |
-| Application Specification | format, content, version | Artifact sinh từ active definition. |
-| Environment Configuration | application, environment, variables, secrets | Aggregate binding theo environment. |
-| Configuration Value | `DIRECT`, `RESOURCE_OUTPUT`, `WORKLOAD_OUTPUT` và payload tương ứng | Value object/reference được persist; không chứa resolved runtime value. |
-| Secret | workload, definition, `secretReference` hoặc sensitive resource reference | Chỉ giữ opaque reference sau khi upload. |
-| Resource Definition | provisioner, contexts, parameters, overrides, outputs, `retiredAt` | Catalog platform-managed; referenced definition được retire. |
-| Deployment | application/configuration, target, fingerprint/algorithm, lifecycle status | Aggregate cho một execution. Lifecycle literal: `AWAITING_CONFIRMATION`, `QUEUED`, `RUNNING`, `SUBMITTED`, `FAILED`. |
-| Workload Deployment | workload identity, image repository/version | Snapshot lịch sử; giữ FK tới Workload đã retire. |
-| Deployment Context | cloud provider, region, target input | Value object persisted 1:1. |
-| Deployment Graph | workload/resource/dependency/configuration IDs | Typed transient graph. |
-| Resource Resolution | requirement/definition/decision | Typed transient decision. |
-| Infrastructure Plan | `applicationId`, `environment`, `deploymentTarget`, ordered `items` | Typed transient root; payload không persist. |
-| Infrastructure Plan Item | requirement, definition, `CREATE/UPDATE/REUSE`, parameters, owner/scope/sharing key, optional instance, override definitions | Canonical plan item. |
-| Override Definition | key, value type, required, constraints | Canonical transient schema; khác với selected override values của execution job. |
-| Resource Instance | definition, original owner application/environment/requirement, target, sharing scope/key, provider references, status | Durable infrastructure identity. Owner columns phục vụ ownership/integrity, không phải reusable lookup path. |
-| Resource Instance Binding | instance, application, environment, logical requirement, target, role, sharing key, `retiredAt` | Persistent exact active lookup scope. Shared reuse cần pre-authorized consumer binding; replacement retires old binding. |
-| Resource Output | instance, name, value, sensitivity | Runtime transient output từ provider sau infrastructure ready. |
-| Workload Output | workload, name, resolved value, `PLAN_TIME` | Transient output do Workload Output Resolver tính từ graph/metadata/context, ví dụ Kubernetes Service DNS. Runtime-only output của cùng deployment bị từ chối để tránh vòng tròn. |
-| Resolved Configuration / Specification | resolved values/dependencies/images | Transient trong worker execution. |
-| Deployment Record | lifecycle status, delivery reference/status, target, error | Durable record; lifecycle dùng cùng enum với Deployment, còn external delivery status dùng enum riêng. |
-| Deployment Step | one of three internal names, step status, timing/error | Chỉ persist `INFRASTRUCTURE_READY`, `CONFIGURATION_RESOLVED`, `MANIFEST_GENERATED`. |
-| Deployment Execution Job | deployment, idempotency key, selected overrides, accepted fingerprint, lease/attempt/status | Durable job đồng thời là transactional outbox; worker có thể claim/retry an toàn. |
+| Object | Persistent owner / key facts |
+|---|---|
+| Application Definition, Workload, Resource Requirement, configuration definitions, Dependency | Source aggregate; active query filters retired_at. Referenced identities use retire/RESTRICT. |
+| Application Specification | Current generated source artifact, saved atomically with fixture source. |
+| Environment Configuration / Environment Variable / Configuration Value / Secret | Direct non-secret input and logical bindings; Secret contains only permanent target/namespace/name/UID/key reference. |
+| Workload Output Definition | Embedded PLAN_TIME/RUNTIME metadata; MVP binds only deterministic PLAN_TIME. |
+| Resource Definition | Platform/fixture catalog; versioned provisioner reference, default parameters and outputs; MVP allowed_overrides empty. |
+| Deployment | Lifecycle and reviewed plan fingerprint/algorithm; source IDs retained for audit, never used as mutable execution input. |
+| Deployment Input Snapshot | Immutable source application/configuration/render context, schemaVersion and inputFingerprint including image digests/context. Exactly one per deployment. |
+| Workload Deployment | Workload identity, selected image tag, actual immutable image digest; never mutated after prepare. |
+| Deployment Context | Immutable target inputs. |
+| Deployment Graph / Resource Resolution | Transient derivation from snapshot and current catalog. |
+| Infrastructure Plan / Item / Override Definition | Transient canonical plan; MVP actions CREATE/REUSE, empty override schema. UPDATE exists only for future profiles. |
+| Resource Instance | Durable owner/scope, state path, provider identity, definition/parameter fingerprints, version and recoveryVerified. |
+| Resource Instance Binding | Canonical exact active lookup at ALL statuses; MVP OWNER only. Non-retired instance has one active owner binding. |
+| Resource/Workload Output | Transient non-sensitive provider output or deterministic Service URL; collected within configuration phase. |
+| Resolved Configuration / Specification | Transient values/reference-bearing output; no plaintext credential. |
+| Deployment Record | Lifecycle + separate delivery state; publication intent artifact URI/digest/expected Application name, acknowledged Application UID and errors. |
+| Deployment Step | Exactly three internal steps after confirm. Future steps become SKIPPED on terminal failure. |
+| Deployment Execution Job | One accepted request/hash, one claim, workerRunId, phase/timestamps/failure. No lease reclaim or replay. |
+| Deployment Scope Guard | One (application, environment, target) gate: IDLE/EXECUTING/RECOVERY_REQUIRED. |
+| Deployment Recovery | Append-only operator/evidence audit releasing a verified blocked scope; old job stays FAILED. |
+
+## Source snapshot structure
+
+applicationDefinition contains complete active workload IDs/names/types/repositories/ports/output definitions, resource requirements, variable/secret definitions and dependencies. environmentConfiguration contains environment and typed direct/output/secret reference bindings. renderContext contains namespace, naming policy and renderer/adapter versions.
+
+inputFingerprint includes these objects plus separately persisted Workload Deployment image digests and Deployment Context. Map keys and source shapes are validated by mvp-source-v1. JSONB stores source facts, never plan payload, resolved resource values or plaintext Secret.
 
 ## Invariants
 
-- Draft UC-01/UC-02 được gửi đầy đủ trong mỗi mutation request và được trả lại cho Web UI. Backend stateless giữa request.
-- UI xóa plaintext secret ngay sau khi nhận opaque staged reference; repositories và log không nhận plaintext.
-- `Infrastructure Plan`, item và override definition dùng canonical JSON: sort item/key ổn định, normalize number/unit, bỏ timestamp/ID sinh kỹ thuật. Fingerprint domain gồm action, requirement/definition/instance identity, target/scope/sharing, resolved parameters và bốn definition fields `provisionerReference`, `supportedContexts`, `defaultParameters`, `allowedOverrides`. Chỉ SHA-256 fingerprint và algorithm persist trên Deployment.
-- Selected override values tối thiểu cần cho worker được lưu trong execution job, không phải plan payload; worker rebuild plan và kiểm lại fingerprint trước reconcile.
-- Resource Instance có original owner tuple và ít nhất một OWNER binding. Reuse query luôn match exact active `(applicationId, environment, resourceRequirementId, deploymentTarget)` qua binding; không fallback sang owner columns. Cross-boundary reuse chỉ thấy instance qua `EXPLICIT_SHARED` + matching `sharingKey`/policy và `SHARED_CONSUMER` binding đã được platform pre-authorize ngoài deployment flow.
-- Workload/definition đã được configuration hoặc deployment history tham chiếu chỉ được retire. Hard delete chỉ hợp lệ khi chưa từng có reference; FK lịch sử luôn `RESTRICT`.
-- `CD_SYNCED` và `APPLICATION_READY` là view marker do UC-04 suy ra live; chúng không phải Deployment Step hay lifecycle status.
+- Source writes do not change accepted/queued deployment input. Snapshot/input tables reject update/delete via DB permission/trigger.
+- Plan fingerprint compares reviewed client token, stored token and freshly rebuilt plan before enqueue; same accepted key/hash returns same tracking ID regardless of lifecycle.
+- Resource lookup returns all statuses; only compatible READY becomes REUSE. Recovery-approved PLANNED can CREATE on retained identity.
+- Reserve resource, state path and record association before provider effects. Whole pipeline never automatically replays.
+- Completion/failure atomically updates lifecycle, record, job, steps and scope guard as applicable.
+- Permanent immutable Secret reference UID/key is checked at prepare/confirm/precheck. Staging/rotation is deferred.
+- Source naming policy is shared by Workload Output Resolver and final manifest; frontend proxy uses the resulting backend Service URL.
+- CD_SYNCED/APPLICATION_READY are read-only revision-correlated views, never deployment steps or lifecycle values.

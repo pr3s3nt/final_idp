@@ -1,6 +1,6 @@
 # Step 3: Database / ERD
 
-Schema này hiện thực persistence classification đã được duyệt ở Step 2. Tên table/column dùng `snake_case`; `UUID` dùng cho identity và foreign key; `JSONB` chỉ dùng cho cấu trúc linh hoạt vốn đã là `Map`/`List` trong domain model. Các `TRANSIENT` execution object không được tạo table.
+Schema này hiện thực MVP theo [deployment design](../MVP_DEPLOYMENT_DESIGN.md) và contracts C1–C13. Các source tables UC-01/02 được fixture loader dùng; secret staging, shared consumer và UPDATE resource là phạm vi tương lai, không được bật trong MVP. Tên table/column dùng `snake_case`; `UUID` dùng cho identity và foreign key; `JSONB` chỉ dùng cho cấu trúc linh hoạt vốn đã là `Map`/`List` trong domain model. Các `TRANSIENT` execution object không được tạo table.
 
 ## Application Repository
 
@@ -186,12 +186,16 @@ Constraint bổ sung: `UNIQUE (environment_configuration_id, secret_definition_i
 | `sharing_scope` | ENUM (`APPLICATION_ENVIRONMENT`, `EXPLICIT_SHARED`) | NOT NULL, DEFAULT `APPLICATION_ENVIRONMENT` | Policy scope; mặc định cấm reuse chéo application/environment. |
 | `sharing_key` | VARCHAR(255) | NULL | Bắt buộc chỉ khi `EXPLICIT_SHARED`; phải match policy và query. |
 | `infrastructure_reference` | VARCHAR(2048) | NULL, UNIQUE khi khác NULL | Durable provider identity; bắt buộc khi status `READY`, có thể chưa có khi `PLANNED/PROVISIONING/FAILED`. |
-| `provider_state_reference` | VARCHAR(2048) | NULL | Reference tới provider state nếu có. |
+| `provider_state_reference` | VARCHAR(2048) | NOT NULL, UNIQUE | Durable Terraform state location từ exact scope; persist trước provider call. |
+| `definition_fingerprint` | CHAR(64) | NOT NULL | Hash catalog fields đã chọn cho resource. |
+| `parameters_fingerprint` | CHAR(64) | NOT NULL | Hash desired parameters; mismatch không được ngầm UPDATE. |
+| `version` | BIGINT | NOT NULL, DEFAULT 1, CHECK (`version` > 0) | Increment khi state/reference/recovery thay đổi; nằm trong plan fingerprint. |
+| `recovery_verified` | BOOLEAN | NOT NULL, DEFAULT false | Chỉ recovery tool đặt true cho PLANNED đã chứng minh chưa có provider object; reset false trước apply. |
 | `status` | ENUM (`PLANNED`, `PROVISIONING`, `READY`, `FAILED`, `RETIRED`) | NOT NULL | Lifecycle status vật lý của Resource Instance. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
 
-`CHECK` yêu cầu `sharing_scope = APPLICATION_ENVIRONMENT` thì `sharing_key IS NULL`, còn `EXPLICIT_SHARED` thì `sharing_key IS NOT NULL`; `status = READY` bắt buộc có `infrastructure_reference`. Các owner columns trên row này chỉ ghi ownership gốc và phục vụ integrity/audit. **Mọi reusable-instance lookup canonical luôn bắt đầu từ exact active tuple trên `resource_instance_binding`; không được query owner columns như một read path thay thế.** Sau khi join binding, repository mới lọc instance `READY`, definition/target compatibility và sharing policy. Không có table `resource_output`: output được collector nạp transient sau khi instance ready.
+`CHECK` yêu cầu `sharing_scope = APPLICATION_ENVIRONMENT` thì `sharing_key IS NULL`, còn `EXPLICIT_SHARED` thì `sharing_key IS NOT NULL`; `status = READY` bắt buộc có `infrastructure_reference`. Các owner columns trên row này chỉ ghi ownership gốc và phục vụ integrity/audit. **Mọi reusable-instance lookup canonical luôn bắt đầu từ exact active tuple trên `resource_instance_binding`; không được query owner columns như một read path thay thế.** Sau khi join binding, repository trả instance ở mọi status. Planner phân biệt READY compatible (REUSE), absence hoặc PLANNED + recovery_verified (CREATE đúng retained identity), và trạng thái cần recovery; không được lọc mất FAILED/PROVISIONING rồi CREATE mới. MVP chỉ APPLICATION_ENVIRONMENT/OWNER, sharing_key NULL. Khi RETIRED, không còn active OWNER binding. Không có table `resource_output`: output được collector nạp transient sau khi instance ready.
 
 ### `resource_instance_binding`
 
@@ -210,7 +214,7 @@ Association bền vững buộc mọi lookup/reuse vào đúng logical consumer 
 | `created_at` | TIMESTAMP | NOT NULL | Audit timestamp. |
 | `retired_at` | TIMESTAMP | NULL | Binding hết hiệu lực nhưng được giữ cho audit/history. |
 
-Partial `UNIQUE (application_id, environment, resource_requirement_id, deployment_target) WHERE retired_at IS NULL` bảo đảm một logical scope không match nhiều active instance nhưng cho phép replacement sau retire. Mỗi instance có đúng một active `OWNER` binding trùng owner tuple. `SHARED_CONSUMER` chỉ được platform sharing administration (ngoài bốn Developer UC) pre-authorize/insert khi instance `EXPLICIT_SHARED`, `READY`, sharing key, authorization và definition compatibility đều khớp. Repository reuse query luôn bắt đầu bằng exact active binding tuple và không tự mở rộng sharing scope trong deployment flow.
+Partial `UNIQUE (application_id, environment, resource_requirement_id, deployment_target) WHERE retired_at IS NULL` bảo đảm một logical scope không match nhiều active instance nhưng cho phép replacement sau retire. Mỗi non-RETIRED instance có đúng một active `OWNER` binding trùng owner tuple, enforce bằng partial unique theo instance + aggregate transaction. OWNER tuple phải khớp original owner/requirement/target; SHARED_CONSUMER không được tạo trong MVP. `SHARED_CONSUMER` chỉ được platform sharing administration (ngoài bốn Developer UC) pre-authorize/insert khi instance `EXPLICIT_SHARED`, `READY`, sharing key, authorization và definition compatibility đều khớp. Repository reuse query luôn bắt đầu bằng exact active binding tuple và không tự mở rộng sharing scope trong deployment flow.
 
 ## Deployment Repository
 
@@ -220,11 +224,11 @@ Partial `UNIQUE (application_id, environment, resource_requirement_id, deploymen
 |---|---|---|---|
 | `deployment_id` | UUID | PK, NOT NULL | Identity của một lần deployment. |
 | `application_id` | UUID | FK → `application_definition.application_id`, NOT NULL | Application được deploy. |
-| `environment_configuration_id` | UUID | FK → `environment_configuration.environment_configuration_id`, NOT NULL | Environment Configuration được dùng làm source references. |
+| `environment_configuration_id` | UUID | FK → `environment_configuration.environment_configuration_id`, NOT NULL | Source identity phục vụ audit; execution chỉ dùng bản sao immutable trong deployment_input_snapshot. |
 | `environment` | VARCHAR(100) | NOT NULL | Environment snapshot của deployment. |
 | `deployment_target` | VARCHAR(255) | NOT NULL | Kubernetes/deployment target đã chọn. |
 | `plan_fingerprint` | CHAR(64) | NOT NULL | SHA-256 fingerprint dạng hex của Infrastructure Plan đã canonicalize để phát hiện plan thay đổi khi confirm; không chứa chính plan. |
-| `plan_fingerprint_algo` | VARCHAR(32) | NOT NULL | Phiên bản thuật toán canonicalization + hashing của fingerprint, ví dụ `sha256-v1`, dùng lại khi rebuild plan. |
+| `plan_fingerprint_algo` | VARCHAR(32) | NOT NULL | Phiên bản thuật toán canonicalization + hashing của fingerprint, MVP `sha256-mvp-v1`, dùng lại khi rebuild plan. |
 | `status` | ENUM (`AWAITING_CONFIRMATION`, `QUEUED`, `RUNNING`, `SUBMITTED`, `FAILED`) | NOT NULL | Platform lifecycle; không chứa external CD status. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo deployment. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
@@ -237,7 +241,8 @@ Partial `UNIQUE (application_id, environment, resource_requirement_id, deploymen
 | `deployment_id` | UUID | FK → `deployment.deployment_id`, NOT NULL | Deployment sở hữu snapshot. |
 | `workload_id` | UUID | FK → `workload.workload_id`, NOT NULL | Logical workload được deploy. |
 | `image_repository` | VARCHAR(1024) | NOT NULL | Image repository thực tế. |
-| `image_version` | VARCHAR(255) | NOT NULL | Image tag/version thực tế do Developer hoặc CI cung cấp. |
+| `image_version` | VARCHAR(255) | NOT NULL | Image tag/version do Developer hoặc CI chọn ở prepare. |
+| `image_digest` | VARCHAR(71) | NOT NULL, CHECK sha256 format | Immutable registry digest; renderer dùng repository@digest. |
 
 Constraint bổ sung: `UNIQUE (deployment_id, workload_id)`; một Deployment phải có ít nhất một Workload Deployment (aggregate invariant, enforce ở transaction/service hoặc deferred database constraint).
 
@@ -259,7 +264,10 @@ Constraint bổ sung: `UNIQUE (deployment_id, workload_id)`; một Deployment ph
 | `deployment_id` | UUID | FK → `deployment.deployment_id`, NOT NULL, UNIQUE | Một deployment sinh tối đa một record. |
 | `environment` | VARCHAR(100) | NOT NULL | Environment được ghi nhận cho history. |
 | `deployment_target` | VARCHAR(255) | NOT NULL | Target thực tế được ghi nhận. |
-| `delivery_reference` | VARCHAR(2048) | NULL | Reference tới desired state/CD delivery nếu có. |
+| `delivery_reference` | VARCHAR(2048) | NULL | Argo Application namespace/name/UID đã được acknowledge; không phải chỉ tên dùng chung. |
+| `artifact_uri` | VARCHAR(2048) | NULL | OCI artifact source; persist trước Application write. |
+| `artifact_digest` | VARCHAR(71) | NULL, CHECK sha256 format khi khác NULL | Expected immutable OCI revision; đi cùng artifact_uri. |
+| `expected_application_name` | VARCHAR(255) | NULL | Deterministic Argo Application name cho inspection khi mất acknowledgment. |
 | `status` | ENUM (`AWAITING_CONFIRMATION`, `QUEUED`, `RUNNING`, `SUBMITTED`, `FAILED`) | NOT NULL | Snapshot platform lifecycle, dùng cùng physical enum với `deployment.status`. |
 | `delivery_status` | ENUM (`NOT_PUBLISHED`, `ACCEPTED`, `SYNCING`, `SYNCED`, `OUT_OF_SYNC`, `DEGRADED`, `FAILED`, `UNKNOWN`) | NOT NULL, DEFAULT `NOT_PUBLISHED` | External CD delivery status riêng; không được copy vào lifecycle. |
 | `error_summary` | TEXT | NULL | Lỗi tổng quát nếu deployment thất bại. |
@@ -297,28 +305,68 @@ Constraint bổ sung: `UNIQUE (deployment_id, workload_id)`; một Deployment ph
 
 Constraint bổ sung: `UNIQUE (deployment_record_id, resource_instance_id)`.
 
-Worker insert association rows ngay khi `INFRASTRUCTURE_READY` thành công (cùng transaction cập nhật step), không đợi CD publish; nhờ đó UC-04 có thể đọc infrastructure status trong khi lifecycle còn `RUNNING`.
+Worker insert association cùng reservation trước provider call, cho cả CREATE/REUSE. Partial/failed resource luôn truy được qua record; step success được ghi sau READY. Unique pair ngăn association trùng.
 
-### `deployment_execution_job`
-
-Durable execution job đồng thời là transactional outbox; không chứa Infrastructure Plan payload.
+### `deployment_input_snapshot`
 
 | Column | Type | Constraints | Mô tả |
 |---|---|---|---|
-| `job_id` | UUID | PK, NOT NULL | Tracking identity trả về bởi confirm. |
-| `deployment_id` | UUID | FK → `deployment.deployment_id`, NOT NULL, UNIQUE | Tối đa một execution job cho deployment. |
-| `idempotency_key` | VARCHAR(255) | NOT NULL, UNIQUE (`deployment_id`, `idempotency_key`) | Cùng deployment/key trả cùng tracking result, không xung đột key của deployment khác. |
-| `override_values` | JSONB | NOT NULL | Selected override values tối thiểu cho worker; không phải plan/item/definition payload. |
-| `accepted_plan_fingerprint` | CHAR(64) | NOT NULL | Fingerprint worker phải verify sau khi rebuild. |
-| `status` | ENUM (`QUEUED`, `CLAIMED`, `SUCCEEDED`, `FAILED`) | NOT NULL | Job/outbox status vật lý. |
-| `attempts` | INT | NOT NULL, DEFAULT 0, CHECK (`attempts >= 0`) | Số lần claim. |
-| `max_attempts` | INT | NOT NULL, CHECK (`max_attempts > 0`) | Retry bound. |
-| `available_at` | TIMESTAMP | NOT NULL | Backoff scheduling. |
-| `lease_until` | TIMESTAMP | NULL | Lease reclaim nếu worker chết. |
-| `last_error` | TEXT | NULL | Lỗi retry/terminal, đã redact secret. |
-| `created_at`, `updated_at` | TIMESTAMP | NOT NULL | Audit timestamps. |
+| `deployment_id` | UUID | PK, FK → deployment.deployment_id, ON DELETE RESTRICT | Chính xác một snapshot/deployment, transaction create enforce. |
+| `schema_version` | VARCHAR(32) | NOT NULL | `mvp-source-v1`; validator nhận đúng shape/version. |
+| `application_definition` | JSONB | NOT NULL | Typed source topology/requirements/outputs/ports; không phải current mutable FK view. |
+| `environment_configuration` | JSONB | NOT NULL | Typed direct non-secret source + logical bindings + permanent Secret target/ns/name/UID/key. |
+| `render_context` | JSONB | NOT NULL | Namespace, naming policy, renderer/adapter versions và target inputs. |
+| `input_fingerprint` | CHAR(64) | NOT NULL | Canonical source hash bao gồm image digests và Deployment Context. |
+| `created_at` | TIMESTAMP | NOT NULL | Snapshot creation. |
 
-`confirmDeployment()` thực hiện CAS `AWAITING_CONFIRMATION → QUEUED`, tạo/cập nhật `deployment_record.status = QUEUED`, tạo đúng ba step row `PENDING`, và insert job trong **một DB transaction**. Worker claim bằng row lock/`SKIP LOCKED` hoặc CAS lease; provider/CD calls dùng stable idempotency key theo deployment + phase/item. Khi hết retry, worker persist job/deployment/record `FAILED` và failed internal step atomically trong DB.
+JSONB snapshots là Map/Lists có schema xác định trong Deployment Input Snapshot (Step 2), không chứa Infrastructure Plan, resolved outputs hoặc secret values. Tạo từ một consistent source read. DB permission/trigger cấm UPDATE/DELETE snapshot và UPDATE input columns trên deployment/workload_deployment/deployment_context. Lifecycle/fingerprint của deployment được phép thay đổi theo contract; source identities, images và context bất biến. Snapshot validation kiểm FK logical cùng application trước insert; retired source rows vẫn được giữ bằng RESTRICT, execution không query current child rows.
+
+### `deployment_scope_guard`
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `application_id` | UUID | FK → application_definition, NOT NULL | Composite PK part. |
+| `environment` | VARCHAR(100) | NOT NULL | Composite PK part. |
+| `deployment_target` | VARCHAR(255) | NOT NULL | Composite PK part. |
+| `deployment_id` | UUID | NULL, UNIQUE, FK → deployment, RESTRICT | Execution sở hữu guard; NULL khi IDLE. |
+| `status` | ENUM (`IDLE`, `EXECUTING`, `RECOVERY_REQUIRED`) | NOT NULL | Gate accept/recovery theo scope. |
+| `updated_at` | TIMESTAMP | NOT NULL | Audit. |
+
+PK `(application_id, environment, deployment_target)`. CHECK IDLE iff deployment_id NULL. Composite FK `(deployment_id, application_id, environment, deployment_target)` tham chiếu UNIQUE cùng tuple trên deployment, đảm bảo guard đúng scope. Insert-if-absent + SELECT FOR UPDATE serialize confirmations; lock Deployment trước guard. Partial UNIQUE trên deployment scope WHERE status IN (QUEUED, RUNNING) bảo vệ thêm; guard vẫn giữ FAILED/RECOVERY_REQUIRED cho tới operator verification.
+
+### `deployment_execution_job`
+
+Durable job là transactional outbox. Một execution attempt; không có lease reclaim/backoff/requeue trong MVP.
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `job_id` | UUID | PK, NOT NULL | Tracking ID. |
+| `deployment_id` | UUID | FK → deployment, NOT NULL, UNIQUE, RESTRICT | Một job/deployment. |
+| `idempotency_key` | VARCHAR(255) | NOT NULL, UNIQUE (deployment_id, idempotency_key) | Accepted confirm identity. |
+| `request_fingerprint` | CHAR(64) | NOT NULL | Hash deployment + client expected fingerprint + canonical overrides; reject same key changed payload. |
+| `override_values` | JSONB | NOT NULL, CHECK = '{}'::jsonb | MVP không cho parameter override. |
+| `accepted_plan_fingerprint` | CHAR(64) | NOT NULL | Pre-side-effect check một lần trên fresh claim. |
+| `status` | ENUM (`QUEUED`, `CLAIMED`, `SUCCEEDED`, `FAILED`) | NOT NULL | FAILED terminal, không retry. |
+| `phase` | ENUM (`INFRASTRUCTURE`, `CONFIGURATION`, `MANIFEST`, `PUBLISH`, `COMPLETE`) | NULL trước claim | Current phase; PUBLISH không phải Deployment Step. |
+| `worker_run_id` | UUID | NULL trước claim | Fencing predicate cho every worker write; host singleton là execution gate. |
+| `failure_code` | VARCHAR(100) | NULL | PLAN_STALE_AFTER_ACCEPT, EXECUTION_INTERRUPTED, provider errors... |
+| `last_error` | TEXT | NULL | Redacted error. |
+| `started_at`, `heartbeat_at`, `completed_at` | TIMESTAMP | NULL | Heartbeat chỉ diagnostic; không lease-stealing. |
+| `created_at`, `updated_at` | TIMESTAMP | NOT NULL | Audit. |
+
+CHECK CLAIMED requires worker_run_id/phase/started_at. SUCCEEDED requires phase COMPLETE/completed_at; FAILED requires failure_code/completed_at. Confirm transaction includes guard/lifecycle/record/three steps/job. Claim transaction includes lifecycle/record/first RUNNING step/job. Complete transaction includes delivery ack/lifecycle/record/job/guard. Failure includes failed/ skipped steps and guard state; writes require job CLAIMED + worker_run_id. Không giữ transaction qua Terraform/CD side effect.
+
+### `deployment_recovery`
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `recovery_id` | UUID | PK | Audit identity. |
+| `deployment_id` | UUID | NOT NULL, FK → deployment, RESTRICT | Failed execution được inspect; old lifecycle không đổi. |
+| `operator_subject` | VARCHAR(255) | NOT NULL | Operator thực hiện recovery. |
+| `evidence` | JSONB | NOT NULL | Typed list resource IDs, state/Argo references, verified absence/presence; không values/credentials. |
+| `created_at` | TIMESTAMP | NOT NULL | Thời điểm verified recovery/release scope. |
+
+Insert audit, update verified instance version/status/recovery_verified, optional observed delivery metadata và release guard trong cùng transaction. Không có public Developer recovery API; chưa đủ evidence thì giữ blocked, không insert completed recovery record.
 
 ## Enforcement của persistence constraints chính
 
@@ -333,7 +381,7 @@ Durable execution job đồng thời là transactional outbox; không chứa Inf
 ### Secret reference, không phải plaintext
 
 - `secret` hoàn toàn không có column plaintext/value. Direct secret đi qua Secret Store và DB chỉ nhận `secret_ref` opaque.
-- Staging và promotion giữ cùng stable opaque reference; `stageSecret` dùng idempotency key + TTL. DB save failure chỉ revoke newly staged refs, còn DB success phải nhận promote acknowledgement (hoặc idempotent retry/reconciliation) trước khi báo thành công.
+- MVP chỉ permanent immutable Kubernetes Secret reference: target/namespace/name/UID/key. Validate tại prepare/confirm/worker precheck; không stage/promote/revoke. Sensitive Resource Output secret path trong schema tổng quát bị fixture/API validator từ chối ở MVP.
 - `CHECK` trên `secret.value_source` bảo đảm `SECRET_REF` và `RESOURCE_OUTPUT` loại trừ lẫn nhau.
 - Với sensitive resource output, DB chỉ lưu `resource_requirement_id` + `resource_output_name`; resolved secret value không được persist.
 - `configuration_value.direct_value` chỉ thuộc Environment Variable path vì table liên kết bắt buộc tới `environment_variable`, không thể liên kết tới `secret`.
@@ -368,6 +416,9 @@ Durable execution job đồng thời là transactional outbox; không chứa Inf
 | Deployment Record | `deployment_record` |
 | Deployment Step | `deployment_step` |
 | Deployment Execution Job | `deployment_execution_job` |
+| Deployment Input Snapshot | `deployment_input_snapshot` |
+| Deployment Scope Guard | `deployment_scope_guard` |
+| Deployment Recovery | `deployment_recovery` |
 
 `deployment_record_resource_instance` chỉ hiện thực quan hệ many-to-many đã có trong domain model; không giới thiệu domain entity mới.
 
@@ -377,8 +428,12 @@ Durable execution job đồng thời là transactional outbox; không chứa Inf
 |---|---|
 | Deployment Graph | Dựng lại cho từng execution từ persistent sources. |
 | Resource Resolution | Quyết định trung gian; durable outcome là Resource Instance/reference. |
-| Infrastructure Plan / Item / Override Definition | Typed plan được rebuild khi confirm và worker execute; chỉ SHA-256 fingerprint + algorithm persist trên `deployment`. Selected override values riêng nằm trong job, không phải plan payload. |
+| Infrastructure Plan / Item / Override Definition | Typed plan rebuild khi confirm và fresh worker precheck; chỉ fingerprint + algorithm persist. Source snapshot riêng không phải plan payload. MVP selected overrides luôn rỗng. |
 | Resource Output | Runtime output được collector nạp in-memory sau khi resource ready. |
 | Workload Output | Plan-time output được Workload Output Resolver tính từ graph/metadata/context; runtime-only/circular output bị từ chối. |
 | Resolved Configuration | In-memory snapshot của values đã resolve. |
 | Resolved Specification | Execution artifact dùng làm input cho `score-k8s`, không phải versioned source specification. |
+
+## Publication và readiness integrity
+
+artifact_uri/digest/expected_application_name phải cùng NULL hoặc cùng có giá trị; publication intent được persist trước Application write. delivery_reference chỉ có sau acknowledgment hoặc verified recovery; giữ UID để phát hiện Application bị thay thế. SUBMITTED/SUCCEEDED completion transaction yêu cầu ba step SUCCEEDED và acknowledgment khớp artifact digest. UC-04 chỉ đọc; không có bảng cho CD_SYNCED/APPLICATION_READY.

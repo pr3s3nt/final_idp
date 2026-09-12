@@ -1,5 +1,5 @@
 @startuml
-title Step 2 - Domain Model & Persistence Classification
+title Step 2 - Domain Model (MVP deployment profile)
 
 left to right direction
 skinparam classAttributeIconSize 0
@@ -136,6 +136,7 @@ class "Workload Deployment" as WorkloadDeployment <<entity>> {
   workloadId: String
   imageRepository: String
   imageVersion: String
+  imageDigest: String
 }
 
 class "Deployment Context" as DeploymentContext <<value object>> {
@@ -163,6 +164,7 @@ class "Infrastructure Plan" as InfrastructurePlan <<transient>> {
   applicationId: String
   environment: String
   deploymentTarget: String
+  inputFingerprint: String
   items: List<InfrastructurePlanItem>
 }
 
@@ -178,6 +180,9 @@ class "Infrastructure Plan Item" as InfrastructurePlanItem <<transient>> {
   ownershipScope: APPLICATION_ENVIRONMENT | EXPLICIT_SHARED
   sharingKey: String [0..1]
   referencedResourceInstanceId: String [0..1]
+  referencedInstanceVersion: Long [0..1]
+  definitionFingerprint: String
+  parametersFingerprint: String
   overrideDefinitions: List<OverrideDefinition>
 }
 
@@ -198,7 +203,11 @@ class "Resource Instance" as ResourceInstance <<aggregate root>> {
   sharingScope: APPLICATION_ENVIRONMENT | EXPLICIT_SHARED
   sharingKey: String [0..1]
   infrastructureReference: String [0..1]
-  providerStateReference: String [0..1]
+  providerStateReference: String
+  definitionFingerprint: String
+  parametersFingerprint: String
+  version: Long
+  recoveryVerified: Boolean
   status: PLANNED | PROVISIONING | READY | FAILED | RETIRED
   createdAt: DateTime
   updatedAt: DateTime
@@ -250,6 +259,9 @@ class "Deployment Record" as DeploymentRecord <<entity>> {
   deploymentTarget: String
   infrastructureReferences: List<String>
   deliveryReference: String [0..1]
+  artifactUri: String [0..1]
+  artifactDigest: String [0..1]
+  expectedApplicationName: String [0..1]
   status: AWAITING_CONFIRMATION | QUEUED | RUNNING | SUBMITTED | FAILED
   deliveryStatus: NOT_PUBLISHED | ACCEPTED | SYNCING | SYNCED | OUT_OF_SYNC | DEGRADED | FAILED | UNKNOWN
   errorSummary: String [0..1]
@@ -272,14 +284,38 @@ class "Deployment Execution Job" as DeploymentExecutionJob <<entity>> {
   jobId: String
   deploymentId: String
   idempotencyKey: String
+  requestFingerprint: String
   overrideValues: Map
   acceptedPlanFingerprint: String
   status: QUEUED | CLAIMED | SUCCEEDED | FAILED
-  attempts: Integer
-  maxAttempts: Integer
-  availableAt: DateTime
-  leaseUntil: DateTime [0..1]
+  phase: INFRASTRUCTURE | CONFIGURATION | MANIFEST | PUBLISH | COMPLETE
+  workerRunId: String [0..1]
+  failureCode: String [0..1]
   lastError: String [0..1]
+  startedAt: DateTime [0..1]
+  heartbeatAt: DateTime [0..1]
+  completedAt: DateTime [0..1]
+}
+class "Deployment Input Snapshot" as DeploymentInputSnapshot <<value object>> {
+  schemaVersion: String
+  applicationDefinition: Map
+  environmentConfiguration: Map
+  renderContext: Map
+  inputFingerprint: String
+  createdAt: DateTime
+}
+class "Deployment Scope Guard" as DeploymentScopeGuard <<entity>> {
+  applicationId: String
+  environment: String
+  deploymentTarget: String
+  status: IDLE | EXECUTING | RECOVERY_REQUIRED
+  updatedAt: DateTime
+}
+class "Deployment Recovery" as DeploymentRecovery <<entity>> {
+  recoveryId: String
+  operatorSubject: String
+  evidence: List<Reference>
+  createdAt: DateTime
 }
 
 ' Application Definition aggregate
@@ -331,6 +367,10 @@ Deployment "1" *-- "1..*" WorkloadDeployment : workload images
 Deployment "1" *-- "1" DeploymentContext : context
 Deployment "1" *-- "0..1" DeploymentRecord : produces
 Deployment "1" *-- "0..1" DeploymentExecutionJob : executes through
+Deployment "1" *-- "1" DeploymentInputSnapshot : immutable source
+ApplicationDefinition "1" -- "0..*" DeploymentScopeGuard : scope
+DeploymentScopeGuard "0..1" --> "0..1" Deployment : current owner
+Deployment "1" -- "0..*" DeploymentRecovery : verified recovery
 WorkloadDeployment "0..*" --> "1" Workload : deploys
 DeploymentRecord "1" *-- "1..*" DeploymentStep : progress
 DeploymentRecord "1" --> "1..*" WorkloadDeployment : records actual images
@@ -360,7 +400,9 @@ ResourceInstance ..> ResourceOutput : exposes at runtime
 
 note right of Deployment
   Infrastructure Plan, items and override definitions are TRANSIENT typed objects.
-  Only planFingerprint and planFingerprintAlgo are persistent on Deployment.
+  Only the plan fingerprint is persisted, not the transient plan payload.
+  Source inputs live in an immutable Deployment Input Snapshot; worker/query
+  use it instead of current mutable application/configuration rows.
 end note
 
 Deployment "1" ..> "0..1" ResolvedConfiguration : resolves
@@ -379,7 +421,8 @@ end note
 note right of ResourceInstance
   Owner fields describe original ownership only. Canonical reuse always starts
   from an exact active ResourceInstanceBinding tuple; owner fields are not an
-  alternative query path. Cross-boundary reuse requires EXPLICIT_SHARED.
+  alternative query path. Lookup returns ALL statuses; only READY compatible
+  instances qualify for REUSE. Shared consumers and UPDATE are outside MVP.
 end note
 
 note right of DeploymentStep
@@ -395,4 +438,14 @@ legend right
   <<transient>>       Exists only during one deployment execution
 endlegend
 
+note right of DeploymentExecutionJob
+  One claim, no automatic replay or lease reclaim.
+  workerRunId fences DB writes; exclusive host lock fences execution.
+  Completion/failure updates lifecycle, job and scope guard atomically.
+end note
+note right of DeploymentInputSnapshot
+  Persisted source-only JSON schema mvp-source-v1.
+  No resolved outputs, plan payload or plaintext Secret.
+  Secret refs contain target/namespace/name/UID/key.
+end note
 @enduml

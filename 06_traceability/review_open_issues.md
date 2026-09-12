@@ -1,10 +1,10 @@
-# Review và các vấn đề còn mở
+# Review findings — lịch sử và trạng thái MVP
 
 Ngày kiểm tra: 12/09/2026.
 
-Trạng thái: **OPEN — 10 findings chưa được xử lý**. Báo cáo được đưa vào repository cùng lần merge `draft` vào `main`. Tên nhánh trong phần bằng chứng chỉ các commit đã review, không phải HEAD hiện tại. Việc merge giữ các sửa đổi thiết kế làm nền cho bước chốt phạm vi MVP; chưa xác nhận thiết kế sẵn sàng triển khai.
+Trạng thái sau thiết kế MVP: **8 RESOLVED_DESIGN_MVP, 2 DEFERRED_MVP (R3, R9)**. Xem [traceability](traceability_matrix.md) và [MVP design review](mvp_design_review.md). Đây là kết luận ở mức tài liệu; chưa có runtime implementation/tests. Các mục R1–R10 bên dưới giữ nguyên tình huống và link commit baseline để truy vết lịch sử, không mô tả HEAD hiện tại.
 
-## Kết luận
+## Kết luận của lần review baseline
 
 Bản main trước merge còn các khoảng trống thiết kế mà commit draft nhắm tới. Bản draft đã sửa nhiều điểm đúng hướng, nhưng chưa đủ cơ sở để kết luận “đã sửa hết, sửa đúng hoàn toàn”. Sau merge, main tiếp nhận bản thiết kế này cùng các vấn đề còn mở bên dưới.
 
@@ -19,23 +19,23 @@ Review này ghi nhận 10 findings: 4 ưu tiên cao (P1), 6 ưu tiên vừa (P2)
 - Static checks xác nhận main có 43 operation, 42 class/interface, 19 table; draft có 45 operation, 48 class/interface, 21 table. Tên các operation có xuất hiện trong sequence tương ứng; danh sách table schema và ERD khớp.
 - Có 13 PlantUML diagrams trên mỗi nhánh. Đã kiểm tra cấu trúc văn bản cơ bản; chưa render/kiểm tra cú pháp đầy đủ vì môi trường không có Java/PlantUML.
 - `git diff --check main draft` không báo lỗi whitespace.
-- Lần review ban đầu chỉ đọc, không sửa tài liệu hoặc merge. Trong bước tích hợp tiếp theo, báo cáo này được lưu vào Git và trạng thái acceptance được cập nhật; 10 findings vẫn chưa được sửa.
+- Lần review ban đầu chỉ đọc, không sửa tài liệu hoặc merge. Trong bước tích hợp tiếp theo, báo cáo này được lưu vào Git và trạng thái acceptance được cập nhật; trạng thái hiện tại được cập nhật trong bảng theo dõi bên dưới.
 - Commit draft nói đến “11 vấn đề trong plan.md”, nhưng `plan.md` không có trong cây file hoặc lịch sử reachable của hai nhánh. Vì vậy danh sách 11 vấn đề được đối chiếu theo commit message và bảng closure trong traceability, không phải bản yêu cầu gốc.
 
-## Danh sách theo dõi
+## Danh sách theo dõi hiện tại
 
 | ID | Ưu tiên | Vấn đề | Trạng thái |
 |---|---|---|---|
-| R1 | P1 | Retry làm đổi fingerprint bởi kết quả lần chạy trước | OPEN |
-| R2 | P1 | Confirm không gắn với plan người dùng đã xem | OPEN |
-| R3 | P1 | Configuration được công bố trước khi secret được promote | OPEN |
-| R4 | P1 | Worker đọc definition/configuration có thể thay đổi sau accept | OPEN |
-| R5 | P2 | Readiness chưa đối chiếu đúng phiên bản workload | OPEN |
-| R6 | P2 | Lookup READY không hỗ trợ recovery instance FAILED | OPEN |
-| R7 | P2 | Hoàn tất job và lifecycle chưa có transaction chung rõ ràng | OPEN |
-| R8 | P2 | Lỗi collect output chưa có active step xác định | OPEN |
-| R9 | P2 | App không có configuration requirement chưa có đường deploy | OPEN |
-| R10 | P2 | VOPC chưa đồng bộ với sequence | OPEN |
+| R1 | P1 | Retry làm đổi fingerprint bởi kết quả lần chạy trước | RESOLVED_DESIGN_MVP |
+| R2 | P1 | Confirm không gắn với plan người dùng đã xem | RESOLVED_DESIGN_MVP |
+| R3 | P1 | Configuration được công bố trước khi secret được promote | DEFERRED_MVP |
+| R4 | P1 | Worker đọc definition/configuration có thể thay đổi sau accept | RESOLVED_DESIGN_MVP |
+| R5 | P2 | Readiness chưa đối chiếu đúng phiên bản workload | RESOLVED_DESIGN_MVP |
+| R6 | P2 | Lookup READY không hỗ trợ recovery instance FAILED | RESOLVED_DESIGN_MVP |
+| R7 | P2 | Hoàn tất job và lifecycle chưa có transaction chung rõ ràng | RESOLVED_DESIGN_MVP |
+| R8 | P2 | Lỗi collect output chưa có active step xác định | RESOLVED_DESIGN_MVP |
+| R9 | P2 | App không có configuration requirement chưa có đường deploy | DEFERRED_MVP |
+| R10 | P2 | VOPC chưa đồng bộ với sequence | RESOLVED_DESIGN_MVP |
 
 Chỉ đóng finding khi đáp ứng điều kiện đóng trong mục tương ứng và đồng bộ các artifact bị ảnh hưởng. Sau khi chốt phạm vi MVP, có thể quyết định hoãn một tính năng kèm lý do và ranh giới cụ thể; việc đếm coverage không tự đóng finding.
 
@@ -204,7 +204,7 @@ Các mục sau chưa được tính vào 10 findings vì có thể là policy c�
 - UC-03 chưa mô tả rõ đường đọc Resource Output sau restart từ provider state và đường biến opaque secret reference thành credential/Kubernetes reference. Vì outputs được chủ đích transient, repository không thể chỉ dựa vào memory của lần reconcile trước.
 - Không xác nhận được cú pháp render của inline class body tại vopc_uc03.puml:116; cần render cả 13 diagram bằng phiên bản PlantUML được dự án chọn trước khi acceptance.
 
-## Thứ tự xử lý đề xuất
+## Thứ tự xử lý đề xuất tại thời điểm review baseline
 
 1. Chốt phạm vi MVP và chính sách retry/secret; sau đó sửa confirm token (R2), pin deployment input (R4), thiết kế recovery và atomic completion theo phạm vi đó (R1, R6, R7).
 2. Đóng secret commit/promotion protocol (R3).

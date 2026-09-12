@@ -1,5 +1,5 @@
 @startuml
-title Step 1 - VOPC / Consolidated Design Class Diagram
+title Step 1 - Consolidated VOPC (MVP execution; UC-01/02 editor deferred)
 
 left to right direction
 skinparam packageStyle rectangle
@@ -51,7 +51,7 @@ package "Boundary/UI" {
     -orchestrator: DeploymentOrchestrator
     +loadDeploymentForm(applicationId, environment, target)
     +createDeployment(applicationId, environment, target, images, context)
-    +confirmDeployment(deploymentId, overrides, idempotencyKey)
+    +confirmDeployment(deploymentId, expectedPlanFingerprint, overrides, idempotencyKey)
   }
   class "Deployment Query API / Controller" as DeploymentQueryAPI <<control>> {
     -queryService: DeploymentQueryService
@@ -62,6 +62,10 @@ package "Boundary/UI" {
 }
 
 package "Application services" {
+  class "Deployment Recovery Service" as RecoveryService <<control>> {
+    +markInterruptedJobs(newWorkerRunId)
+    +recoverDeployment(deploymentId, operator, evidence)
+  }
   class "Application Service" as ApplicationService <<control>> {
     -applicationRepository: ApplicationRepository
     -specificationRepository: SpecificationRepository
@@ -91,11 +95,11 @@ package "Application services" {
     +validateDeploymentInput(applicationDefinition, configuration, images, context)
     +canonicalizePlan(plan, overrideDefinitions, algo)
     +computePlanFingerprint(canonicalBytes)
-    +confirmDeployment(deploymentId, overrides, idempotencyKey)
+    +confirmDeployment(deploymentId, expectedPlanFingerprint, overrides, idempotencyKey)
   }
   class "Deployment Worker" as DeploymentWorker <<control>> {
     +executeDeploymentJob(jobId)
-    +retryOrFail(jobId, error)
+    +failExecution(deploymentId, workerRunId, code, outcome)
   }
   class "Deployment Query Service" as DeploymentQueryService <<control>> {
     -deploymentRepository: DeploymentRepository
@@ -107,6 +111,9 @@ package "Application services" {
 }
 
 package "Domain components" {
+  class "Snapshot Builder" as SnapshotBuilder <<control>> {
+    +buildInputSnapshot(source, images, context)
+  }
   class "Application Definition Validator" as ApplicationDefinitionValidator <<control>> {
     -validationRules: List
     +validateApplicationDefinition(applicationDraft)
@@ -130,14 +137,15 @@ package "Domain components" {
   }
   class "Deployment Graph Builder" as DeploymentGraphBuilder <<control>> {
     -graph: Object
-    +buildDeploymentGraph(applicationDefinition, configuration, images, context)
+    +buildDeploymentGraph(snapshot)
   }
   class "Resource Definition Resolver" as ResourceDefinitionResolver <<control>> {
     -resolvedDefinitions: List
     +resolveResourceDefinitions(graph, context)
   }
   class "Infrastructure Planner" as InfrastructurePlanner <<control>> {
-    +planInfrastructureChanges(graph, resolutions, scopedInstances)
+    +planInfrastructureChanges(snapshot, definitions, instances)
+    +rebuildPlanAndFingerprint(snapshot, definitions, instances)
     +loadInfrastructureOverrides(plan)
     +applyInfrastructureOverrides(plan, overrideValues)
   }
@@ -145,6 +153,7 @@ package "Domain components" {
     +applicationId: String
     +environment: String
     +deploymentTarget: String
+    +inputFingerprint: String
     +items: InfrastructurePlanItem[]
   }
   class "Infrastructure Plan Item" as InfrastructurePlanItem <<transient>> {
@@ -156,6 +165,9 @@ package "Domain components" {
     +ownershipScope: String
     +sharingKey: String
     +referencedResourceInstanceId: String
+    +referencedInstanceVersion: Long
+    +definitionFingerprint: String
+    +parametersFingerprint: String
   }
   class "Override Definition" as OverrideDefinition <<transient>> {
     +parameterKey: String
@@ -165,22 +177,22 @@ package "Domain components" {
   }
   class "Infrastructure Reconciler" as InfrastructureReconciler <<control>> {
     -infrastructureReferences: List
-    +reconcileInfrastructure(finalPlan, deploymentId)
+    +reconcileInfrastructure(finalPlan, deploymentId, workerRunId)
   }
   class "Resource Output Resolver / Collector" as ResourceOutputCollector <<control>> {
     -resourceOutputs: Map
     +collectResourceOutputs(infrastructureReferences)
   }
   class "Workload Output Resolver" as WorkloadOutputResolver <<control>> {
-    +resolvePlanTimeWorkloadOutputs(graph, context)
+    +resolvePlanTimeWorkloadOutputs(snapshot)
   }
   class "Environment Configuration Resolver" as EnvironmentConfigurationResolver <<control>> {
     -resolvedConfiguration: Map
-    +resolveEnvironmentConfiguration(configuration, resourceOutputs, workloadOutputs)
+    +resolveEnvironmentConfiguration(snapshot, outputs, secretRefs)
   }
   class "Resolved Specification Generator" as ResolvedSpecificationGenerator <<control>> {
     -resolvedSpecification: Object
-    +generateResolvedApplicationSpecification(applicationDefinition, images, resolvedConfiguration)
+    +generateResolvedApplicationSpecification(snapshot, configuration)
   }
   class "Manifest Generator / Score Renderer" as ManifestGenerator <<control>> {
     -baseManifest: Object
@@ -205,6 +217,9 @@ package "Domain components" {
 }
 
 package "Integration abstractions" {
+  interface "Secret Reference Adapter" as SecretReferenceAdapter {
+    +validateReferences(target, namespace, name, uid, key)
+  }
   interface "Secret Store / Secret Management Adapter" as SecretStore <<interface>> {
     -secretNamespace: String
     +stageSecret(applicationId, environment, secretDefinitionId, secretValue, ttl, idempotencyKey)
@@ -213,33 +228,40 @@ package "Integration abstractions" {
   }
   interface "Provisioner Adapter / Provisioner Interface" as ProvisionerAdapter <<interface>> {
     -provisioningContext: Object
-    +reconcile(finalPlan, idempotencyKey)
+    +reconcileOrInspect(scope, durableStateReference)
+    +readOutputsFromDurableState(references)
   }
   interface "CD Integration / CD Provider Interface" as CDIntegration <<interface>> {
     -deliveryReference: String
-    +publishDesiredDeploymentState(desiredState, deploymentId, idempotencyKey)
+    +publishDesiredDeploymentState(desiredState, deploymentId, workerRunId)
   }
   interface "CD Integration / CD Status Provider" as CDStatusProvider <<interface>> {
     -deliveryReference: String
-    +getCDStatus(deliveryReference)
+    +getCDStatus(deliveryReference, expectedArtifactDigest)
   }
   interface "Workload Status Provider / Kubernetes Adapter" as WorkloadStatusProvider <<interface>> {
     -target: String
-    +getWorkloadStatus(target, workloads)
-    +getDeploymentEndpoints(target, workloads)
+    +getWorkloadStatus(target, snapshotExpectations, deploymentId)
+    +getDeploymentEndpoints(target, expectedServiceNames)
   }
 }
 
 package "Integration implementations" {
-  class "Concrete CD Provider" as ConcreteCDProvider <<control>> {
+  class "Go Argo CD Adapter" as ConcreteCDProvider <<control>> {
     -providerType: String
     -endpoint: String
-    +publish(desiredState, idempotencyKey)
-    +getStatus(deliveryReference)
+    +publishDesiredDeploymentState(desiredState, deploymentId, workerRunId)
+    +upsertOwnedApplication(expectedName, digest)
+    +inspectPublicationIntent(expectedName, digest)
+    +getCDStatus(deliveryReference, expectedArtifactDigest)
   }
 }
 
 package "External systems" {
+  class "OCI Registry" as OCIRegistry <<boundary>> {
+    +pushArtifact(manifests)
+    +resolveImageDigest(repository, tag)
+  }
   class "Terraform/OpenTofu Runner" as IaCRunner <<boundary>> {
     -moduleSource: String
     -workspace: String
@@ -286,20 +308,32 @@ package "Persistence" {
   }
   class "Resource Instance Repository" as ResourceInstanceRepository <<entity>> {
     -resourceInstances: Collection
-    +findReusableInstances(applicationId, environment, requirementIds, target, sharingPolicy)
-    +saveResourceInstancesAndBindings(ownerConsumerScopeAndState)
-    +loadResourceOutputs(infrastructureReferences)
-    +getInfrastructureStatus(infrastructureReferences)
+    +findScopedInstances(applicationId, environment, requirementIds, target)
+    +checkpointReady(fingerprints, version, reference)
+    +getInfrastructureStatus(resourceIds)
   }
   class "Deployment Repository" as DeploymentRepository <<entity>> {
     -deploymentRecords: Collection
-    +persistDeployment(deployment, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
-    +findByIdWithPersistedInputs(deploymentId)
+    +persistPreparedDeployment(snapshot, images, context, fingerprint)
+    +loadImmutableInputs(deploymentId)
+    +loadDetailWithSnapshot(deploymentId)
+    +loadFailureAndRecoveryState(deploymentId)
+    +loadSnapshotAndRecoveryEvidence(deploymentId)
+    +findAcceptedRequest(deploymentId, key, requestFingerprint)
+    +lockDeploymentThenScope(deploymentId)
     +compareAndSetPlanFingerprint(deploymentId, expectedStatus, expectedFingerprint, newFingerprint)
-    +acceptConfirmationAndEnqueue(deploymentId, expectedStatus, newStatus, threePendingSteps, overrides, idempotencyKey)
-    +markExecutionRunning(deploymentId, jobId)
+    +acceptConfirmationAndEnqueue(deploymentId, expectedPlanFingerprint, requestFingerprint, idempotencyKey)
+    +claimQueuedJob(workerRunId)
+    +reserveResourceAndAssociateRecord(scope, stableStatePath)
+    +finishInfrastructureAndStartConfiguration()
+    +finishConfigurationAndStartManifest()
+    +finishManifestAndEnterPublish()
+    +savePublicationIntent(uri, digest, expectedApplicationName)
+    +completeExecution(deploymentId, workerRunId, acknowledgment)
+    +failExecution(deploymentId, workerRunId, code, outcome)
+    +markInterruptedJobs(newWorkerRunId)
+    +commitVerifiedRecovery(operator, evidence)
     +recordDeploymentStep(deploymentId, stepName, status, detail)
-    +saveDeploymentRecord(deploymentId, infrastructureReferences, deliveryReference, deliveryStatus, lifecycleStatus)
     +findByApplication(applicationId)
     +getDeploymentDetail(deploymentId)
     +getDeploymentFailureDetail(deploymentId)
@@ -307,9 +341,8 @@ package "Persistence" {
     +getDeploymentImages(deploymentId)
   }
   class "Deployment Execution Job / Outbox" as DeploymentExecutionJobRepository <<entity>> {
-    +claimNextJob(lease)
-    +completeJob(jobId)
-    +retryOrFail(jobId, error)
+    +claimQueuedJob(workerRunId)
+    +markInterruptedJobs(newWorkerRunId)
   }
 }
 
@@ -335,17 +368,24 @@ EnvironmentConfigurationService "1" --> "1" EnvironmentConfigurationRepository
 DeploymentAPI "1" --> "1" DeploymentOrchestrator
 DeploymentOrchestrator "1" --> "1" ApplicationRepository
 DeploymentOrchestrator "1" --> "1" EnvironmentConfigurationRepository
+DeploymentOrchestrator ..> SnapshotBuilder
+DeploymentOrchestrator ..> SecretReferenceAdapter
 DeploymentOrchestrator ..> DeploymentGraphBuilder
 DeploymentOrchestrator ..> ResourceDefinitionResolver
 DeploymentOrchestrator ..> InfrastructurePlanner
 DeploymentOrchestrator "1" --> "1" DeploymentRepository
 DeploymentOrchestrator "1" --> "1" ResourceInstanceRepository
+SnapshotBuilder ..> OCIRegistry : resolve image digest
 InfrastructurePlanner --> InfrastructurePlan
 InfrastructurePlan *-- InfrastructurePlanItem
 InfrastructurePlanItem *-- OverrideDefinition
 DeploymentRepository --> DeploymentExecutionJobRepository : atomic enqueue
 DeploymentWorker --> DeploymentExecutionJobRepository
-DeploymentWorker --> DeploymentRepository
+DeploymentWorker --> DeploymentRepository : immutable snapshot / atomic writes
+DeploymentWorker ..> DeploymentGraphBuilder
+DeploymentWorker ..> ResourceDefinitionResolver
+DeploymentWorker --> ResourceInstanceRepository : all-status binding lookup
+DeploymentWorker ..> SecretReferenceAdapter
 DeploymentWorker ..> InfrastructurePlanner
 DeploymentWorker ..> InfrastructureReconciler
 DeploymentWorker ..> ResourceOutputCollector
@@ -359,11 +399,17 @@ DeploymentWorker ..> SecretMaterializer
 DeploymentWorker ..> CDIntegration
 InfrastructureReconciler ..> ProvisionerAdapter
 InfrastructureReconciler "1" --> "1" ResourceInstanceRepository
-ResourceOutputCollector "1" --> "1" ResourceInstanceRepository
+ResourceOutputCollector ..> ProvisionerAdapter : read durable provider state
 ManifestGenerator ..> ScoreK8s
 CDIntegration <|.. ConcreteCDProvider
-ProvisionerAdapter ..> IaCRunner : reconcile() delegates applyInfrastructureModules()
-ConcreteCDProvider ..> CDSystem
+ProvisionerAdapter ..> IaCRunner : durable state + locking
+ConcreteCDProvider ..> CDSystem : Argo CD Application
+ConcreteCDProvider --> DeploymentRepository : persist publication intent
+ConcreteCDProvider ..> OCIRegistry
+RecoveryService --> DeploymentRepository
+RecoveryService --> ResourceInstanceRepository
+RecoveryService ..> ProvisionerAdapter
+RecoveryService ..> ConcreteCDProvider
 CDSystem ..> KubernetesCluster
 
 DeploymentQueryAPI "1" --> "1" DeploymentQueryService
@@ -376,8 +422,8 @@ CDStatusProvider <|.. ConcreteCDProvider
 WorkloadStatusProvider ..> KubernetesCluster
 
 note right of SecretStore
-  Opaque idempotent reference only; staging TTL plus
-  promote/revoke compensation handles cross-system failures.
+  Future UC-02 editor only; staging design remains deferred (R3).
+  MVP fixture/worker uses Secret Reference Adapter instead.
 end note
 
 note right of ApplicationService
@@ -385,7 +431,8 @@ note right of ApplicationService
 end note
 
 note right of DeploymentExecutionJobRepository
-  Durable transactional outbox with unique keys, lease and attempts.
+  Durable outbox; one claim, no replay/lease reclaim.
+  Completion/failure use Deployment Repository transaction.
 end note
 
 note right of WorkloadStatusProvider
@@ -393,4 +440,8 @@ note right of WorkloadStatusProvider
   Kubernetes adapter as one participant.
 end note
 
+note right of DeploymentWorker
+  Reads immutable snapshot; no current app/config read.
+  One exclusive worker process; no automatic retry.
+end note
 @enduml

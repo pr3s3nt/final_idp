@@ -16,6 +16,8 @@ package "Boundary/UI" {
     -queryService: QueryService
     +listDeployments(applicationId)
     +getDeploymentDetail(deploymentId)
+    +loadDetailWithSnapshot(deploymentId)
+    +loadFailureAndRecoveryState(deploymentId)
     +getDeploymentFailureDetail(deploymentId)
   }
 }
@@ -40,20 +42,20 @@ package "Domain components" {
 package "Integration abstractions" {
   interface "CD Integration / CD Status Provider" as CDStatusProvider <<interface>> {
     -deliveryReference: String
-    +getCDStatus(deliveryReference)
+    +getCDStatus(deliveryReference, expectedArtifactDigest)
   }
   interface "Workload Status Provider / Kubernetes Adapter" as WorkloadProvider <<interface>> {
     -target: String
-    +getWorkloadStatus(target, workloads)
-    +getDeploymentEndpoints(target, workloads)
+    +getWorkloadStatus(target, snapshotExpectations, deploymentId)
+    +getDeploymentEndpoints(target, expectedServiceNames)
   }
 }
 
 package "Integration implementations" {
-  class "Concrete CD Provider" as CDProvider <<control>> {
+  class "Go Argo CD Adapter" as CDProvider <<control>> {
     -providerType: String
     -endpoint: String
-    +getStatus(deliveryReference)
+    +getCDStatus(deliveryReference, expectedArtifactDigest)
   }
 }
 
@@ -98,7 +100,9 @@ CDProvider ..> CDSystem
 WorkloadProvider ..> Kubernetes
 
 note right of WorkloadProvider
-  Called only after a delivery reference exists and publish completed.
+  Called only after Application UID/source/observed revision match
+  the expected artifact. Verify image digests, template deployment-id,
+  observedGeneration and completed replica rollout.
   Otherwise QueryService returns PENDING or NOT_AVAILABLE.
 end note
 

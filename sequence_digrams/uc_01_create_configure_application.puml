@@ -1,5 +1,5 @@
 @startuml
-title UC-01 - Create / Configure Application (client-owned draft)
+title UC-01 - Create / Configure Application (client-owned draft) - future editor, not MVP fixture path
 autonumber
 hide footbox
 actor Developer
