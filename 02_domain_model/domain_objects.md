@@ -1,44 +1,44 @@
 # Step 2: Domain Objects
 
-Tài liệu này mô tả domain model được rút ra từ các bảng **Dữ liệu chính**, business rules của UC-01 đến UC-04 và các main-flow sequence diagram. Model chỉ chứa business entity, value object, generated artifact và execution-time data holder; không chứa Boundary, Controller, Service, Validator, Resolver, Generator, Adapter hay Repository.
+Các aggregate root là **Application Definition**, **Environment Configuration**, **Deployment** và **Resource Instance**. Draft chỉnh sửa UC-01/UC-02 là DTO do Web UI sở hữu; application service không giữ draft giữa các request.
 
-Các aggregate root chính là **Application Definition**, **Environment Configuration**, **Deployment** và **Resource Instance**. `Resource Definition` là dữ liệu catalog độc lập do platform quản lý; `Application Specification` là artifact được sinh từ `Application Definition`.
+| Object | Thuộc tính chính | Vai trò / ownership |
+|---|---|---|
+| Application Definition | `applicationId`, `name`, `description`, `retiredAt`, timestamps | Aggregate cấu trúc logic; referenced definition được retire. |
+| Workload | `workloadId`, `name`, `type`, `imageRepository`, `port`, `exposedOutputs`, `retiredAt` | Entity thuộc Application Definition. Output definition ghi availability/resolution kind; referenced workload được retire. |
+| Workload Output Definition | `outputName`, `availability`, `resolutionKind` | Value object embedded trong Workload; resolver chỉ dùng `PLAN_TIME` trong cùng deployment. |
+| Resource Requirement | `resourceRequirementId`, `name`, `resourceType`, `retiredAt` | Logical resource thuộc application; identity được giữ cho reuse/history. |
+| Environment Variable Definition | `variableDefinitionId`, `name`, `required`, `retiredAt` | Requirement thuộc Workload. |
+| Secret Definition | `secretDefinitionId`, `name`, `required`, `retiredAt` | Secret metadata thuộc Workload; không có plaintext. |
+| Dependency | source và đúng một target workload/resource | Topology thuộc Application Definition. |
+| Application Specification | format, content, version | Artifact sinh từ active definition. |
+| Environment Configuration | application, environment, variables, secrets | Aggregate binding theo environment. |
+| Configuration Value | `DIRECT`, `RESOURCE_OUTPUT`, `WORKLOAD_OUTPUT` và payload tương ứng | Value object/reference được persist; không chứa resolved runtime value. |
+| Secret | workload, definition, `secretReference` hoặc sensitive resource reference | Chỉ giữ opaque reference sau khi upload. |
+| Resource Definition | provisioner, contexts, parameters, overrides, outputs, `retiredAt` | Catalog platform-managed; referenced definition được retire. |
+| Deployment | application/configuration, target, fingerprint/algorithm, lifecycle status | Aggregate cho một execution. Lifecycle literal: `AWAITING_CONFIRMATION`, `QUEUED`, `RUNNING`, `SUBMITTED`, `FAILED`. |
+| Workload Deployment | workload identity, image repository/version | Snapshot lịch sử; giữ FK tới Workload đã retire. |
+| Deployment Context | cloud provider, region, target input | Value object persisted 1:1. |
+| Deployment Graph | workload/resource/dependency/configuration IDs | Typed transient graph. |
+| Resource Resolution | requirement/definition/decision | Typed transient decision. |
+| Infrastructure Plan | `applicationId`, `environment`, `deploymentTarget`, ordered `items` | Typed transient root; payload không persist. |
+| Infrastructure Plan Item | requirement, definition, `CREATE/UPDATE/REUSE`, parameters, owner/scope/sharing key, optional instance, override definitions | Canonical plan item. |
+| Override Definition | key, value type, required, constraints | Canonical transient schema; khác với selected override values của execution job. |
+| Resource Instance | definition, original owner application/environment/requirement, target, sharing scope/key, provider references, status | Durable infrastructure identity. Owner columns phục vụ ownership/integrity, không phải reusable lookup path. |
+| Resource Instance Binding | instance, application, environment, logical requirement, target, role, sharing key, `retiredAt` | Persistent exact active lookup scope. Shared reuse cần pre-authorized consumer binding; replacement retires old binding. |
+| Resource Output | instance, name, value, sensitivity | Runtime transient output từ provider sau infrastructure ready. |
+| Workload Output | workload, name, resolved value, `PLAN_TIME` | Transient output do Workload Output Resolver tính từ graph/metadata/context, ví dụ Kubernetes Service DNS. Runtime-only output của cùng deployment bị từ chối để tránh vòng tròn. |
+| Resolved Configuration / Specification | resolved values/dependencies/images | Transient trong worker execution. |
+| Deployment Record | lifecycle status, delivery reference/status, target, error | Durable record; lifecycle dùng cùng enum với Deployment, còn external delivery status dùng enum riêng. |
+| Deployment Step | one of three internal names, step status, timing/error | Chỉ persist `INFRASTRUCTURE_READY`, `CONFIGURATION_RESOLVED`, `MANIFEST_GENERATED`. |
+| Deployment Execution Job | deployment, idempotency key, selected overrides, accepted fingerprint, lease/attempt/status | Durable job đồng thời là transactional outbox; worker có thể claim/retry an toàn. |
 
-| Domain Object | Thuộc tính chính | Mô tả | Aggregate nó thuộc về |
-|---|---|---|---|
-| Application Definition | `applicationId`, `name`, `description`, `createdAt`, `updatedAt` | Mô tả cấu trúc logic của application; là nguồn cho workload, logical resource, dependency và configuration requirement. | **Application Definition** (aggregate root) |
-| Workload | `workloadId`, `name`, `type`, `imageRepository`, `port`, `exposedOutputs` | Một workload thuộc application. Chỉ giữ image repository; image tag/version cụ thể thuộc deployment. `exposedOutputs` là các output logic có thể được tham chiếu, ví dụ `endpoint`. | Application Definition |
-| Resource Requirement | `resourceRequirementId`, `name`, `resourceType` | Nhu cầu resource ở mức logic, ví dụ PostgreSQL hoặc Redis; không chứa cách provision. | Application Definition |
-| Environment Variable Definition | `variableDefinitionId`, `name`, `required` | Khai báo một Environment Variable mà workload cần, chưa có giá trị theo environment. | Application Definition (qua Workload) |
-| Secret Definition | `secretDefinitionId`, `name`, `required` | Khai báo một Secret mà workload cần và phân biệt nó với Environment Variable thông thường. | Application Definition (qua Workload) |
-| Dependency | `dependencyId`, `sourceWorkloadId`, `targetType`, `targetId` | Quan hệ `depends on` từ một workload tới đúng một workload hoặc Resource Requirement khác. | Application Definition |
-| Application Specification | `specificationId`, `applicationId`, `format`, `content`, `version`, `updatedAt` | Generated artifact, ví dụ `score.yaml`, được sinh/cập nhật từ Application Definition. | Application Definition (generated artifact) |
-| Environment Configuration | `environmentConfigurationId`, `applicationId`, `environment`, `createdAt`, `updatedAt` | Cấu hình của một application cho đúng một environment; thay đổi object này không tự động thay đổi deployment đang chạy. | **Environment Configuration** (aggregate root) |
-| Environment Variable | `environmentVariableId`, `workloadId`, `variableName` | Binding theo environment cho một Environment Variable Definition của workload. Giá trị nằm trong một `Configuration Value`. | Environment Configuration |
-| Secret | `secretId`, `workloadId`, `secretName`, `secretReference` | Binding theo environment cho một Secret Definition. Khi Developer nhập secret trực tiếp, object chỉ giữ reference do Secret Store trả về; không giữ plaintext. Với sensitive resource output, source được biểu diễn bằng `Resource Output Reference`. | Environment Configuration |
-| Configuration Value | `valueSourceType` | Abstract value object biểu diễn nguồn của configuration: direct value, Resource Output Reference hoặc Workload Output Reference. | Environment Configuration |
-| Direct Configuration Value | `value` | Giá trị trực tiếp của Environment Variable thông thường. Không được dùng để persist plaintext Secret. | Environment Configuration |
-| Resource Output Reference | `resourceRequirementId`, `outputName` | Reference bền vững tới output logic của một Resource Requirement, ví dụ `postgresql.host`; giá trị thực chỉ được resolve khi deploy. | Environment Configuration |
-| Workload Output Reference | `workloadId`, `outputName` | Reference bền vững tới output logic mà workload expose, ví dụ `backend.endpoint`; giá trị được resolve trong deployment. | Environment Configuration |
-| Resource Definition | `resourceDefinitionId`, `name`, `resourceType`, `provisionerReference`, `supportedContexts`, `defaultParameters`, `allowedOverrides`, `exposedOutputs`, `sensitiveOutputs` | Định nghĩa do platform cung cấp để map logical Resource Requirement sang provisioner phù hợp theo deployment context. `defaultParameters` giữ giá trị mặc định/schema provisioning để plan resolve parameter theo context; `allowedOverrides` giữ policy gồm các parameter key Developer được phép override cùng tập giá trị, khoảng min-max hoặc enum hợp lệ. Definition đồng thời công bố normal/sensitive outputs hợp lệ. | Platform Resource Definition catalog (độc lập) |
-| Deployment | `deploymentId`, `applicationId`, `environment`, `deploymentTarget`, `planFingerprint`, `planFingerprintAlgo`, `status`, `createdAt`, `updatedAt` | Một lần triển khai application cụ thể. Đây là lifecycle aggregate giữ context, actual workload images và record theo dõi. Infrastructure Plan vẫn là `TRANSIENT`; chỉ fingerprint và phiên bản thuật toán của nó được persist để kiểm tra plan rebuild khi confirm. | **Deployment** (aggregate root) |
-| Workload Deployment | `workloadDeploymentId`, `workloadId`, `imageRepository`, `imageVersion` | Snapshot image thực tế của một workload trong deployment. `imageVersion` được Developer chọn hoặc CI cung cấp tại thời điểm deploy. | Deployment |
-| Deployment Context | `cloudProvider`, `region`, `targetSpecificInput` | Context dùng để resolve Resource Definition và thực hiện target-specific adaptation cho deployment target đã chọn. | Deployment |
-| Deployment Graph | `deploymentId`, `workloadIds`, `resourceRequirementIds`, `dependencyIds`, `configurationReferenceIds` | Dependency/resource graph được dựng từ Application Definition, Environment Configuration, workload images và Deployment Context cho một execution. | Deployment (execution-scoped) |
-| Resource Resolution | `resourceRequirementId`, `resourceDefinitionId`, `resolutionStatus`, `reason` | Kết quả chọn Resource Definition phù hợp cho một logical Resource Requirement; có thể dẫn tới create, update hoặc reuse Resource Instance. | Deployment (execution-scoped) |
-| Resource Instance | `resourceInstanceId`, `resourceDefinitionId`, `deploymentTarget`, `infrastructureReference`, `providerStateReference`, `status`, `createdAt`, `updatedAt` | Đại diện durable cho infrastructure đã provision/reconcile để hệ thống có thể theo dõi và reuse. | **Resource Instance** (aggregate root) |
-| Resource Output | `resourceInstanceId`, `outputName`, `resolvedValue`, `sensitive` | Runtime output được collector nạp từ Resource Instance sau khi resource sẵn sàng và dùng để resolve configuration trong một deployment. | Resource Instance (runtime view, execution-scoped) |
-| Resolved Configuration | `deploymentId`, `resolvedEnvironmentVariables`, `resolvedSecrets`, `resolvedDependencies` | Snapshot in-memory sau khi direct values và output references đã được resolve cho deployment hiện tại. | Deployment (execution-scoped) |
-| Resolved Specification | `deploymentId`, `format`, `workloadImages`, `resolvedDependencies`, `generatedAt` | Resolved application specification chứa image version, configuration và dependency đã resolve; là input cho `score-k8s`. | Deployment (execution-scoped) |
-| Deployment Record | `deploymentRecordId`, `environment`, `deploymentTarget`, `infrastructureReferences`, `deliveryReference`, `status`, `errorSummary`, `createdAt`, `updatedAt` | Durable record phục vụ deployment history/result, bao gồm target, actual images qua Workload Deployment, infrastructure references, delivery status và lỗi tổng quát. | Deployment |
-| Deployment Step | `deploymentStepId`, `sequenceNumber`, `stepName`, `status`, `relatedComponentReference`, `errorSummary`, `startedAt`, `completedAt` | Trạng thái/progress của từng bước; giữ failed step và workload/resource liên quan khi deployment thất bại. | Deployment (qua Deployment Record) |
+## Invariants
 
-## Invariants chính
-
-- Một `Application Definition` có `1..*` Workload, `0..*` Resource Requirement và `0..*` Dependency.
-- `Environment Variable Definition` và `Secret Definition` luôn thuộc đúng một Workload.
-- Mỗi Dependency có đúng một source Workload và đúng một target: Workload hoặc Resource Requirement.
-- Một `Environment Configuration` thuộc đúng một Application Definition và một environment; mỗi configured Environment Variable có đúng một Configuration Value.
-- Một configured Secret có đúng một source: `secretReference` hoặc sensitive `Resource Output Reference`. Plaintext Secret không thuộc persistent domain model.
-- Một `Deployment` có đúng một Deployment Context và `1..*` Workload Deployment; mỗi Workload Deployment ghi image version thực tế.
-- Resource Output chỉ được dùng sau khi Resource Instance tương ứng đã resolve/reconcile và ở trạng thái sẵn sàng.
+- Draft UC-01/UC-02 được gửi đầy đủ trong mỗi mutation request và được trả lại cho Web UI. Backend stateless giữa request.
+- UI xóa plaintext secret ngay sau khi nhận opaque staged reference; repositories và log không nhận plaintext.
+- `Infrastructure Plan`, item và override definition dùng canonical JSON: sort item/key ổn định, normalize number/unit, bỏ timestamp/ID sinh kỹ thuật. Fingerprint domain gồm action, requirement/definition/instance identity, target/scope/sharing, resolved parameters và bốn definition fields `provisionerReference`, `supportedContexts`, `defaultParameters`, `allowedOverrides`. Chỉ SHA-256 fingerprint và algorithm persist trên Deployment.
+- Selected override values tối thiểu cần cho worker được lưu trong execution job, không phải plan payload; worker rebuild plan và kiểm lại fingerprint trước reconcile.
+- Resource Instance có original owner tuple và ít nhất một OWNER binding. Reuse query luôn match exact active `(applicationId, environment, resourceRequirementId, deploymentTarget)` qua binding; không fallback sang owner columns. Cross-boundary reuse chỉ thấy instance qua `EXPLICIT_SHARED` + matching `sharingKey`/policy và `SHARED_CONSUMER` binding đã được platform pre-authorize ngoài deployment flow.
+- Workload/definition đã được configuration hoặc deployment history tham chiếu chỉ được retire. Hard delete chỉ hợp lệ khi chưa từng có reference; FK lịch sử luôn `RESTRICT`.
+- `CD_SYNCED` và `APPLICATION_READY` là view marker do UC-04 suy ra live; chúng không phải Deployment Step hay lifecycle status.

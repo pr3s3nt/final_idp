@@ -1,9 +1,7 @@
 @startuml
-title UC-03 - Deploy Application (Main Flow)
-
+title UC-03 - Deploy Application (durable asynchronous execution)
 autonumber
 hide footbox
-
 actor Developer
 boundary "Web UI" as UI
 control "Deployment API / Controller" as API
@@ -12,12 +10,16 @@ entity "Application Repository" as AppRepo
 entity "Environment Configuration Repository" as ConfigRepo
 control "Deployment Graph Builder" as GraphBuilder
 control "Resource Definition Resolver" as ResourceResolver
-control "Infrastructure Planner" as InfraPlanner
+control "Infrastructure Planner" as Planner
 entity "Resource Instance Repository" as ResourceRepo
-control "Infrastructure Reconciler" as InfraReconciler
+entity "Deployment Repository" as DeploymentRepo
+queue "Deployment Execution Job / Outbox" as JobStore
+control "Deployment Worker" as Worker
+control "Infrastructure Reconciler" as Reconciler
 participant "Provisioner Adapter" as Provisioner <<interface>>
 participant "Terraform/OpenTofu Runner" as IaCRunner
-control "Resource Output Resolver / Collector" as OutputCollector
+control "Resource Output Resolver / Collector" as ResourceOutputResolver
+control "Workload Output Resolver" as WorkloadOutputResolver
 control "Environment Configuration Resolver" as ConfigResolver
 control "Resolved Specification Generator" as SpecGenerator
 control "Manifest Generator / Score Renderer" as ManifestGenerator
@@ -28,159 +30,158 @@ control "Secret Materializer" as SecretMaterializer
 participant "CD Integration / CD Provider Interface" as CDIntegration <<interface>>
 control "Concrete CD Provider" as CDProvider
 participant "CD System" as CDSystem
-participant "Kubernetes Cluster" as Kubernetes
-entity "Deployment Repository" as DeploymentRepo
 
-Developer -> UI: Select Deploy Application
-Developer -> UI: Select environment and deployment target
-UI -> API: loadDeploymentForm(applicationId, environment, target)
-API -> Orchestrator: loadDeploymentContext(applicationId, environment, target)
+note right of ResourceRepo
+  findReusableInstances always starts from the exact active
+  resource_instance_binding tuple. Owner columns are not a fallback;
+  shared bindings must already be platform-authorized.
+end note
+
+Developer -> UI: Select environment, target, images and context
+UI -> API: createDeployment(applicationId, environment, target, images, context)
+API -> Orchestrator: createDeployment(...)
 Orchestrator -> AppRepo: findById(applicationId)
-AppRepo --> Orchestrator: Application Definition and workloads
-Orchestrator --> API: Workloads and image repositories
-API --> UI: Display workloads and image repositories
-
-Developer -> UI: Select or confirm image version\nfor each workload
-Developer -> UI: Enter remaining deployment context
-UI -> API: createDeployment(applicationId, environment,\ntarget, images, context)
-API -> Orchestrator: createDeployment(applicationId, environment,\ntarget, images, context)
+AppRepo --> Orchestrator: Active definition plus retained identities
 Orchestrator -> ConfigRepo: findByApplicationAndEnvironment(applicationId, environment)
 ConfigRepo --> Orchestrator: Environment Configuration
-Orchestrator -> Orchestrator: validateDeploymentInput()
-
-Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinition,\nconfiguration, images, context)
-GraphBuilder --> Orchestrator: Deployment graph
+Orchestrator -> Orchestrator: validateDeploymentInput(definition, configuration, images, context)
+Orchestrator -> GraphBuilder: buildDeploymentGraph(definition, configuration, images, context)
+GraphBuilder --> Orchestrator: DeploymentGraph
 Orchestrator -> ResourceResolver: resolveResourceDefinitions(graph, context)
-ResourceResolver --> Orchestrator: Resolved Resource Definitions
-Orchestrator -> ResourceRepo: findResourceInstances(resolvedResources, target)
-ResourceRepo --> Orchestrator: Current resource instances
-Orchestrator -> InfraPlanner: planInfrastructureChanges(graph,\nresolvedDefinitions, currentInstances)
-InfraPlanner --> Orchestrator: Infrastructure plan (create/update/reuse)
-Orchestrator -> InfraPlanner: loadInfrastructureOverrides(plan)
-InfraPlanner --> Orchestrator: Allowed override parameters from\nresource_definition.allowed_overrides
-Orchestrator -> Orchestrator: computePlanFingerprint(plan, allowedOverrides, "sha256-v1")
+ResourceResolver --> Orchestrator: ResourceResolution[]
+Orchestrator -> ResourceRepo: findReusableInstances(applicationId, environment,\nresourceRequirementIds, target, sharingPolicy)
+ResourceRepo --> Orchestrator: Scope-safe current instances
+Orchestrator -> Planner: planInfrastructureChanges(graph, resolutions, currentInstances)
+Planner --> Orchestrator: InfrastructurePlan(items: InfrastructurePlanItem[])
+Orchestrator -> Planner: loadInfrastructureOverrides(plan)
+Planner --> Orchestrator: OverrideDefinition[]
+Orchestrator -> Orchestrator: canonicalizePlan(plan, overrideDefinitions, "sha256-v1")\ncomputePlanFingerprint(canonicalBytes)
 note right of Orchestrator
-  Canonicalize with stable resource/key ordering and canonical JSON;
-  normalize units/numbers; exclude timestamps and non-semantic generated ids.
-  Fingerprint domain: each resource's CREATE/UPDATE/REUSE action;
-  referenced Resource Definition identity and its plan-affecting fields
-  (provisioner_reference, supported_contexts, default_parameters, and
-  allowed_overrides); resolved parameters derived from default_parameters
-  plus deployment context; allowed-override definition derived from
-  allowed_overrides; referenced Resource Instance identity; and deployment
-  target. Changes to those Resource Definition fields change the fingerprint
-  directly; no version column is used.
+  Canonical schema contains application, environment, target and, per sorted item: requirement id,
+  definition identity plus provisioner_reference, supported_contexts,
+  default_parameters and allowed_overrides; action, owner/scope/sharing key,
+  referenced instance id, resolved parameters, and sorted override schema.
+  Canonical JSON normalizes numbers/units and omits timestamps/generated ids.
+  Plan/items/definitions are transient; only fingerprint and algorithm persist.
 end note
-Orchestrator -> DeploymentRepo: persistDeployment(deployment, workloadDeployments,\ndeploymentContext, planFingerprint, planFingerprintAlgo,\nAWAITING_CONFIRMATION)
-DeploymentRepo --> Orchestrator: Deployment aggregate persisted
-Orchestrator --> API: Infrastructure plan, allowed overrides, fingerprint, and algorithm
-API --> UI: Display infrastructure plan, overrides, fingerprint, and algorithm
+Orchestrator -> DeploymentRepo: persistDeployment(..., fingerprint, "sha256-v1",\nAWAITING_CONFIRMATION)
+DeploymentRepo --> Orchestrator: Persisted
+Orchestrator --> API: plan, override definitions, fingerprint
+API --> UI: Display plan
 
-Developer -> UI: Set permitted overrides and select Deploy
-UI -> API: confirmDeployment(deploymentId, overrides)
-API -> Orchestrator: confirmDeployment(deploymentId, overrides)
+Developer -> UI: Confirm with overrides
+UI -> API: confirmDeployment(deploymentId, overrides, idempotencyKey)
+API -> Orchestrator: confirmDeployment(deploymentId, overrides, idempotencyKey)
 Orchestrator -> DeploymentRepo: findByIdWithPersistedInputs(deploymentId)
-DeploymentRepo --> Orchestrator: Deployment, workload images, context,\nstored fingerprint and algorithm
-Orchestrator -> Orchestrator: check status = AWAITING_CONFIRMATION
-
-alt [status != AWAITING_CONFIRMATION]
-  Orchestrator --> API: Error DEPLOYMENT_ALREADY_CONFIRMED
-  API --> UI: Display confirmation conflict
-else [status = AWAITING_CONFIRMATION]
-  Orchestrator -> AppRepo: findById(deployment.applicationId)
-  AppRepo --> Orchestrator: Current Application Definition and workloads
-  Orchestrator -> ConfigRepo: findById(deployment.environmentConfigurationId)
-  ConfigRepo --> Orchestrator: Persisted Environment Configuration
-  Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinition,\nconfiguration, workloadImages, context)
-  GraphBuilder --> Orchestrator: Rebuilt deployment graph
-  Orchestrator -> ResourceResolver: resolveResourceDefinitions(graph, context)
-  ResourceResolver --> Orchestrator: Current resolved Resource Definitions
-  Orchestrator -> ResourceRepo: findResourceInstances(resolvedResources,\ndeployment.deploymentTarget)
-  ResourceRepo --> Orchestrator: Current resource instances
-  Orchestrator -> InfraPlanner: planInfrastructureChanges(graph,\nresolvedDefinitions, currentInstances)
-  InfraPlanner --> Orchestrator: Rebuilt infrastructure plan
-  Orchestrator -> InfraPlanner: loadInfrastructureOverrides(rebuiltPlan)
-  InfraPlanner --> Orchestrator: Current allowed override parameters from\nresource_definition.allowed_overrides
-  Orchestrator -> Orchestrator: computePlanFingerprint(rebuiltPlan,\nallowedOverrides, storedFingerprintAlgo)
-
-  alt [rebuiltPlanFingerprint != storedFingerprint]
-    Orchestrator -> DeploymentRepo: compareAndSetPlanFingerprint(deploymentId,\nAWAITING_CONFIRMATION, storedFingerprint, rebuiltPlanFingerprint)
-    DeploymentRepo --> Orchestrator: Fingerprint refresh result
-    Orchestrator --> API: Error PLAN_CHANGED, rebuilt plan, allowed overrides,\nand rebuilt fingerprint; status remains AWAITING_CONFIRMATION
-    API --> UI: Re-present changed plan for review and re-confirmation
-  else [rebuiltPlanFingerprint = storedFingerprint]
-    Orchestrator -> InfraPlanner: applyInfrastructureOverrides(rebuiltPlan, overrides)\n(validate permitted set/type/range first)
-    InfraPlanner --> Orchestrator: Final infrastructure plan
-    Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId,\nAWAITING_CONFIRMATION, CONFIRMED) <<atomic CAS>>
-    DeploymentRepo --> Orchestrator: Affected row count
-
-    alt [affected rows = 0]
-      Orchestrator --> API: Error DEPLOYMENT_ALREADY_CONFIRMED
-      API --> UI: Display confirmation conflict
-    else [affected rows = 1]
-      Orchestrator -> InfraReconciler: reconcileInfrastructure(finalPlan)
-InfraReconciler -> Provisioner: reconcile(finalPlan)
-Provisioner -> IaCRunner: apply infrastructure modules
-IaCRunner --> Provisioner: Infrastructure ready and raw outputs
-Provisioner --> InfraReconciler: Resource state and outputs
-InfraReconciler -> ResourceRepo: saveResourceInstances(resourceState)
-ResourceRepo --> InfraReconciler: Resource instances saved
-InfraReconciler --> Orchestrator: Infrastructure references
-Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, INFRASTRUCTURE_READY)
-DeploymentRepo --> Orchestrator: Deployment status persisted
-
-Orchestrator -> OutputCollector: collectResourceOutputs(infrastructureReferences)
-OutputCollector -> ResourceRepo: loadResourceOutputs(infrastructureReferences)
-ResourceRepo --> OutputCollector: Resource outputs
-OutputCollector --> Orchestrator: Collected Resource Outputs
-
-Orchestrator -> ConfigResolver: resolveEnvironmentConfiguration(configuration,\nresourceOutputs, workloadOutputs)
-note right of ConfigResolver
-  workloadOutputs are logical outputs obtained from
-  the deployment graph; they do not require a separate
-  output collection step in this sequence.
-end note
-ConfigResolver --> Orchestrator: Resolved configuration and dependencies
-Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, CONFIGURATION_RESOLVED)
-DeploymentRepo --> Orchestrator: Deployment status persisted
-Orchestrator -> SpecGenerator: generateResolvedApplicationSpecification(\napplicationDefinition, workloadImages, resolvedConfiguration)
-SpecGenerator --> Orchestrator: Resolved application specification
-
-Orchestrator -> ManifestGenerator: generateKubernetesManifest(resolvedSpecification)
-ManifestGenerator -> ScoreK8s: render(resolvedSpecification)
-ScoreK8s --> ManifestGenerator: Base Kubernetes manifest
-ManifestGenerator --> Orchestrator: Base Kubernetes manifest
-Orchestrator -> TargetAdapter: adaptManifestForTarget(baseManifest,\ndeployment.deploymentTarget)
-TargetAdapter --> Orchestrator: Target-adapted manifest
-Orchestrator -> ConfigMaterializer: materializeEnvironmentConfiguration(\ntargetAdaptedManifest, resolvedEnvironmentVariables)
-ConfigMaterializer --> Orchestrator: Manifest with environment configuration
-Orchestrator -> SecretMaterializer: materializeSecretConfiguration(\nmanifestWithEnvironmentConfiguration, resolvedSecrets)
-SecretMaterializer --> Orchestrator: Desired deployment state
-note over ConfigMaterializer, SecretMaterializer
-  The target-adapted manifest becomes Desired Deployment State
-  only after resolved environment variables and secret values
-  or secret references have been fully materialized.
-end note
-
-Orchestrator -> CDIntegration: publishDesiredDeploymentState(desiredState)
-CDIntegration -> CDProvider: publish(desiredState)
-CDProvider -> CDSystem: synchronize(desiredState)
-CDSystem -> Kubernetes: Deploy workloads and configuration
-Kubernetes --> CDSystem: Deployment accepted
-CDSystem --> CDProvider: Synchronization started
-CDProvider --> CDIntegration: Delivery reference and status
-CDIntegration --> Orchestrator: Delivery reference and status
-Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, SUBMITTED)
-DeploymentRepo --> Orchestrator: Deployment status persisted
-
-Orchestrator -> DeploymentRepo: saveDeploymentRecord(deployment.environment,\ndeployment.deploymentTarget, workloadImages,\ninfrastructureReferences, deliveryStatus)
-DeploymentRepo --> Orchestrator: Deployment Record saved
-Orchestrator --> API: Deployment created
-API --> UI: Display deployment tracking information
-UI --> Developer: Deployment submitted
-
-    end
-  end
+DeploymentRepo --> Orchestrator: Inputs and stored fingerprint
+Orchestrator -> AppRepo: findById(applicationId)
+AppRepo --> Orchestrator: Current definition
+Orchestrator -> ConfigRepo: findById(environmentConfigurationId)
+ConfigRepo --> Orchestrator: Current configuration
+Orchestrator -> GraphBuilder: buildDeploymentGraph(...)
+GraphBuilder --> Orchestrator: Rebuilt graph
+Orchestrator -> ResourceResolver: resolveResourceDefinitions(graph, context)
+ResourceResolver --> Orchestrator: Current resolutions
+Orchestrator -> ResourceRepo: findReusableInstances(applicationId, environment,\nresourceRequirementIds, target, sharingPolicy)
+ResourceRepo --> Orchestrator: Scope-safe instances
+Orchestrator -> Planner: planInfrastructureChanges(...)
+Planner --> Orchestrator: Rebuilt typed plan
+Orchestrator -> Planner: loadInfrastructureOverrides(rebuiltPlan)
+Planner --> Orchestrator: Current OverrideDefinition[]
+Orchestrator -> Orchestrator: recompute fingerprint with stored algorithm
+alt Fingerprint changed
+  Orchestrator -> DeploymentRepo: compareAndSetPlanFingerprint(...)
+  Orchestrator --> API: PLAN_CHANGED plus rebuilt plan
+  API --> UI: Re-present plan; no job exists
+else Fingerprint matches
+  Orchestrator -> Planner: applyInfrastructureOverrides(rebuiltPlan, overrides)\nvalidate key/type/range/enum
+  Planner --> Orchestrator: Validated override values
+  Orchestrator -> DeploymentRepo: acceptConfirmationAndEnqueue(deploymentId,\nAWAITING_CONFIRMATION, QUEUED, three PENDING steps,\noverrides, idempotencyKey) <<atomic DB transaction>>
+  DeploymentRepo -> JobStore: INSERT QUEUED job/outbox row\n(unique deployment and idempotency key)
+  JobStore --> DeploymentRepo: Durable tracking id
+  DeploymentRepo --> Orchestrator: Tracking id (same id on retry)
+  Orchestrator --> API: 202 Accepted(deploymentId, trackingId)
+  API --> UI: Display tracking
 end
 
+... asynchronous retryable execution ...
+Worker -> JobStore: claimNextJob(lease) <<SKIP LOCKED / CAS>>
+JobStore --> Worker: job(deploymentId, overrides, attempt)
+Worker -> DeploymentRepo: markExecutionRunning(deploymentId, jobId)
+Worker -> DeploymentRepo: findByIdWithPersistedInputs(deploymentId)
+DeploymentRepo --> Worker: Persisted inputs
+Worker -> AppRepo: findById(applicationId)
+AppRepo --> Worker: Current definition
+Worker -> ConfigRepo: findById(environmentConfigurationId)
+ConfigRepo --> Worker: Current configuration
+Worker -> GraphBuilder: buildDeploymentGraph(...)
+GraphBuilder --> Worker: Rebuilt graph
+Worker -> ResourceResolver: resolveResourceDefinitions(graph, context)
+ResourceResolver --> Worker: Current resolutions
+Worker -> ResourceRepo: findReusableInstances(applicationId, environment,\nresourceRequirementIds, target, sharingPolicy)
+ResourceRepo --> Worker: Scope-safe instances
+Worker -> Planner: planInfrastructureChanges(...)
+Planner --> Worker: Rebuilt typed plan
+Worker -> Planner: loadInfrastructureOverrides(rebuiltPlan)
+Planner --> Worker: Current OverrideDefinition[]
+Worker -> Worker: verify canonical fingerprint = acceptedPlanFingerprint
+Worker -> Planner: applyInfrastructureOverrides(rebuiltPlan, storedOverrides)
+Planner --> Worker: Final InfrastructurePlan
+Worker -> DeploymentRepo: recordDeploymentStep(INFRASTRUCTURE_READY, RUNNING, ...)
+Worker -> Reconciler: reconcileInfrastructure(finalPlan, deploymentId)
+Reconciler -> Provisioner: reconcile(finalPlan, idempotencyKey per item)
+Provisioner -> IaCRunner: apply infrastructure modules
+IaCRunner --> Provisioner: Resource state and raw outputs
+Provisioner --> Reconciler: Results
+Reconciler -> ResourceRepo: saveResourceInstancesAndBindings(owner/consumer scope,\nrequirement, target, sharing policy, state)
+ResourceRepo --> Reconciler: Resource instances
+Reconciler --> Worker: Infrastructure references
+Worker -> DeploymentRepo: recordDeploymentStep(INFRASTRUCTURE_READY, SUCCEEDED,\ninfrastructureReferences)
+
+Worker -> ResourceOutputResolver: collectResourceOutputs(infrastructureReferences)
+ResourceOutputResolver -> ResourceRepo: loadResourceOutputs(infrastructureReferences)
+ResourceRepo --> ResourceOutputResolver: ResourceOutput[]
+ResourceOutputResolver --> Worker: ResourceOutput[]
+Worker -> WorkloadOutputResolver: resolvePlanTimeWorkloadOutputs(graph, context)
+WorkloadOutputResolver --> Worker: WorkloadOutput[] (Service DNS/endpoint)
+note right of WorkloadOutputResolver
+  Only deterministic plan-time outputs from workload metadata, graph and target
+  context are allowed. Runtime-only output from this deployment cannot feed
+  the same deployment; circular references fail validation.
+end note
+Worker -> DeploymentRepo: recordDeploymentStep(CONFIGURATION_RESOLVED, RUNNING, ...)
+Worker -> ConfigResolver: resolveEnvironmentConfiguration(configuration,\nresourceOutputs, workloadOutputs)
+ConfigResolver --> Worker: Resolved configuration
+Worker -> DeploymentRepo: recordDeploymentStep(CONFIGURATION_RESOLVED, SUCCEEDED, ...)
+
+Worker -> DeploymentRepo: recordDeploymentStep(MANIFEST_GENERATED, RUNNING, ...)
+Worker -> SpecGenerator: generateResolvedApplicationSpecification(...)
+SpecGenerator --> Worker: Resolved specification
+Worker -> ManifestGenerator: generateKubernetesManifest(resolvedSpecification)
+ManifestGenerator -> ScoreK8s: render(resolvedSpecification)
+ScoreK8s --> ManifestGenerator: Base manifest
+ManifestGenerator --> Worker: Base manifest
+Worker -> TargetAdapter: adaptManifestForTarget(baseManifest, target)
+TargetAdapter --> Worker: Adapted manifest
+Worker -> ConfigMaterializer: materializeEnvironmentConfiguration(...)
+ConfigMaterializer --> Worker: Manifest with configuration
+Worker -> SecretMaterializer: materializeSecretConfiguration(...)
+SecretMaterializer --> Worker: Desired deployment state
+Worker -> DeploymentRepo: recordDeploymentStep(MANIFEST_GENERATED, SUCCEEDED, ...)
+
+Worker -> CDIntegration: publishDesiredDeploymentState(desiredState, deploymentId, publishIdempotencyKey)
+CDIntegration -> CDProvider: publish(desiredState, idempotencyKey)
+CDProvider -> CDSystem: synchronize(desiredState)
+CDSystem --> CDProvider: Delivery reference and status
+CDProvider --> CDIntegration: Delivery reference and status
+CDIntegration --> Worker: Delivery reference and status
+Worker -> DeploymentRepo: saveDeploymentRecord(deploymentId, infrastructureReferences,\ndeliveryReference, deliveryStatus, SUBMITTED)
+Worker -> JobStore: completeJob(jobId)
+
+note over Worker, JobStore
+  Retry uses a lease, attempts/max_attempts and stable deployment/phase keys.
+  Provider reconcile and CD publish are idempotent. Terminal failure persists
+  lifecycle/job FAILED; an internal step is FAILED only for its own phase.
+  CD failure uses delivery_status/error_summary, never a fourth step.
+end note
 @enduml

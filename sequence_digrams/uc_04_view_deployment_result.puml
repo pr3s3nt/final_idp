@@ -1,9 +1,7 @@
 @startuml
-title UC-04 - View Deployment Result (Main Flow)
-
+title UC-04 - View Deployment Result (read-only and prerequisite-aware)
 autonumber
 hide footbox
-
 actor Developer
 boundary "Web UI" as UI
 control "Deployment Query API / Controller" as API
@@ -17,55 +15,65 @@ participant "Workload Status Provider /\nKubernetes Adapter" as WorkloadProvider
 participant "Kubernetes Cluster" as Kubernetes
 control "Deployment Result Aggregator" as Aggregator
 
-Developer -> UI: Open application and select Deployments
+Developer -> UI: Open Deployments and select one
 UI -> API: listDeployments(applicationId)
 API -> QueryService: listDeployments(applicationId)
 QueryService -> DeploymentRepo: findByApplication(applicationId)
-DeploymentRepo --> QueryService: Deployment history
-QueryService --> API: Deployment history
-API --> UI: Display deployment history
-
-Developer -> UI: Select a deployment
+DeploymentRepo --> QueryService: History
+QueryService --> API: History
+API --> UI: Display history
 UI -> API: getDeploymentDetail(deploymentId)
 API -> QueryService: getDeploymentDetail(deploymentId)
-
 QueryService -> DeploymentRepo: getDeploymentDetail(deploymentId)
-DeploymentRepo --> QueryService: Deployment Record and target
+DeploymentRepo --> QueryService: lifecycle, record, references, target, workloads
 QueryService -> DeploymentRepo: getDeploymentProgress(deploymentId)
-DeploymentRepo --> QueryService: Deployment progress
+DeploymentRepo --> QueryService: Zero steps before confirm, otherwise three internal steps
 QueryService -> DeploymentRepo: getDeploymentImages(deploymentId)
-DeploymentRepo --> QueryService: Actual workload images and versions
-QueryService -> ResourceRepo: getInfrastructureStatus(infrastructureReferences)
-ResourceRepo --> QueryService: Infrastructure status
-QueryService -> CDStatusProvider: getCDStatus(deliveryReference)
-CDStatusProvider -> CDProvider: getStatus(deliveryReference)
-CDProvider -> CDSystem: Query deployment/sync status
-CDSystem --> CDProvider: CD status
-CDProvider --> CDStatusProvider: CD status
-CDStatusProvider --> QueryService: CD status
-QueryService -> WorkloadProvider: getWorkloadStatus(target, workloads)
-WorkloadProvider -> Kubernetes: Query workload health and endpoints
-Kubernetes --> WorkloadProvider: Workload status
-WorkloadProvider --> QueryService: Workload health
-QueryService -> WorkloadProvider: getDeploymentEndpoints(target, workloads)
-WorkloadProvider -> Kubernetes: Query exposed endpoints
-Kubernetes --> WorkloadProvider: Endpoints
-WorkloadProvider --> QueryService: Deployment endpoints
+DeploymentRepo --> QueryService: Actual images
 
-QueryService -> Aggregator: aggregate(deploymentRecord, progress, images,\ninfrastructureStatus, cdStatus, workloadStatus, endpoints)
-Aggregator --> QueryService: Deployment result view model
-QueryService --> API: Deployment result
-API --> UI: Display environment, target, images, progress,\ninfrastructure, CD status, workload health and endpoints
+alt Infrastructure references exist
+  QueryService -> ResourceRepo: getInfrastructureStatus(infrastructureReferences)
+  ResourceRepo --> QueryService: Infrastructure status
+else No infrastructure reference
+  QueryService -> QueryService: infrastructureStatus = PENDING or NOT_AVAILABLE
+end
+alt deliveryReference exists
+  QueryService -> CDStatusProvider: getCDStatus(deliveryReference)
+  CDStatusProvider -> CDProvider: getStatus(deliveryReference)
+  CDProvider -> CDSystem: Query delivery status
+  CDSystem --> CDProvider: Delivery status
+  CDProvider --> QueryService: Delivery status
+else Not published
+  QueryService -> QueryService: cdStatus/CD_SYNCED = PENDING or NOT_AVAILABLE
+end
+alt deliveryReference exists and publish completed
+  QueryService -> WorkloadProvider: getWorkloadStatus(target, workloads)
+  WorkloadProvider -> Kubernetes: Query workload health
+  Kubernetes --> WorkloadProvider: Health
+  WorkloadProvider --> QueryService: Workload status
+  QueryService -> WorkloadProvider: getDeploymentEndpoints(target, workloads)
+  WorkloadProvider -> Kubernetes: Query endpoints
+  Kubernetes --> WorkloadProvider: Endpoints
+  WorkloadProvider --> QueryService: Endpoints
+else Workloads cannot exist yet
+  QueryService -> QueryService: workload/endpoints/APPLICATION_READY =\nPENDING or NOT_AVAILABLE
+end
+QueryService -> Aggregator: aggregate(lifecycle, persistedInternalSteps, images,\ninfrastructureStatus, liveDeliveryStatus, liveWorkloadStatus, endpoints)
+Aggregator --> QueryService: View with derived CD_SYNCED and APPLICATION_READY
+QueryService --> API: Result
+API --> UI: Display result
 
-opt Deployment failed (A1)
+opt Deployment failed
   UI -> API: getDeploymentFailureDetail(deploymentId)
   API -> QueryService: getDeploymentFailureDetail(deploymentId)
   QueryService -> DeploymentRepo: getDeploymentFailureDetail(deploymentId)
-  DeploymentRepo --> QueryService: Failed deployment_step rows (status,\nrelated_component_reference, error_summary)\nand deployment_record.error_summary
-  QueryService --> API: Deployment failure detail
-  API --> UI: Failed step, related component and error summary
+  DeploymentRepo --> QueryService: Optional failed internal step and record error summary
+  QueryService --> API: Failure detail
+  API --> UI: Display failure
 end
-
-UI --> Developer: Show deployment result
-
+note over QueryService, Aggregator
+  UC-04 never calls a provider with a missing prerequisite and never writes.
+  CD_SYNCED and APPLICATION_READY are live derived view markers, not rows
+  and not Deployment lifecycle values.
+end note
 @enduml

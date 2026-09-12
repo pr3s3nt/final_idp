@@ -1,9 +1,7 @@
 @startuml
-title UC-02 - Configure Application Environment (Main Flow)
-
+title UC-02 - Configure Environment (client-owned draft and staged secrets)
 autonumber
 hide footbox
-
 actor Developer
 boundary "Web UI" as UI
 control "Environment Configuration\nAPI / Controller" as API
@@ -15,90 +13,96 @@ control "Environment Configuration Validator" as Validator
 collections "Secret Store /\nSecret Management Adapter" as SecretStore
 entity "Environment Configuration Repository" as ConfigRepo
 
-note over API, SecretStore
-  requestResourceOutputs(), requestWorkloadOutputs(),
-  listValidOutputs(), listValidSensitiveOutputs(), and storeSecret()
-  are internal query/integration messages, not UC system operations.
+note over UI, Service
+  ConfigurationDefinitionDraft is owned by Web UI. Each edit carries the whole
+  draft and returns its replacement; Service retains no configurationDraft.
+  After upload, UI holds only an opaque stagedSecretReference, never plaintext.
 end note
-
-note right of SecretStore
-  Secret values are stored securely.
-  Only a Secret reference is returned and persisted
-  in Environment Configuration; plaintext is not
-  stored in Environment Configuration Repository.
-end note
-
-Developer -> UI: Open application Configuration page
 Developer -> UI: Select environment
 UI -> API: selectEnvironment(applicationId, environment)
 API -> Service: selectEnvironment(applicationId, environment)
 Service -> AppRepo: loadConfigurationRequirements(applicationId)
-AppRepo --> Service: Workloads, variables, secrets, dependencies
-Service --> API: Configuration requirements
-API --> UI: Display variables and secrets by workload
+AppRepo --> Service: Requirements
+Service -> ConfigRepo: findByApplicationAndEnvironment(applicationId, environment)
+ConfigRepo --> Service: Existing references, if any
+Service --> API: ConfigurationDefinitionDraft
+API --> UI: Store draft locally
 
 loop For each Environment Variable
-    Developer -> UI: Select value source
-    alt Direct value
-        Developer -> UI: Enter value
-        UI -> API: setDirectConfigurationValue(variable, value)
-        API -> Service: setDirectConfigurationValue(variable, value)
-    else Resource Output
-        Developer -> UI: Select resource
-        UI -> API: requestResourceOutputs(resource)
-        API -> Service: requestResourceOutputs(resource)
-        Service -> ResourceCatalog: listValidOutputs(resource)
-        ResourceCatalog --> Service: Valid resource outputs
-        Service --> API: Valid resource outputs
-        API --> UI: Display valid resource outputs
-        Developer -> UI: Select resource output
-        UI -> API: bindResourceOutput(variable, resource, output)
-        API -> Service: bindResourceOutput(variable, resource, output)
-    else Workload Output
-        Developer -> UI: Select workload and output
-        UI -> API: requestWorkloadOutputs(workload)
-        API -> Service: requestWorkloadOutputs(workload)
-        Service -> WorkloadCatalog: listValidOutputs(workload)
-        WorkloadCatalog --> Service: Valid workload outputs
-        Service --> API: Valid workload outputs
-        API --> UI: Display valid workload outputs
-        Developer -> UI: Select workload output
-        UI -> API: bindWorkloadOutput(variable, workload, output)
-        API -> Service: bindWorkloadOutput(variable, workload, output)
-    end
+  alt Direct
+    UI -> API: setDirectConfigurationValue(configurationDraft, variable, value)
+    API -> Service: setDirectConfigurationValue(configurationDraft, variable, value)
+  else Resource Output
+    UI -> API: requestResourceOutputs(resource)
+    API -> Service: requestResourceOutputs(resource)
+    Service -> ResourceCatalog: listValidOutputs(resource)
+    ResourceCatalog --> Service: Valid outputs
+    Service --> API: Valid outputs
+    UI -> API: bindResourceOutput(configurationDraft, variable, resource, output)
+    API -> Service: bindResourceOutput(configurationDraft, variable, resource, output)
+  else Workload Output
+    UI -> API: requestWorkloadOutputs(workload)
+    API -> Service: requestWorkloadOutputs(workload)
+    Service -> WorkloadCatalog: listValidPlanTimeOutputs(workload)
+    WorkloadCatalog --> Service: Valid plan-time outputs
+    Service --> API: Valid outputs
+    UI -> API: bindWorkloadOutput(configurationDraft, variable, workload, output)
+    API -> Service: bindWorkloadOutput(configurationDraft, variable, workload, output)
+  end
+  Service --> API: Updated ConfigurationDefinitionDraft
+  API --> UI: Replace local draft
 end
 
 loop For each Secret
-    Developer -> UI: Select secret source
-    alt Enter a secret value securely
-        Developer -> UI: Enter secret value
-        UI -> API: setDirectConfigurationValue(secret, secretValue)
-        API -> Service: setDirectConfigurationValue(secret, secretValue)
-        Service -> SecretStore: storeSecret(applicationId, environment, secretValue)
-        SecretStore --> Service: Secret reference
-    else Sensitive Resource Output
-        Developer -> UI: Select resource and sensitive output
-        UI -> API: requestResourceOutputs(resource)
-        API -> Service: requestResourceOutputs(resource)
-        Service -> ResourceCatalog: listValidSensitiveOutputs(resource)
-        ResourceCatalog --> Service: Valid sensitive outputs
-        Service --> API: Valid sensitive outputs
-        API --> UI: Display valid sensitive outputs
-        Developer -> UI: Select sensitive output
-        UI -> API: bindResourceOutput(secret, resource, output)
-        API -> Service: bindResourceOutput(secret, resource, output)
-    end
+  alt Direct secret
+    Developer -> UI: Enter secret value
+    UI -> API: stageSecret(applicationId, environment, secretDefinitionId,\nsecretValue, idempotencyKey)
+    API -> Service: stageSecret(...)
+    Service -> SecretStore: stageSecret(..., ttl, idempotencyKey)
+    SecretStore --> Service: opaque stagedSecretReference
+    Service --> API: opaque stagedSecretReference
+    API --> UI: Replace plaintext with opaque reference
+    UI -> API: setDirectConfigurationValue(configurationDraft, secret, stagedSecretReference)
+    API -> Service: setDirectConfigurationValue(configurationDraft, secret, stagedSecretReference)
+  else Sensitive Resource Output
+    UI -> API: requestResourceOutputs(resource)
+    API -> Service: requestResourceOutputs(resource)
+    Service -> ResourceCatalog: listValidSensitiveOutputs(resource)
+    ResourceCatalog --> Service: Valid sensitive outputs
+    Service --> API: Valid outputs
+    UI -> API: bindResourceOutput(configurationDraft, secret, resource, output)
+    API -> Service: bindResourceOutput(configurationDraft, secret, resource, output)
+  end
+  Service --> API: Updated ConfigurationDefinitionDraft
+  API --> UI: Replace local draft
 end
 
-Developer -> UI: Select Save Configuration
-UI -> API: saveEnvironmentConfiguration(configuration)
-API -> Service: saveEnvironmentConfiguration(configuration)
-Service -> Validator: validateEnvironmentConfiguration(configuration)
-Validator --> Service: Validation successful
-Service -> ConfigRepo: save(configuration with value references)
-ConfigRepo --> Service: Environment Configuration saved
-Service --> API: Configuration saved
-API --> UI: Show save confirmation
-UI --> Developer: Environment Configuration saved
-
+Developer -> UI: Save Configuration
+UI -> API: saveEnvironmentConfiguration(configurationDraft)
+API -> Service: saveEnvironmentConfiguration(configurationDraft)
+Service -> Validator: validateEnvironmentConfiguration(configurationDraft)
+alt Validation failed
+  Validator --> Service: Errors
+  Service -> SecretStore: revokeStagedSecrets(newlyStagedReferences) <<best effort, idempotent>>
+  Service --> API: Validation errors
+else Valid
+  Validator --> Service: Valid
+  Service -> ConfigRepo: save(configuration with opaque references) <<DB transaction>>
+  alt DB save failed
+    ConfigRepo --> Service: Rollback
+    Service -> SecretStore: revokeStagedSecrets(newlyStagedReferences) <<compensation>>
+    Service --> API: Save failed
+  else DB committed
+    ConfigRepo --> Service: Saved
+    Service -> SecretStore: promoteStagedSecrets(newlyStagedReferences) <<idempotent retry>>
+    SecretStore --> Service: Permanent references
+    Service --> API: Configuration saved
+    API --> UI: Show confirmation
+  end
+end
+note over Service, SecretStore
+  There is no distributed transaction. Stable idempotency keys, staging TTL,
+  idempotent promote/revoke, retry and orphan reconciliation bound the window;
+  validation or DB failure triggers compensation.
+end note
 @enduml

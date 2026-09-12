@@ -17,6 +17,8 @@ Environment Variable và Secret mà từng workload cần.
 
 **IDP** lưu Application Definition và sinh application specification tương ứng, ví dụ score.yaml.
 
+Draft chỉnh sửa do Web UI sở hữu. Mỗi thao tác chỉnh sửa gửi toàn bộ `ApplicationDefinitionDraft` cần thiết và nhận lại draft mới; backend stateless và không giữ draft xuyên request.
+
 2. Actor
 
 Primary Actor: Developer
@@ -98,6 +100,8 @@ frontend → backend backend  → postgresql
 Developer chọn Save Application.
 
 **IDP** kiểm tra dữ liệu, lưu Application Definition và sinh/cập nhật application specification.
+
+Nếu Workload/Resource Requirement/configuration definition đã từng được configuration hoặc deployment history tham chiếu nhưng bị bỏ khỏi draft, **IDP** retire (soft-delete) thay vì hard-delete; history và FK vẫn được giữ.
 
 ## Luồng ngoại lệ
 
@@ -310,9 +314,13 @@ Nhập giá trị secret theo cơ chế bảo mật của **IDP**.
 
 Hoặc chọn output nhạy cảm của resource.
 
+Khi nhập trực tiếp, Web UI gửi plaintext đúng một lần tới API staging và lập tức thay nó bằng opaque staged reference có TTL/idempotency key. Mọi request chỉnh draft sau đó mang full `ConfigurationDefinitionDraft` và chỉ opaque reference; service không giữ draft hoặc trả plaintext xuyên request.
+
 Developer chọn Save Configuration.
 
 **IDP** kiểm tra và lưu Environment Configuration.
+
+Nếu validation/DB save thất bại, **IDP** gọi compensating revoke idempotent cho staged reference. Nếu save thành công, reference được promote idempotently. Secret Store nằm ngoài DB transaction; TTL, retry và orphan reconciliation giới hạn crash window.
 
 ## Luồng ngoại lệ
 
@@ -382,6 +390,7 @@ Image tag/version được xác định tại thời điểm deployment, không 
 - Resolve Resource Definition phù hợp theo deployment context.
 - Reconcile infrastructure.
 - Resolve Environment Configuration, Resource Output và Workload Output.
+- Tạo Workload Output plan-time từ graph/workload metadata/deployment context trước khi resolve configuration.
 - Sinh Kubernetes manifest.
 - Chuyển desired deployment state cho hệ thống Continuous Delivery.
 
@@ -405,6 +414,7 @@ Image tag/version được xác định tại thời điểm deployment, không 
 - Kubernetes manifest được sinh với đúng image và configuration.
 - Desired deployment state được gửi tới CD system.
 - Deployment Record được lưu.
+- HTTP confirm chỉ trả accepted/tracking sau khi atomically enqueue durable execution job; worker hoàn tất các hậu điều kiện dài hạn.
 
 ## 5. Luồng chính
 
@@ -470,13 +480,23 @@ Image tag/version được xác định tại thời điểm deployment, không 
     * Cập nhật.
     * Hoặc tái sử dụng.
 
+Mọi reusable-instance lookup bắt đầu từ exact active `resource_instance_binding` cho application + environment + logical Resource Requirement + deployment target. Owner columns trên Resource Instance chỉ ghi ownership gốc, không phải read path thay thế. Reuse chéo chỉ hiện diện khi platform đã pre-authorize `SHARED_CONSUMER` binding với policy `EXPLICIT_SHARED`, sharing key và authorization cùng khớp; deployment flow không tự mở rộng sharing scope.
+
 ## IDP hiển thị các infrastructure parameter mà Developer được phép override.
 
 ## Developer xác nhận và chọn **Deploy**.
 
+**IDP** rebuild typed Infrastructure Plan, kiểm fingerprint và override, rồi CAS/enqueue job trong một DB transaction và trả tracking id. Reconcile, resolve, manifest và publish chạy bất đồng bộ trong worker có lease/retry/idempotency.
+
+Từ đây durable worker thực thi bất đồng bộ.
+
 ## IDP reconcile infrastructure theo dependency/resource graph.
 
 ## Khi infrastructure resource sẵn sàng, IDP thu thập Resource Output tương ứng.
+
+## IDP dùng Workload Output Resolver tạo output plan-time, ví dụ Kubernetes Service DNS/endpoint, từ deployment graph, workload metadata và target context.
+
+Output chỉ có sau khi workload của chính deployment chạy không được dùng làm input cho deployment đó; vòng tròn bị validation từ chối.
 
 ## IDP tiếp tục resolve các dependency và Environment Configuration trong graph.
 
@@ -514,6 +534,8 @@ frontend.BACKEND_URL
 - Image version thực tế của từng workload.
 - Infrastructure reference.
 - Trạng thái deployment.
+- External CD delivery reference/status riêng.
+- Ba internal progress step: Infrastructure Ready, Configuration Resolved, Manifest Generated.
 
 ## 6. Luồng ngoại lệ
 
@@ -534,7 +556,7 @@ Deployment dừng nếu:
 Nếu infrastructure provisioning, manifest generation hoặc CD delivery thất bại:
 
 - **IDP** ghi nhận deployment thất bại.
-- **IDP** lưu failed step và error summary.
+- **IDP** lưu failed internal step cho infrastructure/configuration/manifest; CD publish failure dùng `delivery_status = FAILED` + error summary, không tạo step thứ tư.
 - Developer có thể xem chi tiết trong UC-04 – View Deployment Result.
 
 ## 7. Dữ liệu chính
@@ -546,9 +568,13 @@ Nếu infrastructure provisioning, manifest generation hoặc CD delivery thất
 | Deployment Context     | Cloud provider, region, target-specific input           |
 | Deployment Graph       | Workload, resource, dependency, configuration reference |
 | Resource Resolution    | Resource, Resource Definition                           |
+| Infrastructure Plan    | Typed items/action/parameters/override definitions      |
 | Resource Output        | Resource + output                                       |
+| Workload Output        | Plan-time DNS/endpoint từ workload metadata/context     |
 | Resolved Configuration | Workload, variable/secret, resolved source              |
-| Deployment Record      | Image version, target, status, infrastructure reference |
+| Deployment Record      | Lifecycle, delivery reference/status, target, infra refs |
+| Deployment Step        | Ba internal step persisted                              |
+| Deployment Execution Job | Tracking, overrides, fingerprint, lease/retry          |
 
 ## 8. Quy tắc nghiệp vụ
 
@@ -561,6 +587,9 @@ Nếu infrastructure provisioning, manifest generation hoặc CD delivery thất
 - Infrastructure được reconcile thay vì luôn tạo mới.
 - Resource Output chỉ được sử dụng sau khi resource tương ứng đã được resolve và sẵn sàng.
 - Environment Configuration có thể phụ thuộc vào Resource Output hoặc Workload Output.
+- Infrastructure Plan, Infrastructure Plan Item và Override Definition là typed transient objects với canonical schema; chỉ fingerprint + algorithm persist, không lưu plan payload.
+- `deployment.status` là platform lifecycle `AWAITING_CONFIRMATION/QUEUED/RUNNING/SUBMITTED/FAILED`; CD delivery status có field/enum riêng.
+- `CD Synced` và `Application Ready` được UC-04 suy ra live, không persist thành Deployment Step.
 - Developer không trực tiếp thao tác với Terraform module, Kubernetes ConfigMap, Kubernetes Secret hoặc Kubernetes manifest.
 - `score-k8s` được sử dụng để sinh base Kubernetes manifest từ resolved application specification.
 - Target-specific manifest adaptation/patch được áp dụng sau bước sinh base manifest khi cần.
@@ -622,6 +651,8 @@ backend registry.company.local/shop-backend:v1.4.3 Healthy
 
 ✓ Infrastructure Ready ✓ Configuration Resolved ✓ Manifest Generated ✓ CD Synced ✓ Application Ready
 
+Ba dấu đầu đọc từ `deployment_step`; hai dấu cuối được suy ra live từ CD/Kubernetes. Nếu reference/prerequisite chưa có, UI hiển thị `PENDING` hoặc `NOT_AVAILABLE`.
+
 ## Luồng ngoại lệ
 
 A1 – Deployment thất bại
@@ -635,6 +666,8 @@ A2 – Workload chưa Healthy
 ## Quy tắc nghiệp vụ
 
 UC-04 chỉ cung cấp trạng thái và kết quả deployment.
+
+UC-04 không gọi external provider với reference `NULL`: infrastructure, CD và Kubernetes chỉ được query khi prerequisite tương ứng tồn tại. UC-04 hoàn toàn read-only và không đồng bộ external status vào Deployment lifecycle.
 
 Phải hiển thị image/version thực tế đã sử dụng trong deployment.
 
@@ -657,15 +690,15 @@ Tài liệu ghi lại đúng các nội dung đã được thống nhất trong 
 
 ## UC 01 Create Configure Application
 
-Chịu trách nhiệm khai báo cấu trúc logic của application: workload, resource requirement, dependency và các Environment Variable/Secret mà workload cần. Lưu Application Definition và sinh/cập nhật application specification.
+Chịu trách nhiệm khai báo cấu trúc logic bằng draft do Web UI sở hữu, rồi lưu Application Definition và sinh/cập nhật specification. Backend stateless giữa các request chỉnh draft.
 
 ## UC 02 Configure Application Environment
 
-Chịu trách nhiệm khai báo giá trị cấu hình theo từng environment, bao gồm giá trị trực tiếp hoặc reference tới Resource Output / Workload Output. Không thực hiện deployment.
+Chịu trách nhiệm khai báo giá trị cấu hình theo environment bằng client-owned draft, gồm direct value hoặc output reference. Secret trực tiếp trở thành opaque staged reference; backend không giữ plaintext/draft qua request.
 
 ## UC 03 Deploy Application
 
-Chịu trách nhiệm biến Application Definition + Environment Configuration + deployment context + image version thành một deployment thực tế: dựng dependency/resource graph, reconcile infrastructure, resolve configuration, sinh manifest và gửi desired state sang CD system.
+Chịu trách nhiệm prepare typed plan và atomically enqueue khi confirm; durable worker biến definition + configuration + context + image thành deployment thực tế qua reconcile, plan-time workload output, manifest và CD publish.
 
 ## UC 04 View Deployment Result
 
@@ -677,103 +710,107 @@ Chịu trách nhiệm đọc và hiển thị trạng thái/kết quả của de
 
 ## UC 01 Create Configure Application
 
-- **createApplication()** - Tạo một Application Definition mới.
+- **createApplication(name, description)** - Tạo client-owned Application Definition draft mới.
 
-- **updateApplication()** - Cập nhật thông tin application đã tồn tại.
+- **updateApplication(applicationId)** - Tải definition hiện có thành client-owned draft.
 
-- **addResourceRequirement()** - Thêm resource logic mà application cần, ví dụ PostgreSQL hoặc Redis.
+- **addResourceRequirement(applicationDraft, resources)** - Trả draft mới từ full client-owned draft.
 
-- **addWorkload()** - Thêm workload và các thông tin như type, image repository, port.
+- **addWorkload(applicationDraft, workloads)** - Trả draft mới; backend không giữ draft.
 
-- **defineConfigurationRequirement()** - Khai báo Environment Variable và Secret mà workload cần.
+- **defineConfigurationRequirement(applicationDraft, requirements)** - Khai báo requirement trên full draft.
 
-- **defineDependency()** - Khai báo quan hệ depends on giữa workload và resource/workload khác.
+- **defineDependency(applicationDraft, dependencies)** - Khai báo dependency trên full draft.
 
-- **validateApplicationDefinition()** - Kiểm tra tính hợp lệ của workload, resource, dependency và configuration requirement.
+- **validateApplicationDefinition(applicationDraft)** - Kiểm tra full client-owned draft.
 
-- **saveApplicationDefinition()** - Lưu Application Definition.
+- **saveApplicationDefinition(applicationDraft)** - Validate và lưu full client-owned draft; referenced item bị loại sẽ được retire.
 
-- **generateApplicationSpecification()** - Sinh hoặc cập nhật application specification, ví dụ score.yaml, từ Application Definition đã lưu.
+- **generateApplicationSpecification(applicationDefinition)** - Sinh/cập nhật specification từ definition đã lưu.
 
 Ở mức Use Case Realization, không tách nhỏ hơn thành các operation như addEnvironmentVariable(), addSecret() hoặc validatePort() để tránh làm sequence diagram quá vụn.
 
 ## UC 02 Configure Application Environment
 
-- **selectEnvironment()** - Chọn environment cần cấu hình cho application.
+- **selectEnvironment(applicationId, environment)** - Tạo/tải client-owned configuration draft.
 
-- **loadConfigurationRequirements()** - Lấy danh sách Environment Variable và Secret đã được khai báo từ UC-01.
+- **loadConfigurationRequirements(applicationId)** - Lấy Environment Variable/Secret definitions từ UC-01.
 
-- **setDirectConfigurationValue()** - Gán giá trị trực tiếp cho Environment Variable hoặc Secret.
+- **setDirectConfigurationValue(configurationDraft, item, valueOrOpaqueReference)** - Gán value hoặc opaque Secret reference trên full client-owned draft.
 
-- **bindResourceOutput()** - Gán configuration vào một Resource Output, ví dụ DB_HOST → postgresql.host.
+- **bindResourceOutput(configurationDraft, item, resource, output)** - Trả full draft mới.
 
-- **bindWorkloadOutput()** - Gán configuration vào một Workload Output, ví dụ BACKEND_URL → backend.endpoint.
+- **bindWorkloadOutput(configurationDraft, variable, workload, output)** - Chỉ bind output catalog đánh dấu plan-time resolvable.
 
-- **validateEnvironmentConfiguration()** - Kiểm tra giá trị, resource, workload và output reference có hợp lệ hay không.
+- **stageSecret(applicationId, environment, secretDefinitionId, secretValue, idempotencyKey)** - Lưu secret tạm có TTL/idempotency và chỉ trả opaque reference.
 
-- **saveEnvironmentConfiguration()** - Lưu configuration riêng cho environment đã chọn.
+- **validateEnvironmentConfiguration(configurationDraft)** - Kiểm tra full client-owned draft và opaque references.
+
+- **saveEnvironmentConfiguration(configurationDraft)** - Lưu full draft và promote/revoke staged secrets theo kết quả.
 
 UC-02 chỉ lưu value hoặc reference, chưa resolve giá trị thật của Resource Output / Workload Output. Việc resolve thuộc UC-03 khi deployment thực sự diễn ra.
 
 ## UC 03 Deploy Application
 
-- **createDeployment()** - Tạo deployment mới từ application, environment, deployment target và image version.
+- **createDeployment(applicationId, environment, target, images, context)** - Tạo deployment và plan review.
 
-- **validateDeploymentInput()** - Kiểm tra image version, Environment Configuration và deployment context.
+- **validateDeploymentInput(applicationDefinition, configuration, images, context)** - Kiểm tra input snapshot.
 
-- **buildDeploymentGraph()** - Dựng dependency/resource graph từ workload, resource, dependency, configuration reference và deployment context.
+- **buildDeploymentGraph(applicationDefinition, configuration, images, context)** - Dựng dependency/resource graph.
 
-- **resolveResourceDefinitions()** - Chọn Resource Definition phù hợp cho từng resource trong deployment graph.
+- **resolveResourceDefinitions(graph, context)** - Chọn Resource Definition phù hợp.
 
-- **planInfrastructureChanges()** - Xác định infrastructure resource nào cần tạo mới, cập nhật hoặc tái sử dụng.
+- **planInfrastructureChanges(graph, resolutions, scopedInstances)** - Tạo typed create/update/reuse plan.
 
-- **loadInfrastructureOverrides()** - Lấy các infrastructure parameter mà Developer được phép override.
+- **loadInfrastructureOverrides(plan)** - Tạo typed Override Definition list.
 
-- **applyInfrastructureOverrides()** - Ghi nhận các giá trị override mà Developer lựa chọn.
+- **applyInfrastructureOverrides(plan, overrideValues)** - Validate và áp dụng selected values lên rebuilt plan.
 
-- **confirmDeployment()** - Xác nhận deployment sau khi Developer kiểm tra infrastructure plan và các override.
+- **confirmDeployment(deploymentId, overrides, idempotencyKey)** - Rebuild/check fingerprint, validate override, atomically enqueue durable job và trả accepted/tracking.
 
-- **reconcileInfrastructure()** - Thực thi việc tạo/cập nhật infrastructure thông qua provisioner phù hợp.
+- **reconcileInfrastructure(finalPlan, deploymentId)** - Reconcile và persist scoped Resource Instance/Binding.
 
-- **collectResourceOutputs()** - Thu thập Resource Output sau khi infrastructure resource sẵn sàng.
+- **collectResourceOutputs(infrastructureReferences)** - Thu thập Resource Output sau khi instance ready.
 
-- **resolveEnvironmentConfiguration()** - Resolve configuration từ direct value, Resource Output và Workload Output.
+- **resolvePlanTimeWorkloadOutputs(graph, context)** - Tính plan-time Workload Output trước configuration resolution.
 
-- **generateResolvedApplicationSpecification()** - Tạo resolved application specification chứa image version, configuration và dependency đã resolve.
+- **resolveEnvironmentConfiguration(configuration, resourceOutputs, workloadOutputs)** - Resolve ba nguồn value.
 
-- **generateKubernetesManifest()** - Sinh base Kubernetes manifest từ resolved specification bằng score-k8s.
+- **generateResolvedApplicationSpecification(applicationDefinition, images, resolvedConfiguration)** - Tạo resolved specification.
 
-- **adaptManifestForTarget()** - Áp dụng target-specific patch/adaptation cho Kubernetes manifest nếu deployment target yêu cầu.
+- **generateKubernetesManifest(resolvedSpecification)** - Sinh base manifest bằng score-k8s.
 
-- **materializeEnvironmentConfiguration()** - Chuyển Environment Variable đã resolve thành Kubernetes configuration, ví dụ ConfigMap hoặc cấu hình tương ứng.
+- **adaptManifestForTarget(baseManifest, target)** - Áp dụng target-specific adaptation.
 
-- **materializeSecretConfiguration()** - Chuyển Secret đã resolve thành Kubernetes Secret hoặc secret reference phù hợp.
+- **materializeEnvironmentConfiguration(manifest, resolvedEnvironmentVariables)** - Materialize non-secret configuration.
 
-- **publishDesiredDeploymentState()** - Gửi desired deployment state sang CD abstraction.
+- **materializeSecretConfiguration(manifest, resolvedSecrets)** - Materialize Secret/reference không log plaintext.
 
-- **saveDeploymentRecord()** - Lưu Deployment Record, image version, infrastructure reference và trạng thái thực thi.
+- **publishDesiredDeploymentState(desiredState, deploymentId, idempotencyKey)** - Publish idempotently và nhận delivery reference/status.
 
-Chuỗi chính: tạo deployment → dựng graph → resolve resource → plan/override infra → reconcile infra → resolve output/config → sinh resolved spec → sinh base manifest → adapt theo target → materialize config/secret → publish sang CD → lưu deployment record.
+- **saveDeploymentRecord(deploymentId, infrastructureReferences, deliveryReference, deliveryStatus, lifecycleStatus)** - Upsert record cuối.
+
+Chuỗi chính: tạo deployment → dựng graph → resolve resource → lập typed plan/override → HTTP confirm rebuild/check fingerprint và atomically enqueue → worker đánh dấu `RUNNING`, rebuild/check fingerprint → reconcile infra → resolve output/config → sinh resolved spec → sinh base manifest → adapt theo target → materialize config/secret → publish sang CD → lưu deployment record.
 
 ## UC 04 View Deployment Result
 
-- **listDeployments()** - Lấy danh sách lịch sử deployment của application.
+- **listDeployments(applicationId)** - Lấy lịch sử deployment của application.
 
-- **getDeploymentDetail()** - Lấy thông tin chi tiết của một deployment cụ thể.
+- **getDeploymentDetail(deploymentId)** - Lấy detail/prerequisite references.
 
-- **getDeploymentProgress()** - Lấy tiến trình thực thi của deployment theo từng bước.
+- **getDeploymentProgress(deploymentId)** - Lấy ba internal persisted steps.
 
-- **getInfrastructureStatus()** - Lấy trạng thái của infrastructure liên quan đến deployment.
+- **getInfrastructureStatus(infrastructureReferences)** - Chỉ gọi khi references không rỗng.
 
-- **getCDStatus()** - Lấy trạng thái đồng bộ/triển khai từ CD system thông qua CD abstraction.
+- **getCDStatus(deliveryReference)** - Chỉ gọi khi delivery reference tồn tại.
 
-- **getWorkloadStatus()** - Lấy trạng thái health của từng workload trong deployment.
+- **getWorkloadStatus(target, workloads)** - Chỉ gọi sau publish prerequisite.
 
-- **getDeploymentEndpoints()** - Lấy endpoint được expose sau deployment nếu có.
+- **getDeploymentEndpoints(target, workloads)** - Chỉ gọi sau publish prerequisite.
 
-- **getDeploymentImages()** - Lấy image repository và image version thực tế đã dùng cho từng workload.
+- **getDeploymentImages(deploymentId)** - Lấy image snapshot thực tế.
 
-- **getDeploymentFailureDetail()** - Lấy failed step, workload/resource liên quan và error summary khi deployment thất bại.
+- **getDeploymentFailureDetail(deploymentId)** - Lấy failed internal step/error summary.
 
 UC-04 là read-only: đọc dữ liệu từ Deployment Record và các nguồn trạng thái liên quan, sau đó tổng hợp để hiển thị cho Developer. UC-04 không trigger reconcile, không sửa infrastructure và không redeploy.
 
@@ -819,19 +856,19 @@ UC-01 chưa cần Deployment Orchestrator, Resource Definition Resolver, Infrast
 
 ### Application services
 
-- **Environment Configuration Service** - Điều phối toàn bộ use case cấu hình application theo environment.
+- **Environment Configuration Service** - Stateless; nhận/trả full client-owned draft, stage/promote/revoke opaque secret references.
 
 ### Domain components
 
 - **Resource Output Catalog / Resource Definition Query** - Cung cấp danh sách output hợp lệ mà một resource có thể expose để Developer lựa chọn.
 
-- **Workload Output Catalog** - Cung cấp danh sách output mà workload có thể expose, ví dụ endpoint.
+- **Workload Output Catalog** - Chỉ liệt kê output `PLAN_TIME` mà workload expose cho same-deployment binding.
 
 - **Environment Configuration Validator** - Kiểm tra direct value, resource reference, workload reference và output được chọn có hợp lệ hay không.
 
 ### Integration abstractions
 
-- **Secret Store / Secret Management Adapter** - Lưu giá trị Secret theo cơ chế bảo mật, tránh lưu plaintext trực tiếp trong configuration database.
+- **Secret Store / Secret Management Adapter** - Stage secret bằng idempotency key + TTL, trả opaque reference, rồi promote/revoke idempotently.
 
 Secret backend implementation cụ thể chưa được chốt, vì vậy tài liệu chưa liệt kê thành phần thuộc nhóm Integration implementations cho UC-02.
 
@@ -855,7 +892,9 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 ### Application services
 
-- **Deployment Orchestrator** - Điều phối toàn bộ luồng deploy từ lúc tạo deployment đến khi publish desired state sang CD.
+- **Deployment Orchestrator** - Dựng/rebuild plan và accept/enqueue; không chạy tác vụ dài trong HTTP confirm.
+
+- **Deployment Worker** - Claim durable job và thực thi reconcile → resolve → manifest → publish → record với retry/idempotency.
 
 ### Domain components
 
@@ -865,9 +904,13 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 - **Infrastructure Planner** - So sánh desired state với resource hiện tại để xác định cần create, update hay reuse.
 
+- **Infrastructure Plan / Item / Override Definition** - Typed transient canonical input cho fingerprint; payload không persist.
+
 - **Infrastructure Reconciler** - Điều phối việc reconcile infrastructure theo plan đã xác định.
 
 - **Resource Output Resolver / Collector** - Thu thập output từ infrastructure đã provision, ví dụ host, port, username, password.
+
+- **Workload Output Resolver** - Tạo Service DNS/endpoint plan-time từ graph/workload metadata/deployment context và từ chối circular/runtime-only input.
 
 - **Environment Configuration Resolver** - Resolve direct value, Resource Output reference và Workload Output reference thành configuration thực tế cho deployment.
 
@@ -907,13 +950,15 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 - **Environment Configuration Repository** - Đọc configuration/reference đã lưu từ UC-02.
 
-- **Resource Instance Repository** - Lưu/đọc trạng thái và reference của infrastructure đã provision để phục vụ reconcile/reuse.
+- **Resource Instance Repository** - Lưu Resource Instance/Binding và query exact application + environment + logical requirement + target; shared reuse cần policy/key.
 
 - **Deployment Repository** - Lưu Deployment Record, image version, target, infrastructure reference, step/status và lỗi nếu có.
 
-Luồng responsibility: Web UI → Deployment API → Deployment Orchestrator → Graph Builder → Resource Definition Resolver → Infrastructure Planner → Infrastructure Reconciler → Provisioner → Terraform/OpenTofu Runner → Output Collector → Configuration Resolver → Resolved Spec Generator → Score Renderer → score-k8s → Target Adapter → Config/Secret Materializer → CD Integration → Concrete CD Provider → CD System → Kubernetes.
+- **Deployment Execution Job / Outbox** - Lưu durable accepted work, selected overrides, fingerprint, lease/attempt và idempotency key.
 
-Deployment Orchestrator chỉ điều phối. Các việc dựng graph, resolve Resource Definition, reconcile infrastructure, resolve configuration, sinh manifest và giao tiếp với CD nằm ở các component riêng.
+Luồng responsibility: Web UI → Deployment API → Deployment Orchestrator → atomic Job/Outbox enqueue → Deployment Worker → Graph/Planner → Infrastructure Reconciler → Resource + Workload Output Resolvers → Configuration Resolver → Spec/Manifest/Materializers → CD Integration → Deployment Record.
+
+Deployment Orchestrator chỉ prepare/rebuild/accept; Deployment Worker điều phối tác vụ dài. Các domain/integration component vẫn sở hữu logic chuyên biệt.
 
 ## UC 04 View Deployment Result
 
@@ -956,4 +1001,3 @@ Deployment Orchestrator chỉ điều phối. Các việc dựng graph, resolve 
 Luồng responsibility: Web UI → Deployment Query API → Deployment Query Service → Deployment Repository + Resource Repository + CD Status Provider → Concrete CD Provider → CD System + Kubernetes Adapter → Kubernetes Cluster → Result Aggregator → Web UI.
 
 UC-04 không dùng Deployment Orchestrator để thực hiện hành động. UC-04 đi theo query path riêng vì chỉ đọc và tổng hợp trạng thái, không reconcile infrastructure hoặc trigger deployment.
-

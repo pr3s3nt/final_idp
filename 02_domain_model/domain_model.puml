@@ -9,6 +9,7 @@ class "Application Definition" as ApplicationDefinition <<aggregate root>> {
   applicationId: String
   name: String
   description: String
+  retiredAt: DateTime [0..1]
   createdAt: DateTime
   updatedAt: DateTime
 }
@@ -19,25 +20,29 @@ class "Workload" as Workload <<entity>> {
   type: String
   imageRepository: String
   port: Integer [0..1]
-  exposedOutputs: List<String>
+  exposedOutputs: List<WorkloadOutputDefinition>
+  retiredAt: DateTime [0..1]
 }
 
 class "Resource Requirement" as ResourceRequirement <<entity>> {
   resourceRequirementId: String
   name: String
   resourceType: String
+  retiredAt: DateTime [0..1]
 }
 
 class "Environment Variable Definition" as EnvironmentVariableDefinition <<entity>> {
   variableDefinitionId: String
   name: String
   required: Boolean
+  retiredAt: DateTime [0..1]
 }
 
 class "Secret Definition" as SecretDefinition <<entity>> {
   secretDefinitionId: String
   name: String
   required: Boolean
+  retiredAt: DateTime [0..1]
 }
 
 class "Dependency" as Dependency <<entity>> {
@@ -95,6 +100,12 @@ class "Workload Output Reference" as WorkloadOutputReference <<value object>> {
   outputName: String
 }
 
+class "Workload Output Definition" as WorkloadOutputDefinition <<value object>> {
+  outputName: String
+  availability: PLAN_TIME | RUNTIME
+  resolutionKind: SERVICE_DNS | SERVICE_ENDPOINT | RUNTIME_PROVIDER
+}
+
 class "Resource Definition" as ResourceDefinition <<entity>> {
   resourceDefinitionId: String
   name: String
@@ -105,6 +116,7 @@ class "Resource Definition" as ResourceDefinition <<entity>> {
   allowedOverrides: Map
   exposedOutputs: List<String>
   sensitiveOutputs: List<String>
+  retiredAt: DateTime [0..1]
 }
 
 class "Deployment" as Deployment <<aggregate root>> {
@@ -114,7 +126,7 @@ class "Deployment" as Deployment <<aggregate root>> {
   deploymentTarget: String
   planFingerprint: String
   planFingerprintAlgo: String
-  status: String
+  status: AWAITING_CONFIRMATION | QUEUED | RUNNING | SUBMITTED | FAILED
   createdAt: DateTime
   updatedAt: DateTime
 }
@@ -147,13 +159,47 @@ class "Resource Resolution" as ResourceResolution <<transient>> {
   reason: String [0..1]
 }
 
+class "Infrastructure Plan" as InfrastructurePlan <<transient>> {
+  applicationId: String
+  environment: String
+  deploymentTarget: String
+  items: List<InfrastructurePlanItem>
+}
+
+class "Infrastructure Plan Item" as InfrastructurePlanItem <<transient>> {
+  resourceRequirementId: String
+  resourceDefinitionId: String
+  provisionerReference: String
+  supportedContexts: Map
+  defaultParameters: Map
+  allowedOverrides: Map
+  action: CREATE | UPDATE | REUSE
+  resolvedParameters: Map
+  ownershipScope: APPLICATION_ENVIRONMENT | EXPLICIT_SHARED
+  sharingKey: String [0..1]
+  referencedResourceInstanceId: String [0..1]
+  overrideDefinitions: List<OverrideDefinition>
+}
+
+class "Override Definition" as OverrideDefinition <<transient>> {
+  parameterKey: String
+  valueType: String
+  required: Boolean
+  constraints: Map
+}
+
 class "Resource Instance" as ResourceInstance <<aggregate root>> {
   resourceInstanceId: String
   resourceDefinitionId: String
+  ownerApplicationId: String
+  environment: String
+  resourceRequirementId: String
   deploymentTarget: String
-  infrastructureReference: String
+  sharingScope: APPLICATION_ENVIRONMENT | EXPLICIT_SHARED
+  sharingKey: String [0..1]
+  infrastructureReference: String [0..1]
   providerStateReference: String [0..1]
-  status: String
+  status: PLANNED | PROVISIONING | READY | FAILED | RETIRED
   createdAt: DateTime
   updatedAt: DateTime
 }
@@ -163,6 +209,24 @@ class "Resource Output" as ResourceOutput <<transient>> {
   outputName: String
   resolvedValue: String
   sensitive: Boolean
+}
+
+class "Resource Instance Binding" as ResourceInstanceBinding <<entity>> {
+  resourceInstanceBindingId: String
+  applicationId: String
+  environment: String
+  resourceRequirementId: String
+  deploymentTarget: String
+  bindingRole: OWNER | SHARED_CONSUMER
+  sharingKey: String [0..1]
+  retiredAt: DateTime [0..1]
+}
+
+class "Workload Output" as WorkloadOutput <<transient>> {
+  workloadId: String
+  outputName: String
+  resolvedValue: String
+  availability: PLAN_TIME
 }
 
 class "Resolved Configuration" as ResolvedConfiguration <<transient>> {
@@ -186,7 +250,8 @@ class "Deployment Record" as DeploymentRecord <<entity>> {
   deploymentTarget: String
   infrastructureReferences: List<String>
   deliveryReference: String [0..1]
-  status: String
+  status: AWAITING_CONFIRMATION | QUEUED | RUNNING | SUBMITTED | FAILED
+  deliveryStatus: NOT_PUBLISHED | ACCEPTED | SYNCING | SYNCED | OUT_OF_SYNC | DEGRADED | FAILED | UNKNOWN
   errorSummary: String [0..1]
   createdAt: DateTime
   updatedAt: DateTime
@@ -195,12 +260,26 @@ class "Deployment Record" as DeploymentRecord <<entity>> {
 class "Deployment Step" as DeploymentStep <<entity>> {
   deploymentStepId: String
   sequenceNumber: Integer
-  stepName: String
-  status: String
+  stepName: INFRASTRUCTURE_READY | CONFIGURATION_RESOLVED | MANIFEST_GENERATED
+  status: PENDING | RUNNING | SUCCEEDED | FAILED | SKIPPED
   relatedComponentReference: String [0..1]
   errorSummary: String [0..1]
   startedAt: DateTime [0..1]
   completedAt: DateTime [0..1]
+}
+
+class "Deployment Execution Job" as DeploymentExecutionJob <<entity>> {
+  jobId: String
+  deploymentId: String
+  idempotencyKey: String
+  overrideValues: Map
+  acceptedPlanFingerprint: String
+  status: QUEUED | CLAIMED | SUCCEEDED | FAILED
+  attempts: Integer
+  maxAttempts: Integer
+  availableAt: DateTime
+  leaseUntil: DateTime [0..1]
+  lastError: String [0..1]
 }
 
 ' Application Definition aggregate
@@ -210,6 +289,7 @@ ApplicationDefinition "1" *-- "0..*" Dependency : dependencies
 ApplicationDefinition "1" *-- "0..1" ApplicationSpecification : generated specification
 Workload "1" *-- "0..*" EnvironmentVariableDefinition : variable definitions
 Workload "1" *-- "0..*" SecretDefinition : secret definitions
+Workload "1" *-- "0..*" WorkloadOutputDefinition : output definitions
 Dependency "0..*" --> "1" Workload : source
 Dependency "0..*" --> "0..1" Workload : target workload
 Dependency "0..*" --> "0..1" ResourceRequirement : target resource
@@ -236,6 +316,7 @@ ConfigurationValue <|-- WorkloadOutputReference
 ResourceOutputReference "0..*" --> "1" ResourceRequirement : references
 WorkloadOutputReference "0..*" --> "1" Workload : references
 ResourceOutputReference "0..*" ..> "0..1" ResourceOutput : resolves to at deployment
+WorkloadOutputReference "0..*" ..> "0..1" WorkloadOutput : resolves plan-time
 
 note right of Secret
   A Secret has exactly one source: secretReference
@@ -249,6 +330,7 @@ Deployment "0..*" --> "1" EnvironmentConfiguration : uses
 Deployment "1" *-- "1..*" WorkloadDeployment : workload images
 Deployment "1" *-- "1" DeploymentContext : context
 Deployment "1" *-- "0..1" DeploymentRecord : produces
+Deployment "1" *-- "0..1" DeploymentExecutionJob : executes through
 WorkloadDeployment "0..*" --> "1" Workload : deploys
 DeploymentRecord "1" *-- "1..*" DeploymentStep : progress
 DeploymentRecord "1" --> "1..*" WorkloadDeployment : records actual images
@@ -265,20 +347,45 @@ Deployment "1" ..> "0..*" ResourceResolution : resolves resources
 ResourceResolution "0..*" --> "1" ResourceRequirement : resolves
 ResourceResolution "0..*" --> "1" ResourceDefinition : selects
 ResourceResolution "0..*" --> "0..1" ResourceInstance : create, update, or reuse
+Deployment "1" ..> "0..1" InfrastructurePlan : plans
+InfrastructurePlan "1" *-- "0..*" InfrastructurePlanItem : items
+InfrastructurePlanItem "1" *-- "0..*" OverrideDefinition : permitted overrides
 ResourceInstance "0..*" --> "1" ResourceDefinition : instantiated from
+ResourceInstance "0..*" --> "1" ApplicationDefinition : owned by
+ResourceInstance "0..*" --> "1" ResourceRequirement : fulfills
+ResourceInstance "1" *-- "1..*" ResourceInstanceBinding : reuse scopes
+ResourceInstanceBinding "0..*" --> "1" ApplicationDefinition : application scope
+ResourceInstanceBinding "0..*" --> "1" ResourceRequirement : logical requirement
 ResourceInstance ..> ResourceOutput : exposes at runtime
 
 note right of Deployment
-  Infrastructure Plan remains TRANSIENT.
-  Only planFingerprint and planFingerprintAlgo
-  are persistent on the Deployment.
+  Infrastructure Plan, items and override definitions are TRANSIENT typed objects.
+  Only planFingerprint and planFingerprintAlgo are persistent on Deployment.
 end note
 
 Deployment "1" ..> "0..1" ResolvedConfiguration : resolves
 ResolvedConfiguration "1" --> "1" EnvironmentConfiguration : derived from
 ResolvedConfiguration "1" --> "0..*" ResourceOutput : consumes
+ResolvedConfiguration "1" --> "0..*" WorkloadOutput : consumes
 Deployment "1" ..> "0..1" ResolvedSpecification : generates
 ResolvedSpecification "1" *-- "1" ResolvedConfiguration : embeds
+
+note right of WorkloadOutput
+  Workload Output Resolver derives only deterministic plan-time values
+  such as Kubernetes Service DNS from graph, workload metadata and context.
+  Runtime-only/circular outputs are rejected for the same deployment.
+end note
+
+note right of ResourceInstance
+  Owner fields describe original ownership only. Canonical reuse always starts
+  from an exact active ResourceInstanceBinding tuple; owner fields are not an
+  alternative query path. Cross-boundary reuse requires EXPLICIT_SHARED.
+end note
+
+note right of DeploymentStep
+  Only three internal execution steps persist. CD_SYNCED and APPLICATION_READY
+  are derived live by UC-04 and are not DeploymentStep instances.
+end note
 
 legend right
   <<aggregate root>> Persisted aggregate root

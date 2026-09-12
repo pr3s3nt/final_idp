@@ -11,6 +11,7 @@ package "Application Repository" {
     --
     * name : VARCHAR(255) <<NOT NULL, UNIQUE>>
     description : TEXT
+    retired_at : TIMESTAMP
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
   }
@@ -24,6 +25,7 @@ package "Application Repository" {
     * image_repository : VARCHAR(1024) <<NOT NULL>>
     port : INT
     * exposed_outputs : JSONB <<NOT NULL>>
+    retired_at : TIMESTAMP
   }
 
   entity "resource_requirement" as resource_requirement {
@@ -32,6 +34,7 @@ package "Application Repository" {
     * application_id : UUID <<FK, NOT NULL>>
     * name : VARCHAR(255) <<NOT NULL>>
     * resource_type : VARCHAR(100) <<NOT NULL>>
+    retired_at : TIMESTAMP
   }
 
   entity "environment_variable_definition" as environment_variable_definition {
@@ -40,6 +43,7 @@ package "Application Repository" {
     * workload_id : UUID <<FK, NOT NULL>>
     * name : VARCHAR(255) <<NOT NULL>>
     * required : BOOLEAN <<NOT NULL>>
+    retired_at : TIMESTAMP
   }
 
   entity "secret_definition" as secret_definition {
@@ -48,6 +52,7 @@ package "Application Repository" {
     * workload_id : UUID <<FK, NOT NULL>>
     * name : VARCHAR(255) <<NOT NULL>>
     * required : BOOLEAN <<NOT NULL>>
+    retired_at : TIMESTAMP
   }
 
   entity "dependency" as dependency {
@@ -131,6 +136,7 @@ package "Platform Resource Definition Catalog" {
     * allowed_overrides : JSONB <<NOT NULL>>
     * exposed_outputs : JSONB <<NOT NULL>>
     * sensitive_outputs : JSONB <<NOT NULL>>
+    retired_at : TIMESTAMP
   }
 }
 
@@ -139,12 +145,31 @@ package "Resource Instance Repository" {
     * resource_instance_id : UUID <<PK>>
     --
     * resource_definition_id : UUID <<FK, NOT NULL>>
+    * owner_application_id : UUID <<FK, NOT NULL>>
+    * environment : VARCHAR(100) <<NOT NULL>>
+    * resource_requirement_id : UUID <<FK, NOT NULL>>
     * deployment_target : VARCHAR(255) <<NOT NULL>>
-    * infrastructure_reference : VARCHAR(2048) <<NOT NULL, UNIQUE>>
+    * sharing_scope : ENUM(APPLICATION_ENVIRONMENT, EXPLICIT_SHARED) <<NOT NULL>>
+    sharing_key : VARCHAR(255)
+    infrastructure_reference : VARCHAR(2048) <<UNIQUE WHEN NOT NULL>>
     provider_state_reference : VARCHAR(2048)
-    * status : ENUM <<NOT NULL>>
+    * status : ENUM(PLANNED, PROVISIONING, READY, FAILED, RETIRED) <<NOT NULL>>
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+
+  entity "resource_instance_binding" as resource_instance_binding {
+    * resource_instance_binding_id : UUID <<PK>>
+    --
+    * resource_instance_id : UUID <<FK, NOT NULL>>
+    * application_id : UUID <<FK, NOT NULL>>
+    * environment : VARCHAR(100) <<NOT NULL>>
+    * resource_requirement_id : UUID <<FK, NOT NULL>>
+    * deployment_target : VARCHAR(255) <<NOT NULL>>
+    * binding_role : ENUM(OWNER, SHARED_CONSUMER) <<NOT NULL>>
+    sharing_key : VARCHAR(255)
+    * created_at : TIMESTAMP <<NOT NULL>>
+    retired_at : TIMESTAMP
   }
 }
 
@@ -158,7 +183,7 @@ package "Deployment Repository" {
     * deployment_target : VARCHAR(255) <<NOT NULL>>
     * plan_fingerprint : CHAR(64) <<NOT NULL>>
     * plan_fingerprint_algo : VARCHAR(32) <<NOT NULL>>
-    * status : ENUM <<NOT NULL>>
+    * status : ENUM(AWAITING_CONFIRMATION, QUEUED, RUNNING, SUBMITTED, FAILED) <<NOT NULL>>
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
   }
@@ -188,7 +213,8 @@ package "Deployment Repository" {
     * environment : VARCHAR(100) <<NOT NULL>>
     * deployment_target : VARCHAR(255) <<NOT NULL>>
     delivery_reference : VARCHAR(2048)
-    * status : ENUM <<NOT NULL>>
+    * status : ENUM(AWAITING_CONFIRMATION, QUEUED, RUNNING, SUBMITTED, FAILED) <<NOT NULL>>
+    * delivery_status : ENUM(NOT_PUBLISHED, ACCEPTED, SYNCING, SYNCED, OUT_OF_SYNC, DEGRADED, FAILED, UNKNOWN) <<NOT NULL>>
     error_summary : TEXT
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
@@ -200,8 +226,8 @@ package "Deployment Repository" {
     * deployment_id : UUID <<FK, NOT NULL>>
     * deployment_record_id : UUID <<FK, NOT NULL>>
     * sequence_number : INT <<NOT NULL>>
-    * step_name : VARCHAR(255) <<NOT NULL>>
-    * status : ENUM <<NOT NULL>>
+    * step_name : ENUM(INFRASTRUCTURE_READY, CONFIGURATION_RESOLVED, MANIFEST_GENERATED) <<NOT NULL>>
+    * status : ENUM(PENDING, RUNNING, SUCCEEDED, FAILED, SKIPPED) <<NOT NULL>>
     related_component_reference : VARCHAR(2048)
     error_summary : TEXT
     started_at : TIMESTAMP
@@ -213,6 +239,23 @@ package "Deployment Repository" {
     --
     * deployment_record_id : UUID <<FK, NOT NULL>>
     * resource_instance_id : UUID <<FK, NOT NULL>>
+  }
+
+  entity "deployment_execution_job" as deployment_execution_job {
+    * job_id : UUID <<PK>>
+    --
+    * deployment_id : UUID <<FK, NOT NULL, UNIQUE>>
+    * idempotency_key : VARCHAR(255) <<NOT NULL>>
+    * override_values : JSONB <<NOT NULL>>
+    * accepted_plan_fingerprint : CHAR(64) <<NOT NULL>>
+    * status : ENUM(QUEUED, CLAIMED, SUCCEEDED, FAILED) <<NOT NULL>>
+    * attempts : INT <<NOT NULL>>
+    * max_attempts : INT <<NOT NULL>>
+    * available_at : TIMESTAMP <<NOT NULL>>
+    lease_until : TIMESTAMP
+    last_error : TEXT
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
   }
 }
 
@@ -240,6 +283,11 @@ workload |o--o{ configuration_value : referenced workload output
 resource_requirement |o--o{ secret : referenced sensitive output
 
 resource_definition ||--o{ resource_instance : instantiated as
+application_definition ||--o{ resource_instance : owns
+resource_requirement ||--o{ resource_instance : fulfills
+resource_instance ||--|{ resource_instance_binding : scoped bindings
+application_definition ||--o{ resource_instance_binding : application scope
+resource_requirement ||--o{ resource_instance_binding : logical requirement
 
 application_definition ||--o{ deployment : deploys
 environment_configuration ||--o{ deployment : used by
@@ -248,6 +296,7 @@ workload ||--o{ workload_deployment : deployed as
 deployment ||--|| deployment_context : has
 deployment ||--o| deployment_record : produces
 deployment ||--o{ deployment_step : has steps
+deployment ||--o| deployment_execution_job : queued execution
 deployment_record ||--|{ deployment_step : progress
 deployment_record ||--o{ deployment_record_resource_instance : references
 resource_instance ||--o{ deployment_record_resource_instance : used by
@@ -274,6 +323,31 @@ end note
 
 note bottom of resource_instance
   Resource Output is TRANSIENT; therefore no resource_output table exists.
+  Owner columns record original ownership/integrity only.
+  They are never an alternative reusable-instance lookup path.
+end note
+
+note bottom of resource_instance_binding
+  Every canonical reuse query starts from the exact active tuple:
+  application_id + environment +
+  resource_requirement_id + deployment_target exactly through this table.
+  SHARED_CONSUMER rows are pre-authorized by platform administration and
+  require EXPLICIT_SHARED plus matching sharing_key/policy.
+end note
+
+note bottom of deployment_step
+  Exactly three internal step names may persist. CD_SYNCED and
+  APPLICATION_READY are live UC-04 view markers, never rows.
+end note
+
+note bottom of deployment_execution_job
+  Durable job doubles as transactional outbox. Confirmation changes Deployment
+  to QUEUED and inserts this row in one database transaction.
+end note
+
+note top of workload
+  Historical/configuration foreign keys use ON DELETE RESTRICT.
+  Referenced Workload/definitions are retired, not hard-deleted.
 end note
 
 @enduml

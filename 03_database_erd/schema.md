@@ -11,6 +11,7 @@ Schema này hiện thực persistence classification đã được duyệt ở S
 | `application_id` | UUID | PK, NOT NULL | Identity của Application Definition. |
 | `name` | VARCHAR(255) | NOT NULL, UNIQUE | Tên application. |
 | `description` | TEXT | NULL | Mô tả application. |
+| `retired_at` | TIMESTAMP | NULL | Soft-delete marker; referenced application definition không bị hard-delete. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
 
@@ -24,7 +25,8 @@ Schema này hiện thực persistence classification đã được duyệt ở S
 | `type` | VARCHAR(100) | NOT NULL | Loại workload. |
 | `image_repository` | VARCHAR(1024) | NOT NULL | Image repository; không chứa deployment-time image version. |
 | `port` | INT | NULL, CHECK (`port` BETWEEN 1 AND 65535) | Application port nếu có. |
-| `exposed_outputs` | JSONB | NOT NULL | Danh sách logical outputs workload công bố, ví dụ `endpoint`. |
+| `exposed_outputs` | JSONB | NOT NULL | Output definitions gồm name, availability (`PLAN_TIME`/`RUNTIME`) và resolution metadata. Same-deployment binding chỉ nhận `PLAN_TIME`. |
+| `retired_at` | TIMESTAMP | NULL | Soft-delete marker; active query lọc `NULL`, history vẫn resolve được FK. |
 
 ### `resource_requirement`
 
@@ -34,6 +36,7 @@ Schema này hiện thực persistence classification đã được duyệt ở S
 | `application_id` | UUID | FK → `application_definition.application_id`, NOT NULL | Application sở hữu requirement. |
 | `name` | VARCHAR(255) | NOT NULL, UNIQUE (`application_id`, `name`) | Tên resource logic trong application. |
 | `resource_type` | VARCHAR(100) | NOT NULL | Loại resource, ví dụ PostgreSQL hoặc Redis. |
+| `retired_at` | TIMESTAMP | NULL | Retire marker khi requirement đã từng được tham chiếu. |
 
 ### `environment_variable_definition`
 
@@ -43,6 +46,7 @@ Schema này hiện thực persistence classification đã được duyệt ở S
 | `workload_id` | UUID | FK → `workload.workload_id`, NOT NULL | Workload cần variable này. |
 | `name` | VARCHAR(255) | NOT NULL, UNIQUE (`workload_id`, `name`) | Tên variable trong workload. |
 | `required` | BOOLEAN | NOT NULL | Variable có bắt buộc được configure hay không. |
+| `retired_at` | TIMESTAMP | NULL | Retire marker; không phá binding/history hiện có. |
 
 ### `secret_definition`
 
@@ -52,6 +56,9 @@ Schema này hiện thực persistence classification đã được duyệt ở S
 | `workload_id` | UUID | FK → `workload.workload_id`, NOT NULL | Workload cần secret này. |
 | `name` | VARCHAR(255) | NOT NULL, UNIQUE (`workload_id`, `name`) | Tên secret trong workload. |
 | `required` | BOOLEAN | NOT NULL | Secret có bắt buộc được configure hay không. |
+| `retired_at` | TIMESTAMP | NULL | Retire marker; không phá binding/history hiện có. |
+
+Các FK lịch sử/configuration từ `deployment`, `workload_deployment`, `environment_variable`, `secret`, `configuration_value`, `dependency`, `resource_instance` và `resource_instance_binding` tới Application/Workload/definition/requirement dùng `ON DELETE RESTRICT`; FK `resource_instance.resource_definition_id` cũng `RESTRICT`. Item đã từng được tham chiếu phải set `retired_at`; hard delete chỉ được phép cho item chưa từng có reference và vẫn phải qua kiểm tra FK trong transaction. Query tạo deployment/specification mới lọc `retired_at IS NULL`, còn history query không lọc mất target đã retire.
 
 ### `dependency`
 
@@ -162,6 +169,7 @@ Constraint bổ sung: `UNIQUE (environment_configuration_id, secret_definition_i
 | `allowed_overrides` | JSONB | NOT NULL | Policy override do definition cung cấp: các parameter key Developer được phép override cùng tập giá trị, khoảng min-max hoặc enum hợp lệ. |
 | `exposed_outputs` | JSONB | NOT NULL | Danh sách normal outputs hợp lệ. |
 | `sensitive_outputs` | JSONB | NOT NULL | Danh sách sensitive outputs hợp lệ. |
+| `retired_at` | TIMESTAMP | NULL | Catalog definition đã có Resource Instance/history chỉ được retire. |
 
 ## Resource Instance Repository
 
@@ -171,14 +179,38 @@ Constraint bổ sung: `UNIQUE (environment_configuration_id, secret_definition_i
 |---|---|---|---|
 | `resource_instance_id` | UUID | PK, NOT NULL | Identity bền vững của provisioned infrastructure. |
 | `resource_definition_id` | UUID | FK → `resource_definition.resource_definition_id`, NOT NULL | Catalog definition đã dùng để provision. |
+| `owner_application_id` | UUID | FK → `application_definition.application_id`, NOT NULL | Application tạo/sở hữu gốc; dùng cho ownership/audit, không phải read path thay thế cho active binding. |
+| `environment` | VARCHAR(100) | NOT NULL | Environment ownership của instance. |
+| `resource_requirement_id` | UUID | FK → `resource_requirement.resource_requirement_id`, NOT NULL | Logical requirement cụ thể mà instance thực hiện. |
 | `deployment_target` | VARCHAR(255) | NOT NULL | Target nơi resource được quản lý. |
-| `infrastructure_reference` | VARCHAR(2048) | NOT NULL, UNIQUE | Durable provider/infrastructure identity. |
+| `sharing_scope` | ENUM (`APPLICATION_ENVIRONMENT`, `EXPLICIT_SHARED`) | NOT NULL, DEFAULT `APPLICATION_ENVIRONMENT` | Policy scope; mặc định cấm reuse chéo application/environment. |
+| `sharing_key` | VARCHAR(255) | NULL | Bắt buộc chỉ khi `EXPLICIT_SHARED`; phải match policy và query. |
+| `infrastructure_reference` | VARCHAR(2048) | NULL, UNIQUE khi khác NULL | Durable provider identity; bắt buộc khi status `READY`, có thể chưa có khi `PLANNED/PROVISIONING/FAILED`. |
 | `provider_state_reference` | VARCHAR(2048) | NULL | Reference tới provider state nếu có. |
-| `status` | ENUM | NOT NULL | Lifecycle status của Resource Instance. |
+| `status` | ENUM (`PLANNED`, `PROVISIONING`, `READY`, `FAILED`, `RETIRED`) | NOT NULL | Lifecycle status vật lý của Resource Instance. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
 
-Không có table `resource_output`: `Resource Output` là runtime view `TRANSIENT`; output được collector nạp in-memory sau khi instance ready.
+`CHECK` yêu cầu `sharing_scope = APPLICATION_ENVIRONMENT` thì `sharing_key IS NULL`, còn `EXPLICIT_SHARED` thì `sharing_key IS NOT NULL`; `status = READY` bắt buộc có `infrastructure_reference`. Các owner columns trên row này chỉ ghi ownership gốc và phục vụ integrity/audit. **Mọi reusable-instance lookup canonical luôn bắt đầu từ exact active tuple trên `resource_instance_binding`; không được query owner columns như một read path thay thế.** Sau khi join binding, repository mới lọc instance `READY`, definition/target compatibility và sharing policy. Không có table `resource_output`: output được collector nạp transient sau khi instance ready.
+
+### `resource_instance_binding`
+
+Association bền vững buộc mọi lookup/reuse vào đúng logical consumer scope; owner columns trên `resource_instance` chỉ là original creator ownership.
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `resource_instance_binding_id` | UUID | PK, NOT NULL | Identity kỹ thuật. |
+| `resource_instance_id` | UUID | FK → `resource_instance.resource_instance_id`, NOT NULL | Instance được binding. |
+| `application_id` | UUID | FK → `application_definition.application_id`, NOT NULL | Consumer application. |
+| `environment` | VARCHAR(100) | NOT NULL | Consumer environment. |
+| `resource_requirement_id` | UUID | FK → `resource_requirement.resource_requirement_id`, NOT NULL | Logical requirement của consumer. |
+| `deployment_target` | VARCHAR(255) | NOT NULL | Consumer target; phải trùng instance target. |
+| `binding_role` | ENUM (`OWNER`, `SHARED_CONSUMER`) | NOT NULL | Owner binding hoặc explicit shared consumer. |
+| `sharing_key` | VARCHAR(255) | NULL | Chỉ có cho shared consumer và phải trùng instance key. |
+| `created_at` | TIMESTAMP | NOT NULL | Audit timestamp. |
+| `retired_at` | TIMESTAMP | NULL | Binding hết hiệu lực nhưng được giữ cho audit/history. |
+
+Partial `UNIQUE (application_id, environment, resource_requirement_id, deployment_target) WHERE retired_at IS NULL` bảo đảm một logical scope không match nhiều active instance nhưng cho phép replacement sau retire. Mỗi instance có đúng một active `OWNER` binding trùng owner tuple. `SHARED_CONSUMER` chỉ được platform sharing administration (ngoài bốn Developer UC) pre-authorize/insert khi instance `EXPLICIT_SHARED`, `READY`, sharing key, authorization và definition compatibility đều khớp. Repository reuse query luôn bắt đầu bằng exact active binding tuple và không tự mở rộng sharing scope trong deployment flow.
 
 ## Deployment Repository
 
@@ -193,7 +225,7 @@ Không có table `resource_output`: `Resource Output` là runtime view `TRANSIEN
 | `deployment_target` | VARCHAR(255) | NOT NULL | Kubernetes/deployment target đã chọn. |
 | `plan_fingerprint` | CHAR(64) | NOT NULL | SHA-256 fingerprint dạng hex của Infrastructure Plan đã canonicalize để phát hiện plan thay đổi khi confirm; không chứa chính plan. |
 | `plan_fingerprint_algo` | VARCHAR(32) | NOT NULL | Phiên bản thuật toán canonicalization + hashing của fingerprint, ví dụ `sha256-v1`, dùng lại khi rebuild plan. |
-| `status` | ENUM | NOT NULL | Lifecycle status của Deployment. |
+| `status` | ENUM (`AWAITING_CONFIRMATION`, `QUEUED`, `RUNNING`, `SUBMITTED`, `FAILED`) | NOT NULL | Platform lifecycle; không chứa external CD status. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo deployment. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
 
@@ -228,7 +260,8 @@ Constraint bổ sung: `UNIQUE (deployment_id, workload_id)`; một Deployment ph
 | `environment` | VARCHAR(100) | NOT NULL | Environment được ghi nhận cho history. |
 | `deployment_target` | VARCHAR(255) | NOT NULL | Target thực tế được ghi nhận. |
 | `delivery_reference` | VARCHAR(2048) | NULL | Reference tới desired state/CD delivery nếu có. |
-| `status` | ENUM | NOT NULL | Final/current status được lưu bền vững. |
+| `status` | ENUM (`AWAITING_CONFIRMATION`, `QUEUED`, `RUNNING`, `SUBMITTED`, `FAILED`) | NOT NULL | Snapshot platform lifecycle, dùng cùng physical enum với `deployment.status`. |
+| `delivery_status` | ENUM (`NOT_PUBLISHED`, `ACCEPTED`, `SYNCING`, `SYNCED`, `OUT_OF_SYNC`, `DEGRADED`, `FAILED`, `UNKNOWN`) | NOT NULL, DEFAULT `NOT_PUBLISHED` | External CD delivery status riêng; không được copy vào lifecycle. |
 | `error_summary` | TEXT | NULL | Lỗi tổng quát nếu deployment thất bại. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo record. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật record. |
@@ -243,14 +276,14 @@ Constraint bổ sung: `UNIQUE (deployment_id, workload_id)`; một Deployment ph
 | `deployment_id` | UUID | FK → `deployment.deployment_id`, NOT NULL | Deployment sở hữu step; biểu diễn trực tiếp cardinality 1:N. |
 | `deployment_record_id` | UUID | FK → `deployment_record.deployment_record_id`, NOT NULL | Deployment Record sở hữu step. Qua quan hệ 1:1 record–deployment, một Deployment có nhiều step. |
 | `sequence_number` | INT | NOT NULL, UNIQUE (`deployment_record_id`, `sequence_number`) | Thứ tự step trong deployment. |
-| `step_name` | VARCHAR(255) | NOT NULL | Tên step. |
-| `status` | ENUM | NOT NULL | Trạng thái step. |
+| `step_name` | ENUM (`INFRASTRUCTURE_READY`, `CONFIGURATION_RESOLVED`, `MANIFEST_GENERATED`) | NOT NULL | Chỉ ba progress step nội bộ được persist. |
+| `status` | ENUM (`PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `SKIPPED`) | NOT NULL | Physical step status. |
 | `related_component_reference` | VARCHAR(2048) | NULL | Workload/resource reference liên quan. |
 | `error_summary` | TEXT | NULL | Chi tiết lỗi của step nếu có. |
 | `started_at` | TIMESTAMP | NULL | Thời điểm bắt đầu. |
 | `completed_at` | TIMESTAMP | NULL | Thời điểm hoàn tất. |
 
-`deployment_id` phải trùng deployment của `deployment_record_id`; constraint này được enforce bằng composite FK. Một record đã được tạo phải có ít nhất một step theo aggregate invariant.
+`deployment_id` phải trùng deployment của `deployment_record_id`; constraint này được enforce bằng composite FK. `UNIQUE (deployment_id, step_name)` bảo đảm mỗi internal step có một row để worker upsert. `CD_SYNCED` và `APPLICATION_READY` không thuộc enum này; UC-04 suy ra chúng live từ CD/Kubernetes.
 
 ### `deployment_record_resource_instance`
 
@@ -264,7 +297,30 @@ Constraint bổ sung: `UNIQUE (deployment_id, workload_id)`; một Deployment ph
 
 Constraint bổ sung: `UNIQUE (deployment_record_id, resource_instance_id)`.
 
-## Enforcement của hai persistence constraints chính
+Worker insert association rows ngay khi `INFRASTRUCTURE_READY` thành công (cùng transaction cập nhật step), không đợi CD publish; nhờ đó UC-04 có thể đọc infrastructure status trong khi lifecycle còn `RUNNING`.
+
+### `deployment_execution_job`
+
+Durable execution job đồng thời là transactional outbox; không chứa Infrastructure Plan payload.
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `job_id` | UUID | PK, NOT NULL | Tracking identity trả về bởi confirm. |
+| `deployment_id` | UUID | FK → `deployment.deployment_id`, NOT NULL, UNIQUE | Tối đa một execution job cho deployment. |
+| `idempotency_key` | VARCHAR(255) | NOT NULL, UNIQUE (`deployment_id`, `idempotency_key`) | Cùng deployment/key trả cùng tracking result, không xung đột key của deployment khác. |
+| `override_values` | JSONB | NOT NULL | Selected override values tối thiểu cho worker; không phải plan/item/definition payload. |
+| `accepted_plan_fingerprint` | CHAR(64) | NOT NULL | Fingerprint worker phải verify sau khi rebuild. |
+| `status` | ENUM (`QUEUED`, `CLAIMED`, `SUCCEEDED`, `FAILED`) | NOT NULL | Job/outbox status vật lý. |
+| `attempts` | INT | NOT NULL, DEFAULT 0, CHECK (`attempts >= 0`) | Số lần claim. |
+| `max_attempts` | INT | NOT NULL, CHECK (`max_attempts > 0`) | Retry bound. |
+| `available_at` | TIMESTAMP | NOT NULL | Backoff scheduling. |
+| `lease_until` | TIMESTAMP | NULL | Lease reclaim nếu worker chết. |
+| `last_error` | TEXT | NULL | Lỗi retry/terminal, đã redact secret. |
+| `created_at`, `updated_at` | TIMESTAMP | NOT NULL | Audit timestamps. |
+
+`confirmDeployment()` thực hiện CAS `AWAITING_CONFIRMATION → QUEUED`, tạo/cập nhật `deployment_record.status = QUEUED`, tạo đúng ba step row `PENDING`, và insert job trong **một DB transaction**. Worker claim bằng row lock/`SKIP LOCKED` hoặc CAS lease; provider/CD calls dùng stable idempotency key theo deployment + phase/item. Khi hết retry, worker persist job/deployment/record `FAILED` và failed internal step atomically trong DB.
+
+## Enforcement của persistence constraints chính
 
 ### Reference, không phải resolved runtime value
 
@@ -277,6 +333,7 @@ Constraint bổ sung: `UNIQUE (deployment_record_id, resource_instance_id)`.
 ### Secret reference, không phải plaintext
 
 - `secret` hoàn toàn không có column plaintext/value. Direct secret đi qua Secret Store và DB chỉ nhận `secret_ref` opaque.
+- Staging và promotion giữ cùng stable opaque reference; `stageSecret` dùng idempotency key + TTL. DB save failure chỉ revoke newly staged refs, còn DB success phải nhận promote acknowledgement (hoặc idempotent retry/reconciliation) trước khi báo thành công.
 - `CHECK` trên `secret.value_source` bảo đảm `SECRET_REF` và `RESOURCE_OUTPUT` loại trừ lẫn nhau.
 - Với sensitive resource output, DB chỉ lưu `resource_requirement_id` + `resource_output_name`; resolved secret value không được persist.
 - `configuration_value.direct_value` chỉ thuộc Environment Variable path vì table liên kết bắt buộc tới `environment_variable`, không thể liên kết tới `secret`.
@@ -289,6 +346,7 @@ Constraint bổ sung: `UNIQUE (deployment_record_id, resource_instance_id)`.
 |---|---|
 | Application Definition | `application_definition` |
 | Workload | `workload` |
+| Workload Output Definition | Embedded JSONB items in `workload.exposed_outputs` |
 | Resource Requirement | `resource_requirement` |
 | Environment Variable Definition | `environment_variable_definition` |
 | Secret Definition | `secret_definition` |
@@ -306,8 +364,10 @@ Constraint bổ sung: `UNIQUE (deployment_record_id, resource_instance_id)`.
 | Workload Deployment | `workload_deployment` |
 | Deployment Context | `deployment_context` |
 | Resource Instance | `resource_instance` |
+| Resource Instance Binding | `resource_instance_binding` |
 | Deployment Record | `deployment_record` |
 | Deployment Step | `deployment_step` |
+| Deployment Execution Job | `deployment_execution_job` |
 
 `deployment_record_resource_instance` chỉ hiện thực quan hệ many-to-many đã có trong domain model; không giới thiệu domain entity mới.
 
@@ -317,7 +377,8 @@ Constraint bổ sung: `UNIQUE (deployment_record_id, resource_instance_id)`.
 |---|---|
 | Deployment Graph | Dựng lại cho từng execution từ persistent sources. |
 | Resource Resolution | Quyết định trung gian; durable outcome là Resource Instance/reference. |
-| Infrastructure Plan | Plan được rebuild khi confirm; chỉ SHA-256 fingerprint và algorithm version của canonical plan được persist trên `deployment`. |
+| Infrastructure Plan / Item / Override Definition | Typed plan được rebuild khi confirm và worker execute; chỉ SHA-256 fingerprint + algorithm persist trên `deployment`. Selected override values riêng nằm trong job, không phải plan payload. |
 | Resource Output | Runtime output được collector nạp in-memory sau khi resource ready. |
+| Workload Output | Plan-time output được Workload Output Resolver tính từ graph/metadata/context; runtime-only/circular output bị từ chối. |
 | Resolved Configuration | In-memory snapshot của values đã resolve. |
 | Resolved Specification | Execution artifact dùng làm input cho `score-k8s`, không phải versioned source specification. |

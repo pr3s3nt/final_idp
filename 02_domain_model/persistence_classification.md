@@ -1,49 +1,22 @@
-# Step 2: Persistence Classification
+# Persistence Classification
 
-Phân loại dưới đây bao phủ toàn bộ domain object trong `domain_model.puml`. Với các object thuộc application lifecycle, `PERSISTENT` nghĩa là state cần tồn tại qua nhiều request/deployment execution và được quản lý bởi đúng một trong năm repository boundary đã thống nhất. `Resource Definition` cũng là dữ liệu bền vững, nhưng là reference data thuộc catalog do platform quản lý và nằm ngoài phạm vi năm repository này. `TRANSIENT` nghĩa là object chỉ được dựng/resolve trong một deployment execution và không được lưu như một domain record độc lập.
-
-| Domain Object | Persistent/Transient | Repository (nếu persistent) | Lý do |
+| Object(s) | Classification | Owner/table | Lý do |
 |---|---|---|---|
-| Application Definition | PERSISTENT | Application Repository | Là source of truth của cấu trúc logic application và phải đọc lại khi configure/deploy. |
-| Workload | PERSISTENT | Application Repository | Là thành phần được Application Definition sở hữu; image repository và configuration requirements phải tồn tại qua các lần deploy. |
-| Resource Requirement | PERSISTENT | Application Repository | Logical resource requirement là một phần của Application Definition, được dùng lại để dựng graph và resolve resource. |
-| Environment Variable Definition | PERSISTENT | Application Repository | Requirement khai báo ở UC-01 phải được tải lại trong UC-02 và UC-03. |
-| Secret Definition | PERSISTENT | Application Repository | Tên/requirement của Secret là metadata của Workload; không chứa secret plaintext. |
-| Dependency | PERSISTENT | Application Repository | Topology `depends on` là một phần bền vững của Application Definition. |
-| Application Specification | PERSISTENT | Specification Repository / Config Repo Service | Generated specification cần được lưu hoặc version hóa như đã quy định ở Step 1. |
-| Environment Configuration | PERSISTENT | Environment Configuration Repository | Configuration được quản lý và đọc lại riêng theo application + environment. |
-| Environment Variable | PERSISTENT | Environment Configuration Repository | Binding variable theo workload/environment phải được dùng lại khi tạo deployment. |
-| Secret | PERSISTENT | Environment Configuration Repository | Chỉ metadata và `secretReference`/output reference được lưu; plaintext nằm ngoài repository này. |
-| Configuration Value | PERSISTENT | Environment Configuration Repository | Persist discriminator của nguồn giá trị và payload subtype trong Environment Configuration. |
-| Direct Configuration Value | PERSISTENT | Environment Configuration Repository | Direct value của Environment Variable thông thường cần được dùng lại cho deployment sau; không chứa plaintext Secret. |
-| Resource Output Reference | PERSISTENT | Environment Configuration Repository | Lưu logical reference như `DB_HOST -> postgresql.host`, không lưu resolved value. |
-| Workload Output Reference | PERSISTENT | Environment Configuration Repository | Lưu logical reference như `BACKEND_URL -> backend.endpoint`, không lưu runtime value. |
-| Resource Definition | PERSISTENT (platform-managed) | Platform Resource Definition catalog (ngoài phạm vi năm application-lifecycle repository) | Là reference data do platform quản lý, dùng qua nhiều deployment để resolve logical resource. Không thuộc Specification Repository / Config Repo Service, vì repository đó chỉ lưu/version hóa Application Specification được sinh. |
-| Deployment | PERSISTENT | Deployment Repository | Deployment cần identity và lifecycle status bền vững để xác nhận, theo dõi và truy vấn lịch sử. |
-| Workload Deployment | PERSISTENT | Deployment Repository | Phải lưu chính xác image repository/version thực tế cho từng workload của mỗi deployment. |
-| Deployment Context | PERSISTENT | Deployment Repository | Environment, target và context đã dùng phải được giữ để audit/reproduce kết quả deployment. |
-| Deployment Graph | TRANSIENT | — | Được dựng lại từ Application Definition, Environment Configuration, images và context cho một execution; không phải source of truth. |
-| Resource Resolution | TRANSIENT | — | Là quyết định trung gian của resolver trong execution hiện tại; durable outcome là Resource Instance/reference. |
-| Resource Instance | PERSISTENT | Resource Instance Repository | Durable infrastructure identity, state/reference và status cần cho reconcile/update/reuse và UC-04. |
-| Resource Output | TRANSIENT | — | Object ở đây là output đã được collector nạp vào memory sau khi resource ready để resolve configuration; nó không được lưu như domain record độc lập. Durable infrastructure/provider reference vẫn nằm trong Resource Instance. |
-| Resolved Configuration | TRANSIENT | — | Chỉ là snapshot giá trị đã resolve cho một deployment execution; source of truth vẫn là Environment Configuration references và Secret Store. |
-| Resolved Specification | TRANSIENT | — | Được sinh cho execution hiện tại làm input cho `score-k8s`; application specification chưa resolve mới là artifact được version hóa. |
-| Deployment Record | PERSISTENT | Deployment Repository | Cung cấp history/detail, final status, infrastructure/delivery references và error summary cho UC-04. |
-| Deployment Step | PERSISTENT | Deployment Repository | Progress, failed step và error detail phải còn lại để xem kết quả sau khi execution kết thúc. |
+| Application Definition, Workload, embedded Workload Output Definition, Resource Requirement, definitions, Dependency | PERSISTENT | Application Repository | Cấu trúc logic; output metadata nằm trong `workload.exposed_outputs`; referenced definitions dùng retire. |
+| Application Specification | PERSISTENT | Specification Repository | Artifact versioned. |
+| Environment Configuration, Environment Variable, Configuration Value, Secret/reference | PERSISTENT | Environment Configuration Repository | Chỉ logical/direct non-secret value và opaque reference. |
+| Resource Definition | PERSISTENT (platform-managed) | `resource_definition` | Catalog ngoài bốn Developer UC. |
+| Deployment, Workload Deployment, Deployment Context | PERSISTENT | Deployment Repository | Input snapshot, lifecycle và fingerprint. |
+| Resource Instance, Resource Instance Binding | PERSISTENT | Resource Instance Repository | Instance giữ original ownership/provider identity; exact active binding là canonical reusable lookup path. Shared-consumer binding do platform administration pre-authorize. |
+| Deployment Record, three Deployment Steps | PERSISTENT | Deployment Repository | Audit/lifecycle và ba bước nội bộ. |
+| Deployment Execution Job | PERSISTENT | `deployment_execution_job` | Transactional outbox, idempotency, lease và retry. |
+| ApplicationDefinitionDraft, ConfigurationDefinitionDraft | CLIENT-OWNED DTO | Web UI only | Không có backend draft store và không giữ qua request. |
+| Deployment Graph, Resource Resolution | TRANSIENT | Worker/request execution | Rebuild từ persisted inputs. |
+| Infrastructure Plan, Infrastructure Plan Item, Override Definition | TRANSIENT | Planner execution | Typed canonical fingerprint input; không persist payload. |
+| Resource Output, Workload Output | TRANSIENT | Output resolvers | Resource output đọc sau reconcile; workload output tính plan-time trước configuration resolution. |
+| Resolved Configuration, Resolved Specification | TRANSIENT | Worker execution | Không lưu resolved credential/endpoint. |
+| `CD_SYNCED`, `APPLICATION_READY` markers | DERIVED VIEW | UC-04 aggregator | Suy ra live từ CD/Kubernetes, không phải row. |
 
-## Hai business constraint ảnh hưởng trực tiếp tới persistence
+`deployment_execution_job.override_values` chỉ chứa selected values cần để worker áp dụng lại sau khi rebuild plan; nó không chứa Infrastructure Plan, item hay override-definition schema. `accepted_plan_fingerprint` buộc worker kiểm lại plan trước side effect.
 
-### 1. Persist references, không persist resolved values
-
-`Environment Configuration Repository` lưu value source. Với output-based configuration, dữ liệu bền vững là reference, ví dụ:
-
-```text
-DB_HOST -> postgresql.host
-BACKEND_URL -> backend.endpoint
-```
-
-Repository không thay các reference này bằng host, port, endpoint hoặc credential đã resolve. `Resource Output` và `Resolved Configuration` chỉ tồn tại trong execution của UC-03; nhờ vậy deployment sau luôn resolve theo Resource Instance và context hiện hành, còn việc thay configuration không tự động sửa deployment đang chạy.
-
-### 2. Persist Secret reference, không persist plaintext
-
-Khi Developer nhập Secret trực tiếp, `Secret Store / Secret Management Adapter` lưu secret value và trả về một `secretReference`. `Environment Configuration Repository` chỉ persist tên Secret, workload association và reference này. Nếu Secret lấy từ sensitive Resource Output, repository chỉ persist `Resource Output Reference`. Plaintext Secret không xuất hiện trong `Secret`, `Direct Configuration Value`, `Environment Configuration`, log hay Deployment Record.
+Secret Store nằm ngoài DB transaction. `stageSecret` tạo opaque idempotent reference có TTL; save failure gọi `revoke`, save success gọi idempotent `promote`. Crash/retry được giới hạn bằng TTL và orphan reconciliation. Đây là compensation, không phải distributed atomicity.
