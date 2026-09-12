@@ -1,0 +1,44 @@
+@startuml
+title MVP - interrupted execution and manual recovery (C11-C12)
+autonumber
+hide footbox
+actor Operator
+control Supervisor
+control "Worker / Recovery Tool" as Recovery
+entity "Deployment Repository" as Repo
+participant "Terraform State / Kubernetes" as Provider
+participant "Argo CD" as CD
+Operator -> Supervisor: Stop old worker process group and verify quiescence
+Supervisor --> Operator: No old writer/provider process; state lock safe
+Operator -> Recovery: Start under exclusive host lock
+Recovery -> Repo: markInterruptedJobs(newWorkerRunId)
+Repo --> Recovery: Old CLAIMED -> FAILED, guard RECOVERY_REQUIRED
+note right of Repo
+  No replay/requeue, no lease stealing.
+  Failure preserves snapshot, resource and publication intent.
+end note
+Operator -> Recovery: recoverDeployment(deploymentId, operatorSubject)
+Recovery -> Repo: loadSnapshotAndRecoveryEvidence(deploymentId)
+Repo --> Recovery: State paths, reserved identities, expected Application/digest
+Recovery -> Provider: Inspect actual owned objects and durable state
+Provider --> Recovery: Verified presence / absence / uncertain state
+opt Created object missing from Terraform state
+  Operator -> Provider: Import exact owned identity after inspection
+end
+opt Publication intent exists
+  Recovery -> CD: Inspect expected Application and digest (read-only)
+  CD --> Recovery: Actual acknowledged revision / absent / unknown
+end
+alt Evidence complete, no old writer and outcome known
+  Recovery -> Repo: commitVerifiedRecovery(operator, evidence)
+  note right of Repo
+    ONE transaction: audit; resource version + READY or
+    approved PLANNED on SAME identity; optional observed
+    delivery metadata; release guard IDLE.
+    Old deployment/job stay FAILED.
+  end note
+  Repo --> Operator: Scope available for NEW deployment/review
+else Unknown outcome or provider still active
+  Recovery --> Operator: Keep RECOVERY_REQUIRED; inspect/repair before release
+end
+@enduml

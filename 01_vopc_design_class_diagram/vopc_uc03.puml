@@ -1,180 +1,136 @@
 @startuml
-title VOPC - UC-03 Deploy Application
+title MVP VOPC - UC-03 and internal recovery
 left to right direction
-skinparam packageStyle rectangle
 skinparam classAttributeIconSize 0
 hide empty members
-
-package "Boundary/UI" {
-  class "Web UI" as WebUI <<boundary>> {
-    -selectedEnvironment: String
-    -selectedTarget: String
-    -selectedImages: Map
-    +showDeploymentForm()
-    +showInfrastructurePlan()
-    +showDeploymentTracking()
-  }
-  class "Deployment API / Controller" as API <<control>> {
-    +createDeployment(applicationId, environment, target, images, context)
-    +confirmDeployment(deploymentId, overrides, idempotencyKey)
-  }
+class "Web UI / API client" as UI <<boundary>>
+class "Deployment API" as API <<control>> {
+  +createDeployment(applicationId, environment, target, images, context)
+  +confirmDeployment(deploymentId, expectedPlanFingerprint, overrides, idempotencyKey)
 }
-package "Application services" {
-  class "Deployment Orchestrator" as Orchestrator <<control>> {
-    +createDeployment(applicationId, environment, target, images, context)
-    +validateDeploymentInput(applicationDefinition, configuration, images, context)
-    +canonicalizePlan(plan, overrideDefinitions, algo)
-    +computePlanFingerprint(canonicalBytes)
-    +confirmDeployment(deploymentId, overrides, idempotencyKey)
-  }
-  class "Deployment Worker" as Worker <<control>> {
-    +executeDeploymentJob(jobId)
-    +retryOrFail(jobId, error)
-  }
+class "Deployment Orchestrator" as Orchestrator <<control>> {
+  +createDeployment(...)
+  +confirmDeployment(...)
 }
-package "Domain components" {
-  class "Deployment Graph Builder" as GraphBuilder <<control>> {
-    +buildDeploymentGraph(applicationDefinition, configuration, images, context)
-  }
-  class "Resource Definition Resolver" as ResourceResolver <<control>> {
-    +resolveResourceDefinitions(graph, context)
-  }
-  class "Infrastructure Planner" as Planner <<control>> {
-    +planInfrastructureChanges(graph, resolutions, scopedInstances)
-    +loadInfrastructureOverrides(plan)
-    +applyInfrastructureOverrides(plan, overrideValues)
-  }
-  class "Infrastructure Plan" as InfrastructurePlan <<transient>> {
-    +applicationId: String
-    +environment: String
-    +deploymentTarget: String
-    +items: InfrastructurePlanItem[]
-  }
-  class "Infrastructure Plan Item" as InfrastructurePlanItem <<transient>> {
-    +resourceRequirementId: String
-    +resourceDefinitionId: String
-    +definitionPlanFields: Map
-    +action: CREATE|UPDATE|REUSE
-    +resolvedParameters: Map
-    +ownershipScope: String
-    +sharingKey: String
-    +referencedResourceInstanceId: String
-  }
-  class "Override Definition" as OverrideDefinition <<transient>> {
-    +parameterKey: String
-    +valueType: String
-    +required: Boolean
-    +constraints: Map
-  }
-  class "Infrastructure Reconciler" as Reconciler <<control>> {
-    +reconcileInfrastructure(finalPlan, deploymentId)
-  }
-  class "Resource Output Resolver / Collector" as ResourceOutputResolver <<control>> {
-    +collectResourceOutputs(infrastructureReferences)
-  }
-  class "Workload Output Resolver" as WorkloadOutputResolver <<control>> {
-    +resolvePlanTimeWorkloadOutputs(graph, context)
-  }
-  class "Environment Configuration Resolver" as ConfigResolver <<control>> {
-    +resolveEnvironmentConfiguration(configuration, resourceOutputs, workloadOutputs)
-  }
-  class "Resolved Specification Generator" as SpecGenerator <<control>> {
-    +generateResolvedApplicationSpecification(applicationDefinition, images, resolvedConfiguration)
-  }
-  class "Manifest Generator / Score Renderer" as ManifestGenerator <<control>> {
-    +generateKubernetesManifest(resolvedSpecification)
-  }
-  class "Target Manifest Adapter" as TargetAdapter <<control>> {
-    +adaptManifestForTarget(baseManifest, target)
-  }
-  class "Environment Configuration Materializer" as ConfigMaterializer <<control>> {
-    +materializeEnvironmentConfiguration(manifest, variables)
-  }
-  class "Secret Materializer" as SecretMaterializer <<control>> {
-    +materializeSecretConfiguration(manifest, secrets)
-  }
+class "Deployment Worker" as Worker <<control>> {
+  +executeDeploymentJob(jobId)
 }
-package "Integration abstractions" {
-  interface "Provisioner Adapter / Provisioner Interface" as Provisioner {
-    +reconcile(finalPlan, idempotencyKey)
-  }
-  interface "CD Integration / CD Provider Interface" as CDIntegration {
-    +publishDesiredDeploymentState(desiredState, deploymentId, idempotencyKey)
-  }
+class "Deployment Recovery Service" as Recovery <<control>> {
+  +markInterruptedJobs(newWorkerRunId)
+  +recoverDeployment(deploymentId, operator, evidence)
 }
-package "Integration implementations" {
-  class "Concrete CD Provider" as CDProvider <<control>> {
-    +publish(desiredState, idempotencyKey)
-  }
+class "Application / Configuration Repositories" as Sources <<entity>> {
+  +readConsistentSource()
 }
-package "External systems" {
-  class "Terraform/OpenTofu Runner" as IaCRunner <<boundary>>
-  class "score-k8s" as ScoreK8s <<boundary>>
-  class "CD System" as CDSystem <<boundary>>
+class "Snapshot Builder" as Snapshot <<control>> {
+  +buildInputSnapshot(source, images, context)
 }
-package "Persistence" {
-  class "Application Repository" as AppRepo <<entity>> { +findById(applicationId) }
-  class "Environment Configuration Repository" as ConfigRepo <<entity>> {
-    +findByApplicationAndEnvironment(applicationId, environment)
-    +findById(environmentConfigurationId)
-  }
-  class "Resource Instance Repository" as ResourceRepo <<entity>> {
-    +findReusableInstances(applicationId, environment, requirementIds, target, sharingPolicy)
-    +saveResourceInstancesAndBindings(ownerConsumerScopeAndState)
-    +loadResourceOutputs(infrastructureReferences)
-  }
-  class "Deployment Repository" as DeploymentRepo <<entity>> {
-    +persistDeployment(..., fingerprint, algorithm, status)
-    +findByIdWithPersistedInputs(deploymentId)
-    +compareAndSetPlanFingerprint(...)
-    +acceptConfirmationAndEnqueue(...)
-    +markExecutionRunning(deploymentId, jobId)
-    +recordDeploymentStep(stepName, status, detail)
-    +saveDeploymentRecord(deploymentId, infrastructureReferences, deliveryReference, deliveryStatus, lifecycleStatus)
-  }
-  class "Deployment Execution Job / Outbox" as JobStore <<entity>> {
-    +claimNextJob(lease)
-    +completeJob(jobId)
-    +retryOrFail(jobId, error)
-  }
+class "Deployment Graph Builder" as Graph <<control>> {
+  +buildDeploymentGraph(snapshot)
 }
-
-WebUI --> API
+class "Resource Definition Resolver" as Catalog <<control>> {
+  +resolveResourceDefinitions(graph, context)
+}
+class "Infrastructure Planner" as Planner <<control>> {
+  +planInfrastructureChanges(snapshot, definitions, instances)
+  +rebuildPlanAndFingerprint(...)
+}
+class "Resource Instance Repository" as Resources <<entity>> {
+  +findScopedInstances(exactActiveTuple)
+  +checkpointReady(fingerprints, version, reference)
+}
+class "Deployment Repository" as Repo <<entity>> {
+  +persistPreparedDeployment(snapshot, images, context, fingerprint)
+  +findAcceptedRequest(deploymentId, key, requestFingerprint)
+  +lockDeploymentThenScope(deploymentId)
+  +acceptConfirmationAndEnqueue(...)
+  +claimQueuedJob(workerRunId)
+  +reserveResourceAndAssociateRecord(scope, statePath)
+  +finishInfrastructureAndStartConfiguration()
+  +finishConfigurationAndStartManifest()
+  +finishManifestAndEnterPublish()
+  +savePublicationIntent(uri, digest, expectedApplicationName)
+  +completeExecution(deploymentId, workerRunId, acknowledgment)
+  +failExecution(deploymentId, workerRunId, code, outcome)
+  +markInterruptedJobs(newWorkerRunId)
+  +commitVerifiedRecovery(operator, evidence)
+}
+interface "Secret Reference Adapter" as Secrets {
+  +validateReferences(secretRefs)
+}
+class "Infrastructure Reconciler" as Reconciler <<control>> {
+  +reconcileInfrastructure(plan, deploymentId, workerRunId)
+}
+interface "Go Provisioner Adapter" as Provisioner {
+  +reconcileOrInspect(scope, durableStateReference)
+  +readOutputsFromDurableState(references)
+}
+class "Terraform / durable state" as Terraform <<boundary>>
+class "Resource Output Collector" as Outputs <<control>> {
+  +collectResourceOutputs(references)
+}
+class "Workload Output Resolver" as WorkloadOutputs <<control>> {
+  +resolvePlanTimeWorkloadOutputs(snapshot)
+}
+class "Configuration Resolver" as Config <<control>> {
+  +resolveEnvironmentConfiguration(snapshot, outputs, secretRefs)
+}
+class "Resolved Specification Generator" as Spec <<control>> {
+  +generateResolvedApplicationSpecification(snapshot, configuration)
+}
+class "Manifest Generator" as Renderer <<control>> {
+  +generateKubernetesManifest(spec)
+}
+class "score-k8s" as Score <<boundary>>
+class "Target / Config / Secret Materializers" as Materializers <<control>> {
+  +adaptAndMaterialize(snapshot, configuration, secretKeyRefs)
+}
+class "Go Argo CD Adapter" as CD <<control>> {
+  +publishDesiredDeploymentState(desiredState, deploymentId, workerRunId)
+  +inspectPublicationIntent(expectedName, digest)
+}
+class "OCI Registry" as Registry <<boundary>>
+class "Argo CD Application API" as Argo <<boundary>>
+UI --> API
 API --> Orchestrator
-Orchestrator --> AppRepo
-Orchestrator --> ConfigRepo
-Orchestrator --> GraphBuilder
-Orchestrator --> ResourceResolver
+Orchestrator --> Sources
+Orchestrator --> Snapshot
+Snapshot --> Registry : resolve image tags to digests
+Orchestrator --> Graph
+Orchestrator --> Catalog
 Orchestrator --> Planner
-Planner --> InfrastructurePlan
-InfrastructurePlan *-- InfrastructurePlanItem
-InfrastructurePlanItem *-- OverrideDefinition
-Orchestrator --> ResourceRepo
-Orchestrator --> DeploymentRepo
-DeploymentRepo --> JobStore : same DB transaction
-Worker --> JobStore
-Worker --> DeploymentRepo
+Orchestrator --> Resources
+Orchestrator --> Secrets
+Orchestrator --> Repo
+Worker --> Repo
+Worker --> Graph
+Worker --> Catalog
 Worker --> Planner
+Worker --> Resources
+Worker --> Secrets
 Worker --> Reconciler
-Worker --> ResourceOutputResolver
-Worker --> WorkloadOutputResolver
-Worker --> ConfigResolver
-Worker --> SpecGenerator
-Worker --> ManifestGenerator
-Worker --> TargetAdapter
-Worker --> ConfigMaterializer
-Worker --> SecretMaterializer
-Worker --> CDIntegration
+Worker --> Outputs
+Worker --> WorkloadOutputs
+Worker --> Config
+Worker --> Spec
+Worker --> Renderer
+Worker --> Materializers
+Worker --> CD
+Reconciler --> Repo : atomic reservation
+Reconciler --> Resources
 Reconciler --> Provisioner
-Reconciler --> ResourceRepo
-Provisioner ..> IaCRunner
-ManifestGenerator ..> ScoreK8s
-CDIntegration ..> CDSystem
-CDIntegration <|.. CDProvider
-CDProvider ..> CDSystem
-
-note right of JobStore
-  Durable job is the transactional outbox.
-  Unique deployment/idempotency keys, leases and attempts make retries safe.
+Outputs --> Provisioner : read durable state
+Provisioner --> Terraform
+Renderer --> Score
+CD --> Registry
+CD --> Repo : publication intent before Argo write
+CD --> Argo
+Recovery --> Repo
+Recovery --> Resources
+Recovery --> Provisioner
+Recovery --> CD
+note bottom of Repo
+  All transactions listed in C2-C12; job/snapshot/guard are persistent
+  objects, not a second database. No separate completeJob commit.
 end note
 @enduml

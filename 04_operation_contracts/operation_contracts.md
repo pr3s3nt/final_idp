@@ -1,86 +1,111 @@
-# Step 4: Operation Contracts
+# Step 4: Operation Contracts — MVP
 
-Các contract dùng domain names Step 2 và physical enum Step 3/5. Draft UC-01/UC-02 là full DTO do Web UI sở hữu; backend không giữ draft qua request. `Infrastructure Plan`, item, override definition, outputs và resolved objects đều transient.
+Normative MVP: [scope](../MVP_SCOPE.md), [deployment design](../MVP_DEPLOYMENT_DESIGN.md). Names/columns map Step 2/3; transitions map Step 5. API/worker/provider are Go + Terraform + Argo CD. No automatic pipeline replay, shared consumer, UPDATE/resize or staged Secret API in this profile.
 
-## 1. `saveApplicationDefinition(applicationDraft)`
+## C1. Fixture import (UC-01/02 subset, internal)
 
-- **Cross references:** UC-01 main/A1.
-- **Preconditions:** caller có quyền; full draft có identity/version phù hợp, ít nhất một workload; names, ports, dependencies và configuration definitions hợp lệ.
-- **Postconditions:** Application Definition aggregate được persist atomically; specification được xử lý bởi Contract 2 kế tiếp. New items được insert, active items được update. Application/Workload/requirement/definition bị bỏ nhưng đã từng được `workload_deployment`, environment configuration, Resource Instance hoặc history tham chiếu được set `retired_at`, không hard-delete. Hard delete chỉ tùy chọn cho item chưa từng có reference và FK vẫn kiểm tra `RESTRICT`.
-- **Guarantees:** không sửa/xóa history, deployment, configuration hoặc Resource Instance. Validation/persist failure giữ nguyên DB. Application Service không retain `applicationDraft`.
+- Caller: bootstrap fixture loader, not a public editing API.
+- Validate active topology, ownership, unique names, dependencies, images and direct/non-sensitive output bindings; reject cycles/runtime-only same-deployment output. Existing referenced identities are retained/retired, not hard-deleted.
+- Save application aggregate, generated current specification and environment configuration atomically in metadata DB. Source edits remain allowed; existing Deployment snapshots never change.
+- Environment configuration may be empty when the fixture has no requirements; the frontend/backend/database demo has required configuration. Full UC-01/02 editor is deferred.
+- Secret source is permanent Kubernetes Secret reference only. Validate target/namespace/name/UID/key and immutable flag via Secret Reference Adapter; no plaintext or staged reference in DB. No stage/promote/revoke operation is invoked.
+- API preflight cannot atomically prevent external Secret deletion; bootstrap/operator must not mutate/delete referenced resources during execution. Missing/replaced reference is an explicit failure, not a fallback credential.
 
-## 2. `generateApplicationSpecification(applicationDefinition)`
+## C2. createDeployment(applicationId, environment, target, images, context)
 
-- **Cross references:** UC-01 main.
-- **Preconditions:** persisted active definition hợp lệ.
-- **Postconditions:** create/update đúng một `application_specification` cho application; content chỉ gồm active topology/requirements, không có image version, resolved value hay secret plaintext.
-- **Guarantees:** generation/save atomic; artifact cũ còn nguyên khi lỗi.
+- Preconditions: authenticated developer; allowlisted kind target; valid fixture/configuration; image tags resolve to immutable digests; renderer/naming versions known.
+- Read all source rows under one REPEATABLE READ transaction; build immutable Deployment Input Snapshot with source application/configuration, render context, secret metadata references. Snapshot hash also covers persisted workload image digests and Deployment Context.
+- Catalog read and Resource Instance Repository lookup create a transient typed plan. Lookup starts from exact active consumer binding and returns ALL statuses. Uninspected PLANNED/PROVISIONING/FAILED yields RESOURCE_RECOVERY_REQUIRED; compatible READY yields REUSE. Absent binding yields CREATE; recovery-approved PLANNED yields CREATE on retained instance identity. Parameter changes require unsupported UPDATE and are rejected.
+- One DB transaction persists Deployment AWAITING_CONFIRMATION, snapshot, Workload Deployments, context, fingerprint and algorithm. No provider write, job, record or step exists yet.
+- Return plan, input fingerprint, plan fingerprint and algorithm. Source snapshots/images/context cannot be updated; changing source requires a new deployment.
+- Validation failure creates no partial aggregate. Plan payload remains transient.
 
-## 3. `saveEnvironmentConfiguration(configurationDraft)`
+## C3. confirmDeployment(deploymentId, expectedPlanFingerprint, overrides, idempotencyKey)
 
-- **Cross references:** UC-02 main/A1.
-- **Preconditions:** full client-owned draft tham chiếu đúng application/environment và active definitions. Direct non-secret values hợp lệ. Secret trực tiếp chỉ xuất hiện dưới dạng opaque staged reference từ `stageSecret(..., idempotencyKey)`; resource/workload output được catalog công bố, workload output phải plan-time resolvable.
-- **Postconditions:** configuration/value/reference rows phản ánh đúng submitted draft trong một DB transaction; không persist resolved output/plaintext. Sau DB success, staged references được idempotent `promote`; client chỉ giữ opaque reference.
-- **Exceptions/guarantees:** validation hoặc DB save failure rollback DB và gọi idempotent compensating `revokeStagedSecrets` chỉ cho references mới stage trong edit session (không revoke permanent references cũ). Secret Store nằm ngoài DB transaction: stable idempotency key, staging TTL, retry và orphan reconciliation xử lý crash window; save không báo thành công trước promote acknowledgement, và hệ thống không tuyên bố distributed atomicity. Backend không retain `configurationDraft`.
+- Authenticate before lookup. Normalize request, compute request_fingerprint. Existing accepted job with same key/hash returns same trackingId before checking lifecycle/catalog; same key/different payload returns IDEMPOTENCY_KEY_REUSED; another key returns ALREADY_ACCEPTED.
+- Lock Deployment and re-read accepted job/key/hash before status checks, so a concurrent winner returns the same tracking result. If still unaccepted, lock deployment_scope_guard. Status must be AWAITING_CONFIRMATION; EXECUTING/RECOVERY_REQUIRED scope cannot be acquired.
+- Rebuild from immutable snapshot + current catalog + all-status bindings, validate permanent secret metadata again. Compare client expected fingerprint with BOTH stored and rebuilt fingerprint.
+- Mismatch: while still awaiting, refresh stored fingerprint and return 409 PLAN_CHANGED + new plan/token; no job/guard acquisition. A lost response/retry with old token cannot accept refreshed plan.
+- Overrides must equal {}; unsupported key/value returns 422 without writes.
+- Match: in one transaction CAS lifecycle+fingerprint, guard EXECUTING, one QUEUED job with idempotency/request hash/accepted fingerprint, record QUEUED/NOT_PUBLISHED, exactly three PENDING step rows. Return 202 only after commit.
+- Unique job per deployment, scoped guard and CAS prevent duplicate confirmation. No Terraform/render/publish occurs in HTTP confirm.
 
-## 4. `createDeployment(applicationId, environment, target, images, context)`
+## C4. executeDeploymentJob(jobId, workerRunId)
 
-- **Cross references:** UC-03 prepare/review plan, A1.
-- **Preconditions:** active application/configuration hợp lệ; images đầy đủ; graph không có runtime-only/circular Workload Output input; definitions/context tồn tại.
-- **Postconditions:** persist Deployment `AWAITING_CONFIRMATION`, workload image snapshots và context. Build typed transient `DeploymentGraph`, `ResourceResolution`, `InfrastructurePlan`, `InfrastructurePlanItem`, `OverrideDefinition`.
-- **Safe reuse:** repository query always starts from an exact active Resource Instance Binding tuple `application_id + environment + resource_requirement_id + deployment_target`, then joins a `READY` instance. No binding yields a `CREATE` plan item; Contract 7 later creates its `OWNER` binding during worker reconciliation. Cross-boundary reuse is visible to lookup only after platform sharing administration (outside the four Developer UCs) has pre-authorized a `SHARED_CONSUMER` binding with matching `sharing_key`, definition/target compatibility and authorization. Owner columns are never a fallback query path.
-- **Canonicalization:** canonical JSON starts with application/environment/target and uses stable item/key ordering, normalized number/unit and no timestamps/generated IDs. Each item contains requirement/definition identities; `provisioner_reference`, `supported_contexts`, `default_parameters`, `allowed_overrides`; action, owner/scope/sharing key, referenced instance, resolved parameters and sorted override schema. Persist only SHA-256 fingerprint + algorithm; return plan payload for review, never persist it.
-- **Guarantees:** A1 rolls back all deployment rows and creates no job/provider side effect.
+- Preconditions: supervisor stopped old process group; exclusive host worker lock held; job QUEUED, lifecycle QUEUED, scope guard EXECUTING and owned by this deployment.
+- Atomic claim: job CLAIMED + worker_run_id, lifecycle/record RUNNING, phase INFRASTRUCTURE and INFRASTRUCTURE_READY RUNNING. Every later writer predicates on CLAIMED + matching worker_run_id.
+- Load immutable snapshot, rebuild/check accepted fingerprint once BEFORE resource reservations/provider writes. No current app/configuration read. Invalid/stale input calls failExecution with no side effect and releases scope.
+- Execute C5–C9. Never claim old CLAIMED job or requeue failed job. Provider calls use stable resource state/identity and publication intent; idempotency does not justify replay.
+- On uncertain side effect, use C10 and RECOVERY_REQUIRED. Host heartbeat loss is diagnostic, not permission to start a second worker.
 
-## 5. `confirmDeployment(deploymentId, overrides, idempotencyKey)`
+## C5. reconcileInfrastructure(finalPlan, deploymentId, workerRunId)
 
-- **Cross references:** UC-03 confirm/A1/concurrency.
-- **Preconditions:** Deployment is `AWAITING_CONFIRMATION`; persisted definition/config/image/context/fingerprint inputs exist. No prior request memory is assumed.
-- **Postconditions:** rebuild same typed plan from current inputs and scope-safe instances, canonicalize with stored algorithm, compare fingerprint, then validate override key/type/range/enum. On match, one DB transaction performs CAS `AWAITING_CONFIRMATION → QUEUED`, creates/updates Deployment Record to `QUEUED`, creates exactly three `PENDING` step rows (`INFRASTRUCTURE_READY`, `CONFIGURATION_RESOLVED`, `MANIFEST_GENERATED`), and inserts `deployment_execution_job` with selected override values, accepted fingerprint, `QUEUED`, attempt policy and unique deployment/idempotency keys. Return `202 Accepted(deploymentId, trackingId)`; no reconcile/resolve/manifest/CD call occurs in HTTP request.
-- **Exceptions/guarantees:** mismatch atomically refreshes fingerprint and returns `PLAN_CHANGED` + rebuilt plan; no job. Invalid override leaves state unchanged. CAS loser returns existing conflict/tracking result. Retry with same idempotency key returns same tracking id. Atomic DB enqueue prevents “confirm succeeded but job lost”. Plan payload/override-definition schema is not persisted; only selected override values required by worker are stored.
+- Preconditions: accepted preflight passed, exclusive worker ownership, stable resource scope. MVP CREATE or REUSE only; no shared binding or UPDATE.
+- Before CREATE, atomically reserve PLANNED Resource Instance, deterministic durable provider_state_reference, OWNER binding and record association. Recovery-approved reserved identity is reused; do not allocate a new identity. Before apply, write PROVISIONING, recovery_verified=false and resource version increment.
+- Provider applies only within deterministic state path/namespace/object ownership. READY result persists infrastructure_reference, parameter/definition fingerprints, resource version and timestamps. Repository association is written before provider call so failure/partial progress is queryable.
+- REUSE inspects provider state and objects, expected identity and parameters; drift/missing object fails and requires recovery instead of implicit recreate.
+- Complete infrastructure and start CONFIGURATION_RESOLVED in one transaction. Do not recompute accepted CREATE fingerprint after reservation/provision.
+- Unknown apply outcome records resource failure/available state and retains scope RECOVERY_REQUIRED. No rollback/deletion of a created database.
 
-## 6. `executeDeploymentJob(jobId)` (internal worker operation)
+## C6. resolveEnvironmentConfiguration(snapshot, resourceReferences, workerRunId)
 
-- **Cross references:** UC-03 asynchronous execution/A2.
-- **Preconditions:** claimable `QUEUED` job or expired `CLAIMED` lease; Deployment `QUEUED`/`RUNNING`. Worker rebuilds plan, checks `accepted_plan_fingerprint`, then applies stored overrides before external side effects.
-- **Postconditions:** atomically claim lease/increment attempts and set lifecycle/record `RUNNING`; execute contracts 7–10; on success mark job `SUCCEEDED` and lifecycle/record `SUBMITTED`.
-- **Retry/idempotency:** leases permit recovery; exponential/backoff via `available_at`; stable keys per `(deployment, phase, resource item)` are passed to provisioner/CD. Because claim calls `markExecutionRunning` before rebuild/verify, fingerprint mismatch is terminal `PLAN_STALE_AFTER_ACCEPT` on transition `RUNNING → FAILED`, before external side effects, and marks `INFRASTRUCTURE_READY` failed. Other retryable errors requeue until `max_attempts`; terminal/exhausted error atomically marks job/deployment/record `FAILED` and redacted detail. The active internal step is `FAILED` when failure belongs to one of the three phases; CD publish failure instead uses `delivery_status = FAILED` + record error and does not invent a fourth step.
+- CONFIGURATION_RESOLVED is already RUNNING before any output collection.
+- Resource Output Collector reads provider using durable state/identity, never memory from an earlier process. Only READY resources produce non-sensitive host/port outputs.
+- Workload Output Resolver uses snapshot naming policy/namespace/port to generate backend Service URL. No same-deployment runtime endpoint/cycle.
+- Resolve direct values and logical output references; Secret Materializer receives only validated secretKeyRef metadata. No credentials resolved into IDP DB or artifact.
+- On success, atomically finish configuration and start MANIFEST_GENERATED. Collector/resolver failure belongs to this step and calls C10.
 
-## 7. `reconcileInfrastructure(finalPlan, deploymentId)`
+## C7. generateKubernetesManifest(snapshot, resolvedConfiguration)
 
-- **Cross references:** UC-03 worker/A2; Resource Instance state machine.
-- **Preconditions:** typed plan fingerprint was rechecked; overrides valid. Every `REUSE` points to a `READY` instance selected through the exact active `resource_instance_binding` tuple for its consumer scope; owner columns are not a lookup path.
-- **Postconditions:** create/update/reuse preserves owner fields and exact active Resource Instance Bindings; provider references/state are persisted. Create adds an OWNER binding; cross-boundary reuse validates but does not create/expand the pre-authorized SHARED_CONSUMER binding. Upsert `INFRASTRUCTURE_READY` step `RUNNING → SUCCEEDED` and associate the resolved Resource Instances with the existing Deployment Record so UC-04 can read them while execution continues; failure writes `FAILED` and lifecycle failure through worker.
-- **Guarantees:** provider calls are idempotent. No instance from another scope is silently matched.
+- MANIFEST_GENERATED covers resolved spec generation, score-k8s, target adaptation, env/secret-reference materialization.
+- Final manifest must preserve expected Service/Deployment names, namespace, pinned image digests and idp.deployment-id Pod template annotation. Failure belongs to this phase.
+- Resolved objects remain transient; desired manifest is delivered as an external OCI artifact containing non-secret values and secret references only.
+- Complete step and set job phase PUBLISH atomically; do not introduce a persisted CD step.
 
-## 8. `resolveEnvironmentConfiguration(configuration, resourceOutputs, workloadOutputs)`
+## C8. publishDesiredDeploymentState(desiredState, deploymentId, workerRunId)
 
-- **Cross references:** UC-03 worker/A2.
-- **Preconditions:** Resource Outputs were collected only from READY instances. `WorkloadOutputResolver.resolvePlanTimeWorkloadOutputs(graph, context)` already produced deterministic values (for example Kubernetes Service DNS/endpoint) from graph/workload metadata/target context. Runtime-only output of the same deployment and circular bindings are invalid.
-- **Postconditions:** transient Resolved Configuration contains direct values, resource outputs and plan-time workload outputs; references in DB remain unchanged. Upsert `CONFIGURATION_RESOLVED` step `RUNNING → SUCCEEDED`.
-- **Guarantees:** missing/unresolvable output fails the active step and never persists resolved secret/value.
+- Go Argo CD Adapter packages/pushes immutable OCI artifact. Persist artifact URI/digest and expected_application_name on record BEFORE creating/updating Application.
+- Upsert only the owned Application for the deployment scope, with namespace/UID/resourceVersion checks, OCI source targetRevision=digest and target namespace. Ownership mismatch fails without takeover.
+- Return Application acknowledgment (namespace/name/UID + digest). Acceptance is not Synced/Healthy.
+- A definite rejection maps delivery FAILED; an ambiguous API timeout maps UNKNOWN and requires operator inspection. Do not publish a different digest from the same accepted execution.
 
-## 9. `generateKubernetesManifest(resolvedSpecification)` and materialization chain
+## C9. completeExecution(deploymentId, workerRunId, acknowledgment)
 
-- **Cross references:** UC-03 worker/A2.
-- **Preconditions:** configuration resolved.
-- **Postconditions:** score renderer, target adapter and configuration/secret materializers produce desired state; worker upserts `MANIFEST_GENERATED` `RUNNING → SUCCEEDED` only after all materialization succeeds.
-- **Guarantees:** failure records only this internal step and redacted detail. No `CD_SYNCED`/`APPLICATION_READY` row is created.
+- Requires job CLAIMED owned by run, phase PUBLISH, all three internal steps SUCCEEDED and acknowledgment matching persisted publication intent.
+- ONE DB transaction sets delivery_reference/status=ACCEPTED, lifecycle/record SUBMITTED, job SUCCEEDED/COMPLETE, completed_at and scope guard IDLE.
+- Repeated completion with identical committed result is a no-op. No independent saveDeploymentRecord + completeJob commits; rollback leaves CLAIMED/RUNNING for interruption handling.
 
-## 10. `publishDesiredDeploymentState(desiredState, deploymentId, idempotencyKey)`
+## C10. failExecution(deploymentId, workerRunId, code, outcome)
 
-- **Cross references:** UC-03 worker/A2.
-- **Preconditions:** Manifest Generated succeeded; stable publish idempotency key exists.
-- **Postconditions:** CD returns `deliveryReference` and external `deliveryStatus`; worker stores them separately from lifecycle. CD acceptance permits platform lifecycle `SUBMITTED`, even while delivery status is `ACCEPTED` or `SYNCING`.
-- **Guarantees:** `SYNCING`, `SYNCED`, `OUT_OF_SYNC`, `DEGRADED`, etc. are never written to `deployment.status` or `deployment_record.status`.
+- ONE transaction sets job/deployment/record FAILED, sanitized failure_code/error; active internal step FAILED, future PENDING steps SKIPPED. Prior successful steps remain SUCCEEDED.
+- Publish errors use delivery_status/record error only. UNKNOWN is used if acknowledgment/outcome cannot be established.
+- Confirmed no side effects, or phase error after all infrastructure is checkpointed READY and before Argo write: guard IDLE. Terraform/CD ambiguity, interrupted execution or provider drift: guard RECOVERY_REQUIRED.
+- No row deletion, no job requeue, no automatic resource destroy.
 
-## 11. `saveDeploymentRecord(deploymentId, infrastructureReferences, deliveryReference, deliveryStatus, lifecycleStatus)`
+## C11. markInterruptedJobs(newWorkerRunId)
 
-- **Cross references:** UC-03 asynchronous success/A2 and UC-04 reads.
-- **Preconditions:** Deployment exists; references belong to scope-safe Resource Instances; lifecycle and delivery values belong to their distinct physical enums.
-- **Postconditions:** upsert one Deployment Record and association rows; record lifecycle mirrors Deployment lifecycle. Three internal Deployment Step rows carry their own status/timing/error. Delivery reference may be null and delivery status is `NOT_PUBLISHED` before publish.
-- **Guarantees:** actual images remain in `workload_deployment`; history FK targets are retained. UC-04 is the only live aggregation path and does not write `CD_SYNCED`/`APPLICATION_READY`.
+- Only after exclusive worker lock and proof that old worker/Terraform processes stopped. No lease-stealing/replay.
+- Old CLAIMED jobs become FAILED/EXECUTION_INTERRUPTED with active phase mapping per C10 and guard RECOVERY_REQUIRED. QUEUED jobs stay queued but cannot bypass blocked scope.
+- Old writer predicate no longer matches; no second active job is started for that scope.
 
-## 12. UC-04 query guarantees
+## C12. recoverDeployment(deploymentId, operator, evidence)
 
-`getDeploymentDetail()` loads lifecycle, optional record/reference, target, workload snapshots and zero steps before confirmation or the three persisted steps afterward. `getInfrastructureStatus()` is called only with non-empty infrastructure references. `getCDStatus()` is called only when `delivery_reference` exists. Kubernetes health/endpoints are queried only when delivery reference and publish prerequisite exist. Missing future prerequisite maps to `PENDING`; a terminal failure or non-applicable source maps to `NOT_AVAILABLE`. Live `SYNCED` maps `CD_SYNCED` to `SUCCEEDED`, `ACCEPTED/SYNCING/UNKNOWN` to `PENDING`, and terminal adverse delivery values to `FAILED`; `APPLICATION_READY` is `SUCCEEDED` only when every expected workload is Healthy, `PENDING` while converging and `FAILED` on observed terminal unhealthy state. These operations are read-only and never update lifecycle/steps.
+- Internal operator tool under exclusive worker lock, not Developer API. Scope RECOVERY_REQUIRED and old process/state lock safely quiescent.
+- Inspect deterministic state and actual Kubernetes objects. Import exact owned object if provider created it before state write; never discard state/apply blindly. Matching object -> READY; proven no object -> PLANNED + recovery_verified=true with SAME binding/identity. Unknown/partial incompatible result stays blocked.
+- If publication intent exists, inspect expected Argo Application/digest; record observed acknowledgment if established, otherwise retain UNKNOWN/blocked until operator resolves it. Never republish as part of recovery.
+- One DB transaction updates verified resource metadata/version, inserts Deployment Recovery audit/evidence, fills observed record metadata where known, releases guard IDLE. Old job/deployment remain FAILED; next attempt is a NEW deployment/review, not replay of old fingerprint.
+- No database cleanup; teardown is separate and only targets owned demo resources.
+
+## C13. getDeploymentDetail(deploymentId) / UC-04
+
+- Read immutable snapshot/images, optional record and zero pre-confirm or exactly three post-confirm steps. No write or reconcile operation.
+- Infrastructure query only with known resource identities. Argo query only with delivery_reference; absence is PENDING while running or NOT_AVAILABLE when terminal.
+- Argo Application UID/source mismatch -> NOT_AVAILABLE/SUPERSEDED or REPLACED. Current source correct but observed revision not expected digest -> PENDING.
+- CD_SYNCED succeeds only for Synced plus expected artifact digest/revision. Runtime query is allowed only after revision correlation. Argo Healthy alone cannot establish application readiness.
+- APPLICATION_READY additionally requires all expected Kubernetes names/namespace, matching template deployment-id and image digests, observedGeneration >= generation, and updated/ready/available replica counts at desired with no old replicas. Observed terminal error for expected revision -> FAILED; missing/converging -> PENDING; unavailable provider -> PENDING with reason.
+- External markers are view-only. SUBMITTED lifecycle never becomes CD SYNCED/DEGRADED. History for a replaced deployment cannot borrow current health.
+- listDeployments reads DB only; getDeploymentFailureDetail reads failed step/record/job failure and recovery state.
+
+## Acceptance boundary
+
+Design review scenarios and R1–R10 disposition: [traceability](../06_traceability/traceability_matrix.md). UC-01/02 full editor, staged secrets, shared resources, automatic replay and in-place database update are not promised by these MVP contracts.

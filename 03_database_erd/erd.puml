@@ -1,5 +1,5 @@
 @startuml
-title Step 3 - Database / ERD
+title Step 3 - Database / ERD (MVP deployment profile)
 
 hide circle
 skinparam linetype ortho
@@ -152,7 +152,11 @@ package "Resource Instance Repository" {
     * sharing_scope : ENUM(APPLICATION_ENVIRONMENT, EXPLICIT_SHARED) <<NOT NULL>>
     sharing_key : VARCHAR(255)
     infrastructure_reference : VARCHAR(2048) <<UNIQUE WHEN NOT NULL>>
-    provider_state_reference : VARCHAR(2048)
+    * provider_state_reference : VARCHAR(2048) <<NOT NULL, UNIQUE>>
+    * definition_fingerprint : CHAR(64) <<NOT NULL>>
+    * parameters_fingerprint : CHAR(64) <<NOT NULL>>
+    * version : BIGINT <<NOT NULL>>
+    * recovery_verified : BOOLEAN <<NOT NULL>>
     * status : ENUM(PLANNED, PROVISIONING, READY, FAILED, RETIRED) <<NOT NULL>>
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
@@ -195,6 +199,7 @@ package "Deployment Repository" {
     * workload_id : UUID <<FK, NOT NULL>>
     * image_repository : VARCHAR(1024) <<NOT NULL>>
     * image_version : VARCHAR(255) <<NOT NULL>>
+    * image_digest : VARCHAR(71) <<NOT NULL>>
   }
 
   entity "deployment_context" as deployment_context {
@@ -213,6 +218,9 @@ package "Deployment Repository" {
     * environment : VARCHAR(100) <<NOT NULL>>
     * deployment_target : VARCHAR(255) <<NOT NULL>>
     delivery_reference : VARCHAR(2048)
+    artifact_uri : VARCHAR(2048)
+    artifact_digest : VARCHAR(71)
+    expected_application_name : VARCHAR(255)
     * status : ENUM(AWAITING_CONFIRMATION, QUEUED, RUNNING, SUBMITTED, FAILED) <<NOT NULL>>
     * delivery_status : ENUM(NOT_PUBLISHED, ACCEPTED, SYNCING, SYNCED, OUT_OF_SYNC, DEGRADED, FAILED, UNKNOWN) <<NOT NULL>>
     error_summary : TEXT
@@ -243,19 +251,45 @@ package "Deployment Repository" {
 
   entity "deployment_execution_job" as deployment_execution_job {
     * job_id : UUID <<PK>>
-    --
     * deployment_id : UUID <<FK, NOT NULL, UNIQUE>>
     * idempotency_key : VARCHAR(255) <<NOT NULL>>
+    * request_fingerprint : CHAR(64) <<NOT NULL>>
     * override_values : JSONB <<NOT NULL>>
     * accepted_plan_fingerprint : CHAR(64) <<NOT NULL>>
     * status : ENUM(QUEUED, CLAIMED, SUCCEEDED, FAILED) <<NOT NULL>>
-    * attempts : INT <<NOT NULL>>
-    * max_attempts : INT <<NOT NULL>>
-    * available_at : TIMESTAMP <<NOT NULL>>
-    lease_until : TIMESTAMP
+    phase : ENUM(INFRASTRUCTURE, CONFIGURATION, MANIFEST, PUBLISH, COMPLETE)
+    worker_run_id : UUID
+    failure_code : VARCHAR(100)
     last_error : TEXT
+    started_at : TIMESTAMP
+    heartbeat_at : TIMESTAMP
+    completed_at : TIMESTAMP
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+  entity "deployment_input_snapshot" as deployment_input_snapshot {
+    * deployment_id : UUID <<PK, FK>>
+    * schema_version : VARCHAR(32) <<NOT NULL>>
+    * application_definition : JSONB <<NOT NULL>>
+    * environment_configuration : JSONB <<NOT NULL>>
+    * render_context : JSONB <<NOT NULL>>
+    * input_fingerprint : CHAR(64) <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+  }
+  entity "deployment_scope_guard" as deployment_scope_guard {
+    * application_id : UUID <<PK, FK>>
+    * environment : VARCHAR(100) <<PK>>
+    * deployment_target : VARCHAR(255) <<PK>>
+    deployment_id : UUID <<FK, UNIQUE>>
+    * status : ENUM(IDLE, EXECUTING, RECOVERY_REQUIRED) <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+  entity "deployment_recovery" as deployment_recovery {
+    * recovery_id : UUID <<PK>>
+    * deployment_id : UUID <<FK, NOT NULL>>
+    * operator_subject : VARCHAR(255) <<NOT NULL>>
+    * evidence : JSONB <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
   }
 }
 
@@ -297,6 +331,10 @@ deployment ||--|| deployment_context : has
 deployment ||--o| deployment_record : produces
 deployment ||--o{ deployment_step : has steps
 deployment ||--o| deployment_execution_job : queued execution
+deployment ||--|| deployment_input_snapshot : immutable inputs
+application_definition ||--o{ deployment_scope_guard : scopes
+deployment |o--o| deployment_scope_guard : current scope owner
+deployment ||--o{ deployment_recovery : verified recovery
 deployment_record ||--|{ deployment_step : progress
 deployment_record ||--o{ deployment_record_resource_instance : references
 resource_instance ||--o{ deployment_record_resource_instance : used by
@@ -331,8 +369,8 @@ note bottom of resource_instance_binding
   Every canonical reuse query starts from the exact active tuple:
   application_id + environment +
   resource_requirement_id + deployment_target exactly through this table.
-  SHARED_CONSUMER rows are pre-authorized by platform administration and
-  require EXPLICIT_SHARED plus matching sharing_key/policy.
+  Return ALL instance statuses; READY is a REUSE decision, not a query filter.
+  Shared consumers are outside MVP. See schema.md for partial UNIQUE rules.
 end note
 
 note bottom of deployment_step
@@ -342,7 +380,8 @@ end note
 
 note bottom of deployment_execution_job
   Durable job doubles as transactional outbox. Confirmation changes Deployment
-  to QUEUED and inserts this row in one database transaction.
+  to QUEUED and inserts job/record/steps plus scope ownership atomically.
+  Completion updates record/job/lifecycle and scope in one transaction.
 end note
 
 note top of workload
@@ -350,4 +389,11 @@ note top of workload
   Referenced Workload/definitions are retired, not hard-deleted.
 end note
 
+note right of deployment_input_snapshot
+  Immutable source inputs; no resolved outputs or credentials.
+end note
+note right of deployment_scope_guard
+  CHECK: IDLE iff deployment_id IS NULL.
+  Composite FK binds owner deployment to this exact scope.
+end note
 @enduml

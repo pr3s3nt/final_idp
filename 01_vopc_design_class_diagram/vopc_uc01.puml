@@ -1,5 +1,5 @@
 @startuml
-title VOPC - UC-01 Create / Configure Application
+title VOPC - UC-01 Create / Configure Application - future editor, not MVP fixture path
 
 left to right direction
 skinparam packageStyle rectangle

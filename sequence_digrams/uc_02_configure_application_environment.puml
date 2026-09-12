@@ -1,5 +1,5 @@
 @startuml
-title UC-02 - Configure Environment (client-owned draft and staged secrets)
+title UC-02 - Configure Environment (client-owned draft and staged secrets) - future editor, not MVP fixture path
 autonumber
 hide footbox
 actor Developer

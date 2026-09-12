@@ -1,26 +1,35 @@
 @startuml
-title Step 5 - Resource Instance State Machine
+title MVP Resource Instance lifecycle (CREATE / REUSE only)
 hide empty description
-state "Planned\n(PLANNED)" as PLANNED
-state "Provisioning\n(PROVISIONING)" as PROVISIONING
-state "Ready\n(READY)" as READY
-state "Failed\n(FAILED)" as FAILED
-state "Retired\n(RETIRED)" as RETIRED
-
-[*] --> PLANNED : planner chooses CREATE
-PLANNED --> PROVISIONING : reconcile create/update
-PROVISIONING --> READY : provider success / persist references
-PROVISIONING --> FAILED : provider failure / persist actual state
-READY --> PLANNED : planner chooses UPDATE / retain identity
-READY --> READY : scope-safe REUSE / refresh state
-READY --> READY : collectResourceOutputs / transient outputs
-READY --> RETIRED : retire instance and active bindings / exclude from reuse
-FAILED --> PLANNED : explicit retry/update
-RETIRED --> [*]
-
-note right of READY
-  Canonical reuse starts from exact active ResourceInstanceBinding tuple.
-  Owner columns are original ownership only, never an alternate read path.
-  Cross-boundary reuse requires EXPLICIT_SHARED + matching key/policy.
+state "Planned\nPLANNED" as Planned
+state "Provisioning\nPROVISIONING" as Provisioning
+state "Ready\nREADY" as Ready
+state "Failed\nFAILED" as Failed
+state "Retired\nRETIRED" as Retired
+[*] --> Planned : C5 reserve identity/state path/OWNER binding\nbefore provider call
+Planned --> Provisioning : C5 CREATE / reset recovery_verified=false
+Provisioning --> Ready : provider success / checkpoint identity+fingerprints+version
+Provisioning --> Failed : provider error / preserve actual state
+Ready --> Ready : compatible REUSE / inspect actual provider state
+Ready --> Failed : missing/drifted provider object / recovery required
+Ready --> Ready : C6 collect non-sensitive outputs from durable state
+Failed --> Ready : C12 verified owned provider object / audit
+Provisioning --> Ready : C12 interrupted apply verified complete / audit
+Planned --> Ready : C12 orphan provider object imported and verified / audit
+Failed --> Planned : C12 verified absence / SAME identity, recovery_verified=true
+Provisioning --> Planned : C12 verified absence / SAME identity, recovery_verified=true
+Planned --> Planned : C12 verified absence / recovery_verified=true
+Ready --> Retired : explicit final demo teardown / retire active bindings
+Planned --> Retired : explicit teardown after verified absence
+Failed --> Retired : explicit teardown after verified cleanup
+Retired --> [*]
+note right of Planned
+  Lookup always returns the exact active binding at ALL statuses.
+  Existing PLANNED can be selected for a new CREATE only after
+  recovery_verified=true; no implicit replacement or UPDATE.
+end note
+note right of Retired
+  Teardown is an operator action outside Developer deployment flow.
+  Retired instance has no active OWNER binding; history remains.
 end note
 @enduml
