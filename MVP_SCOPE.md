@@ -1,12 +1,12 @@
 # Phạm vi MVP
 
-Ngày chốt: 12/09/2026. Trạng thái: phạm vi đã chốt cho mốc đầu tiên. Thiết kế chi tiết ở [MVP_DEPLOYMENT_DESIGN.md](MVP_DEPLOYMENT_DESIGN.md); 8 findings đã xử lý ở mức thiết kế MVP, R3/R9 hoãn theo phạm vi. Runtime acceptance chờ implementation.
+Ngày cập nhật: 12/09/2026. Phạm vi hiện tại theo yêu cầu người dùng: **UC-03 happy path trên AWS thật**, thay thế mục tiêu local-only trước đây. Thiết kế chi tiết ở [MVP_DEPLOYMENT_DESIGN.md](MVP_DEPLOYMENT_DESIGN.md), prompt triển khai ở [plab_mvp.md](plab_mvp.md). Tám findings đã xử lý ở mức thiết kế rộng, R3/R9 hoãn; không phải bằng chứng runtime hoặc cloud đã chạy.
 
 ## Mục tiêu nghiệm thu
 
-IDP deploy một ứng dụng CRUD gồm frontend, backend và PostgreSQL. Người dùng mở frontend, tạo một bản ghi qua backend và đọc lại từ database. Redeploy backend với image mới vẫn giữ dữ liệu database.
+IDP deploy một ứng dụng CRUD gồm frontend, backend và PostgreSQL **đều chạy trên AWS**. Người dùng mở frontend, tạo một bản ghi qua backend và đọc lại từ database. Deploy lần đầu và CRUD thành công là mục tiêu mốc này; redeploy giữ dữ liệu và recovery đầy đủ là mốc sau.
 
-Ưu tiên làm UC-03 (deploy) cùng phần tối thiểu của UC-04 (trạng thái/lỗi). Application Definition và Environment Configuration được chuẩn bị bằng fixture có kiểm tra hợp lệ; UI chỉnh sửa UC-01/02 làm sau.
+Chỉ làm UC-03 (deploy) cùng phần tối thiểu của UC-04 (trạng thái/lỗi). Application Definition và Environment Configuration được chuẩn bị bằng fixture có kiểm tra hợp lệ; UI chỉnh sửa UC-01/02 làm sau. API/worker/metadata IDP có thể chạy local, kind có thể dùng test hỗ trợ; **chạy trên kind không thay thế nghiệm thu AWS**.
 
 ## Các quyết định đã có
 
@@ -16,32 +16,34 @@ IDP deploy một ứng dụng CRUD gồm frontend, backend và PostgreSQL. Ngư�
 | Ứng dụng mẫu | CRUD ghi chú; frontend và backend là hai workload, image riêng |
 | Frontend | Go phục vụ HTML/CSS/JavaScript tối thiểu; reverse proxy `/api` tới backend |
 | Backend | Go REST API kết nối PostgreSQL |
-| Truy cập | Một địa chỉ local: `/` là frontend, `/api` là backend; có thể dùng port-forward cho demo, chưa cần mua domain/TLS |
+| Truy cập | `/` là frontend, `/api` là backend trên AWS; endpoint hoặc tunnel/port-forward tới target AWS, chưa cần mua domain/public load balancer |
 | Workload Output | Backend cung cấp Service URL plan-time cho proxy của frontend; trình duyệt chỉ dùng `/api` cùng origin |
 | Environment | Một environment `dev` |
-| Target | Một cụm kind riêng tên `idp-mvp`, context `kind-idp-mvp`, được tạo ở bước dựng môi trường |
-| Resource | Một logical PostgreSQL resource cho ứng dụng, StatefulSet + persistent volume + Service nội bộ |
+| Target | Một cụm Kubernetes trên AWS do task tạo/quản lý; ghi account, region, cluster identity/context thực tế. EKS hay Kubernetes trên EC2 cần chốt trước provision |
+| Resource | Một logical PostgreSQL resource cho ứng dụng, StatefulSet + PVC + Service nội bộ trên target AWS; cấu hình storage hoạt động thật. Chưa chuyển sang RDS |
 | Infrastructure overrides | Parameter database cố định; overrides rỗng, chỉ CREATE/REUSE, chưa UPDATE/resize/replace |
-| Provisioner | Go adapter gọi Terraform với Kubernetes provider; state bền vững và khóa theo resource scope, không chạy apply trên state tạm bị mất khi worker dừng |
+| Provisioner | Terraform bootstrap hạ tầng target AWS bằng state riêng; trong UC3, Go adapter gọi Terraform Kubernetes provider để tạo database trên target AWS. State database bền vững và khóa theo resource scope, không dùng state tạm |
 | CD | Argo CD; Go adapter publish desired manifests thành OCI artifact, tạo/cập nhật Argo CD Application với `targetRevision` pin theo digest và đồng bộ frontend/backend |
 | Renderer | `score-k8s` cho base manifests, sau đó target adapter và materialization |
-| Registry | Dùng registry local với repository prefix `idp-mvp/`; cấu hình đường truy cập từ host và kind trước khi chạy |
+| Registry | Registry hỗ trợ images/OCI artifacts mà host, AWS nodes và Argo CD repo-server truy cập/xác thực được; không giả định registry localhost dùng được từ cloud |
 | Secret | Reference tới Kubernetes Secret chuẩn bị sẵn trong namespace demo; DB và backend dùng cùng reference. Fixture, API response, manifest artifact và Terraform config chỉ mang tên/key reference, không mang credential |
 | Persistence IDP | PostgreSQL metadata riêng, được bootstrap độc lập với database của ứng dụng; dữ liệu IDP và job không mất khi restart API/worker |
 | Worker | Một worker dưới exclusive host lock; confirm enqueue bền vững, có idempotency; execution gián đoạn cần operator verification, không replay job cũ |
 | Quyền truy cập MVP | Một developer, API chỉ bind loopback và dùng token local; chưa triển khai SSO/multi-tenant |
 
-Database ứng dụng do provisioner quản lý; frontend/backend do CD quản lý. Bootstrap quản lý metadata database, namespace và secret chuẩn bị sẵn. Một Kubernetes object chỉ có một bên sở hữu vòng đời.
+Database ứng dụng trên AWS do provisioner quản lý; frontend/backend trên AWS do CD quản lý. Bootstrap quản lý target AWS, metadata database, namespace và secret chuẩn bị sẵn, không tạo sẵn database ứng dụng để bỏ qua UC3. Một Kubernetes object chỉ có một bên sở hữu vòng đời. Argo CD có thể đặt local hoặc trên AWS nhưng destination phải trỏ đúng target AWS đã đăng ký, không ngầm dùng in-cluster kind.
 
 ## Phạm vi AWS và hạ tầng hiện có
 
-Người dùng cho phép tạo hạ tầng AWS phục vụ công việc và xóa các tài nguyên đó sau khi hoàn tất. Mốc MVP local không bắt buộc dùng AWS; chưa tạo tài nguyên AWS trong bước chốt phạm vi.
+Người dùng cho phép tạo hạ tầng AWS phục vụ công việc và xóa các tài nguyên đó sau khi hoàn tất. **AWS deployment là điều kiện bắt buộc**, không phải mốc mở rộng tùy chọn. Lần cập nhật tài liệu này không tạo tài nguyên AWS.
 
-Nếu bổ sung thử nghiệm AWS, phải ghi lại resource ID, region, ownership và Terraform state của tài nguyên vừa tạo để cleanup đúng tập đó. Không xóa các cluster/resource tồn tại trước task. AWS deployment là mốc mở rộng, không phải điều kiện đạt bản MVP local này.
+Trước provision, ghi lựa chọn EKS hoặc Kubernetes trên EC2, account/region, compute, network/access, storage, registry, vị trí Argo CD, state và ước tính chi phí theo thời gian chạy. Xác minh giá/quyền thực tế, hỏi người dùng nếu cần chốt dịch vụ/ngân sách; chưa có lựa chọn dịch vụ cloud cụ thể được duyệt trong tài liệu này. Database không được public ra internet. Không tự thêm RDS/production architecture.
 
-Kiểm tra môi trường ngày 12/09/2026:
+Ghi inventory resource ID/ARN, region, ownership và Terraform state ngay khi tạo. **Ngay sau smoke test, lưu bằng chứng rồi chủ động xóa tài nguyên AWS do task tạo để tránh tiếp tục phát sinh phí; không giữ demo live chờ bàn giao và không cần xin lại quyền cleanup tập đã xác định.** Thứ tự: workload/CD trước, database khi target còn hoạt động, target/network/registry sau; kiểm tra tài nguyên còn sót bằng inventory và AWS API, gồm volume/snapshot/load balancer/NAT/public IP/storage nếu có tạo. Không xóa cluster/resource tồn tại trước task hoặc xóa state khi chưa xác minh cleanup. Nếu thất bại/phải dừng giữa chừng, lưu chẩn đoán và dừng/xác minh writer trước teardown an toàn của tập task-owned. Cleanup bị chặn phải báo resource ID/region và cách xử lý tiếp; không tuyên bố đã xóa hết/hết phí. Cloud bị chặn phải báo blocker, không fallback kind rồi tuyên bố hoàn thành.
 
-- Có ba cụm kind `prod`, `staging`, `v2`; đã kiểm tra `kind-v2` có node Ready và có Fleet/Traefik đang chạy. MVP dùng cluster riêng để giữ ownership rõ ràng.
+Thông tin kiểm tra môi trường trước đây ngày 12/09/2026 (lịch sử, phải kiểm tra lại khi triển khai; không phải lựa chọn target hiện tại):
+
+- Có ba cụm kind `prod`, `staging`, `v2`; đã kiểm tra `kind-v2` có node Ready và có Fleet/Traefik đang chạy. Không thay đổi các cluster này; không dùng chúng làm target nghiệm thu AWS.
 - Context Kubernetes mặc định trỏ tới EKS; mọi thao tác MVP phải chỉ định context/cluster đích rõ ràng.
 - AWS STS xác thực thành công; điều này chưa chứng minh quyền tạo mọi loại tài nguyên AWS. Region CLI mặc định là `us-east-1`.
 - Có Docker, registry local ở host port `5001`, Terraform `1.9.8`, Flux CLI `2.8.8`, Helm và `score-k8s 0.15.0`.
@@ -49,15 +51,17 @@ Kiểm tra môi trường ngày 12/09/2026:
 
 ## Luồng thực hiện
 
-1. Bootstrap môi trường MVP, metadata database và secret; nạp definition/configuration mẫu gồm hai workload và một resource.
+1. Bootstrap target AWS theo cấu hình cloud đã chọn, metadata database và secret; nạp definition/configuration mẫu gồm hai workload và một resource với context AWS đã xác minh.
 2. Chọn hai image version và target cố định, tạo infrastructure plan để review.
 3. Confirm gửi fingerprint đã review và idempotency key; API atomically enqueue và trả tracking ID.
-4. Worker dùng input revision đã accept, provision/reuse PostgreSQL, lấy resource outputs và tạo Workload Output plan-time.
+4. Worker dùng input revision đã accept, provision PostgreSQL trên target AWS, lấy resource outputs và tạo Workload Output plan-time. REUSE thuộc thiết kế mở rộng, chưa là tiêu chí mốc đầu.
 5. Resolve configuration/reference, render manifests, publish OCI artifact và cập nhật Argo CD Application tới đúng digest qua Go CD adapter.
-6. Argo CD đồng bộ frontend/backend; API query trả lifecycle, các step, delivery revision và readiness tương ứng phiên bản mong đợi. Trạng thái Sync/Health của Argo CD được ánh xạ vào delivery/view status, tách biệt với lifecycle của IDP.
-7. Demo CRUD, redeploy backend, kiểm tra dữ liệu còn nguyên và kết thúc thử nghiệm theo runbook cleanup.
+6. Argo CD đồng bộ frontend/backend lên AWS; API query trả lifecycle, các step, delivery revision và readiness tương ứng phiên bản mong đợi. Trạng thái Sync/Health của Argo CD được ánh xạ vào delivery/view status, tách biệt với lifecycle của IDP.
+7. Demo CRUD trên AWS, lưu bằng chứng target/resource/revision và kết thúc thử nghiệm theo runbook cleanup. Không yêu cầu redeploy trong mốc happy-path.
 
 ## Những bảo đảm đã đặc tả, cần kiểm chứng khi code
+
+Đây là thiết kế rộng, không phải yêu cầu triển khai toàn bộ recovery/redeploy trước khi xong happy path. Mốc đầu vẫn giữ snapshot, confirm idempotency, durable state/identity, lỗi đúng phase và không tự replay khi outcome không rõ; phần tool recovery đầy đủ và fault-injection matrix để sau.
 
 - Confirm phải kiểm tra fingerprint do client xác nhận; request lặp không tạo job hoặc provider side effect trùng (R2).
 - Definition/configuration dùng cho deployment được pin revision/snapshot của source input, không bị thay đổi bởi lần chỉnh sửa sau accept (R4).
@@ -71,24 +75,25 @@ Kiểm tra môi trường ngày 12/09/2026:
 
 | Kịch bản | Kết quả cần đạt |
 |---|---|
-| Deploy lần đầu | Plan CREATE database; worker provision thành công, Argo CD đồng bộ đúng artifact digest và hai image, CRUD hoạt động |
-| Redeploy backend | Database được reuse, không mất dữ liệu; readiness khớp phiên bản backend mới |
+| Deploy lần đầu trên AWS | Terraform bootstrap hạ tầng AWS; plan CREATE database; worker provision database trên AWS, Argo CD đồng bộ đúng artifact digest và hai image lên AWS, CRUD hoạt động |
+| Bằng chứng cloud | Ghi account/region/cluster identity, resource IDs, destination và revision; cả workloads lẫn database ở AWS. Local/kind test không đủ |
 | Confirm lặp | Cùng request đã accept trả cùng tracking ID, có một job và không provision trùng |
 | Plan đã thay đổi | Confirm với fingerprint cũ bị từ chối và trả plan mới để review |
 | Input sửa sau enqueue | Deployment tiếp tục dùng đúng input đã accept |
 | Provider hoặc renderer lỗi | API hiển thị failed phase/error đã loại secret, không báo SUBMITTED/Ready giả |
-| Worker dừng sau provision | Giữ resource identity/state, nhận biết execution gián đoạn, thực hiện được runbook recovery mà không tạo database trùng |
-| Backend mới chưa Ready | Health của backend cũ không làm deployment mới được báo Ready |
-| Kết thúc thử nghiệm | Có lệnh/runbook cleanup đúng tài nguyên MVP; giữ database suốt phép thử redeploy, chỉ xóa dữ liệu demo ở teardown cuối |
+| Execution gián đoạn | Giữ resource identity/state, báo cần kiểm tra thủ công và chặn replay mù quáng; tool recovery đầy đủ chưa bắt buộc |
+| Readiness | SUBMITTED không đồng nghĩa Ready; kiểm đúng target/revision/image và rollout mong đợi |
+| Kết thúc thử nghiệm | Lưu bằng chứng CRUD và chạy cleanup đúng tài nguyên AWS do task tạo, kiểm tra tài nguyên còn sót; báo rõ nếu cleanup bị chặn |
 
 ## Chưa làm trong mốc này
 
 - UI đầy đủ cho UC-01/02, catalog editor và quản trị platform.
 - Nhiều environment/target, multi-tenant, SSO, shared resource giữa application.
 - Automatic retry/resume toàn bộ pipeline, rollback tự động, HA, autoscaling.
+- Redeploy/REUSE như tiêu chí nghiệm thu, tool recovery đầy đủ và fault-injection matrix. Các thiết kế đó vẫn giữ làm đầu vào mốc sau.
 - Nhập secret trực tiếp, staging/promote, rotation secret và credential động từ provider.
 - App không có configuration requirement chưa thuộc demo chính; R9 vẫn mở để giải quyết khi mở rộng phạm vi.
-- Database HA/backup phục vụ production, cloud networking và AWS deployment.
+- Database HA/backup và cloud production hardening. Network/access/storage tối thiểu để deploy AWS chạy thật vẫn trong scope.
 - Logs/metrics/traces dashboard nâng cao; vẫn cần log vận hành tối thiểu đã loại credential.
 
 ## Tài liệu liên quan

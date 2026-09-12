@@ -256,6 +256,8 @@ Constraint bổ sung: `UNIQUE (deployment_id, workload_id)`; một Deployment ph
 | `region` | VARCHAR(100) | NULL | Region nếu target yêu cầu. |
 | `target_specific_input` | JSONB | NOT NULL | Target-specific input có cấu trúc linh hoạt. |
 
+Profile UC3 AWS hiện tại: validator bắt buộc `cloud_provider = AWS`, `region` không rỗng và `target_specific_input` chứa account ID, cluster identity/context/destination đã allowlist. Các cột nullable ở mô hình tổng quát không cho phép bỏ AWS context trong fixture/snapshot của mốc này. Không dùng kind làm target nghiệm thu; đối chiếu identity thực tế khi preflight, không chỉ tin nhãn `AWS` do client gửi.
+
 ### `deployment_record`
 
 | Column | Type | Constraints | Mô tả |

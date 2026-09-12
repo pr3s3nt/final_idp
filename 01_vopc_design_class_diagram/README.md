@@ -2,6 +2,8 @@
 
 MVP behavior follows [scope](../MVP_SCOPE.md), [deployment design](../MVP_DEPLOYMENT_DESIGN.md) and contracts C1–C13. UC-03/04 diagrams are current execution/query profiles; UC-01/02 diagrams preserve the future full editor, while MVP uses fixture import.
 
+The first implementation milestone is UC3 happy path on AWS: provisioner and CD target the AWS cluster, even if IDP/Argo CD runs locally. Kind-only deployment does not satisfy acceptance. Diagrams retain full recovery/query collaborators for later milestones; do not implement all of them before the first AWS demo. Follow the [implementation prompt](../plab_mvp.md).
+
 | File | Scope |
 |---|---|
 | design_class_diagram.puml | Consolidated components, including deferred editor classes and current MVP adapters/snapshot/recovery |

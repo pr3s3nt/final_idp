@@ -4,6 +4,8 @@ Ngày kiểm tra: 12/09/2026.
 
 Trạng thái sau thiết kế MVP: **8 RESOLVED_DESIGN_MVP, 2 DEFERRED_MVP (R3, R9)**. Xem [traceability](traceability_matrix.md) và [MVP design review](mvp_design_review.md). Đây là kết luận ở mức tài liệu; chưa có runtime implementation/tests. Các mục R1–R10 bên dưới giữ nguyên tình huống và link commit baseline để truy vết lịch sử, không mô tả HEAD hiện tại.
 
+Phạm vi triển khai mới: **UC3 happy path trên AWS thật**, không local-only. Các trạng thái thiết kế trên không chứng minh AWS đã chạy, cũng không buộc implement toàn bộ recovery/redeploy ở mốc đầu. Xem [scope](../MVP_SCOPE.md) và [prompt](../plab_mvp.md); lựa chọn dịch vụ AWS/chi phí còn cần chốt trước provision.
+
 ## Kết luận của lần review baseline
 
 Bản main trước merge còn các khoảng trống thiết kế mà commit draft nhắm tới. Bản draft đã sửa nhiều điểm đúng hướng, nhưng chưa đủ cơ sở để kết luận “đã sửa hết, sửa đúng hoàn toàn”. Sau merge, main tiếp nhận bản thiết kế này cùng các vấn đề còn mở bên dưới.

@@ -2,6 +2,8 @@
 
 Normative MVP: [scope](../MVP_SCOPE.md), [deployment design](../MVP_DEPLOYMENT_DESIGN.md). Names/columns map Step 2/3; transitions map Step 5. API/worker/provider are Go + Terraform + Argo CD. No automatic pipeline replay, shared consumer, UPDATE/resize or staged Secret API in this profile.
 
+Current milestone: UC3 first-deploy happy path on **AWS**, not kind/local. Terraform bootstraps the AWS target separately; C5 provisions the application database on that target, and C8 delivers both workloads there. AWS service topology/cost must be recorded before provisioning. C12 full recovery, REUSE/redeploy and full UC4 queries remain broader design, not first-milestone completion requirements; retain fail-closed interruption handling. See [implementation prompt](../plab_mvp.md).
+
 ## C1. Fixture import (UC-01/02 subset, internal)
 
 - Caller: bootstrap fixture loader, not a public editing API.
@@ -13,7 +15,7 @@ Normative MVP: [scope](../MVP_SCOPE.md), [deployment design](../MVP_DEPLOYMENT_D
 
 ## C2. createDeployment(applicationId, environment, target, images, context)
 
-- Preconditions: authenticated developer; allowlisted kind target; valid fixture/configuration; image tags resolve to immutable digests; renderer/naming versions known.
+- Preconditions: authenticated developer; allowlisted AWS Kubernetes target with verified account/region/cluster identity; valid fixture/configuration; image tags resolve to immutable digests accessible by AWS nodes and Argo CD; renderer/naming versions known. Local/kind targets cannot satisfy cloud acceptance.
 - Read all source rows under one REPEATABLE READ transaction; build immutable Deployment Input Snapshot with source application/configuration, render context, secret metadata references. Snapshot hash also covers persisted workload image digests and Deployment Context.
 - Catalog read and Resource Instance Repository lookup create a transient typed plan. Lookup starts from exact active consumer binding and returns ALL statuses. Uninspected PLANNED/PROVISIONING/FAILED yields RESOURCE_RECOVERY_REQUIRED; compatible READY yields REUSE. Absent binding yields CREATE; recovery-approved PLANNED yields CREATE on retained instance identity. Parameter changes require unsupported UPDATE and are rejected.
 - One DB transaction persists Deployment AWAITING_CONFIRMATION, snapshot, Workload Deployments, context, fingerprint and algorithm. No provider write, job, record or step exists yet.
@@ -42,7 +44,7 @@ Normative MVP: [scope](../MVP_SCOPE.md), [deployment design](../MVP_DEPLOYMENT_D
 
 - Preconditions: accepted preflight passed, exclusive worker ownership, stable resource scope. MVP CREATE or REUSE only; no shared binding or UPDATE.
 - Before CREATE, atomically reserve PLANNED Resource Instance, deterministic durable provider_state_reference, OWNER binding and record association. Recovery-approved reserved identity is reused; do not allocate a new identity. Before apply, write PROVISIONING, recovery_verified=false and resource version increment.
-- Provider applies only within deterministic state path/namespace/object ownership. READY result persists infrastructure_reference, parameter/definition fingerprints, resource version and timestamps. Repository association is written before provider call so failure/partial progress is queryable.
+- Provider applies only within deterministic state path/namespace/object ownership on the allowlisted AWS target; database state is separate from target bootstrap state. READY result persists infrastructure_reference, parameter/definition fingerprints, resource version and timestamps. Repository association is written before provider call so failure/partial progress is queryable.
 - REUSE inspects provider state and objects, expected identity and parameters; drift/missing object fails and requires recovery instead of implicit recreate.
 - Complete infrastructure and start CONFIGURATION_RESOLVED in one transaction. Do not recompute accepted CREATE fingerprint after reservation/provision.
 - Unknown apply outcome records resource failure/available state and retains scope RECOVERY_REQUIRED. No rollback/deletion of a created database.
@@ -65,7 +67,7 @@ Normative MVP: [scope](../MVP_SCOPE.md), [deployment design](../MVP_DEPLOYMENT_D
 ## C8. publishDesiredDeploymentState(desiredState, deploymentId, workerRunId)
 
 - Go Argo CD Adapter packages/pushes immutable OCI artifact. Persist artifact URI/digest and expected_application_name on record BEFORE creating/updating Application.
-- Upsert only the owned Application for the deployment scope, with namespace/UID/resourceVersion checks, OCI source targetRevision=digest and target namespace. Ownership mismatch fails without takeover.
+- Upsert only the owned Application for the deployment scope, with namespace/UID/resourceVersion checks, OCI source targetRevision=digest and explicit AWS destination cluster/namespace. An Argo CD instance running on kind must not use its local in-cluster destination for cloud deployment. Ownership mismatch fails without takeover.
 - Return Application acknowledgment (namespace/name/UID + digest). Acceptance is not Synced/Healthy.
 - A definite rejection maps delivery FAILED; an ambiguous API timeout maps UNKNOWN and requires operator inspection. Do not publish a different digest from the same accepted execution.
 

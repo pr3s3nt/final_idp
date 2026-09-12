@@ -2,6 +2,8 @@
 
 Source: [scope](../MVP_SCOPE.md), [deployment design](../MVP_DEPLOYMENT_DESIGN.md). This matrix supersedes the pre-MVP numeric PASS: counts alone do not verify failure paths. Full UC-01/02 editor diagrams remain future references; runtime acceptance is deferred until implementation.
 
+Current milestone is UC3 happy-path deployment to **AWS**. IDP may run locally; kind is development support, never a substitute acceptance target. The matrix retains broader recovery/redeploy/query design for later work; see [implementation prompt](../plab_mvp.md) for the first-milestone subset.
+
 ## A. Operation ownership and persistence
 
 | Operation / contract | Owner / sequence | Durable read/write |
@@ -26,6 +28,7 @@ There are five Developer HTTP operations: create, confirm, detail, history and f
 
 | Decision | Domain / schema | Contract | Sequence / state |
 |---|---|---|---|
+| AWS target, no local fallback | Deployment Context: AWS/account/region/cluster identity; separate bootstrap/database state | C2/C5/C8 | UC-03 AWS prerequisite, explicit CD destination |
 | Immutable inputs | Deployment Input Snapshot; image_digest; DB immutability guards | C2–C4 | UC-03 prepare and worker |
 | Reviewed client token + request identity | plan_fingerprint, request_fingerprint, unique job | C3 | UC-03 confirm alternatives; awaiting self-loop |
 | Scope serialization | Deployment Scope Guard | C3/C9–C12 | Accept / complete / recovery |
@@ -58,4 +61,4 @@ RESOLVED_DESIGN_MVP means specification corrected for this profile, not runtime 
 
 ## D. Acceptance
 
-[MVP design review](mvp_design_review.md) records scenario walkthroughs and actual documentation checks. Main may receive this MVP design after those checks pass. Next work is Go implementation on a separate branch; this design change itself creates no application code, migration, Kubernetes cluster or AWS resource.
+[MVP design review](mvp_design_review.md) records historical scenario walkthroughs and documentation checks, not AWS execution evidence. Current acceptance requires Terraform-created AWS infrastructure, Go UC3 provisioning the application database on AWS, Argo CD delivering both workloads to AWS, successful CRUD and recorded cleanup of task-owned resources. Local/kind success alone fails this acceptance. Select and record AWS service topology/cost before provisioning. Next work is Go implementation on a separate branch; this documentation update creates no application code, migration, Kubernetes cluster or AWS resource.

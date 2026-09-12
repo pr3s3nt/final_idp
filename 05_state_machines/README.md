@@ -2,6 +2,8 @@
 
 Contracts C2–C13 and [deployment design](../MVP_DEPLOYMENT_DESIGN.md) define transitions. This profile has one worker, no automatic retry/replay, permanent secret references and Argo CD delivery.
 
+Current acceptance is UC3 first deployment and CRUD on AWS, not kind/local. These state machines retain broader REUSE/recovery transitions; full recovery tooling is deferred beyond the happy-path milestone, while uncertain/interrupted executions must still remain blocked. See [scope](../MVP_SCOPE.md).
+
 ## Physical enum registry
 
 | Field | Literals |

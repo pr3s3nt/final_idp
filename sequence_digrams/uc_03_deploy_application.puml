@@ -1,5 +1,5 @@
 @startuml
-title UC-03 - MVP deployment (Go / Terraform / Argo CD)
+title UC-03 - AWS MVP deployment (Go / Terraform / Argo CD)
 autonumber
 hide footbox
 actor Developer
@@ -30,7 +30,13 @@ participant "OCI Registry" as Registry
 participant "Argo CD Application API" as Argo
 
 group Prepare: C2
-Developer -> UI: Select images, dev and kind-idp-mvp
+note over UI, Terraform
+  AWS target infrastructure is bootstrapped with separate Terraform state.
+  UC3 provisions PostgreSQL on AWS; Argo CD deploys both workloads to AWS.
+  Kind is development-only, not the acceptance target.
+  REUSE/full recovery branches describe later milestones.
+end note
+Developer -> UI: Select images, dev and verified AWS target/account/region
 UI -> API: createDeployment(applicationId, environment, target, images, context)
 API -> Orchestrator: createDeployment(...)
 Orchestrator -> SourceRepo: readConsistentSource() [REPEATABLE READ]

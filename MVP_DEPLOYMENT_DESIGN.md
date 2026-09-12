@@ -2,11 +2,14 @@
 
 Tài liệu này chốt các quyết định triển khai của [MVP_SCOPE.md](MVP_SCOPE.md). Domain, schema, contracts, sequence, VOPC và state machines ở các thư mục 01–06 hiện thực cùng các quy tắc dưới đây. UC-01/02 đầy đủ và shared-resource administration là thiết kế mở rộng, không phải API cần code trong mốc này.
 
+Mốc triển khai hiện tại là **UC3 happy path trên AWS thật**, theo [prompt triển khai](plab_mvp.md). Các mục REUSE/redeploy, recovery tool và query đầy đủ bên dưới giữ làm thiết kế mốc sau, không buộc code hết trước demo lần đầu. Kind/local chỉ phục vụ phát triển hoặc chạy control plane IDP, không thay thế target cloud. Lựa chọn dịch vụ Kubernetes AWS cụ thể chưa chốt; cần cấu hình cloud/chi phí trước provision như scope quy định.
+
 ## 1. Ranh giới và ownership
 
 - IDP Go API/worker chạy trên một máy; một worker duy nhất, được supervisor quản lý cả process group chứa Terraform/renderer. Metadata PostgreSQL, Terraform state directory và worker lock nằm trên storage bền vững, tách database ứng dụng.
-- Target được allowlist là context `kind-idp-mvp`, namespace ứng dụng `idp-demo-dev`; mọi adapter truyền target rõ ràng, không dùng kubeconfig current-context.
-- Provisioner sở hữu PostgreSQL StatefulSet/PVC/Service; Argo CD sở hữu frontend/backend Deployment/Service/ConfigMap. Bootstrap sở hữu namespace, secret, metadata database và Argo CD. Không có object do hai controller quản lý.
+- Target được allowlist là một cluster Kubernetes trên AWS với account/region/cluster identity/context đã xác minh, namespace ứng dụng `idp-demo-dev`; mọi adapter truyền target rõ ràng, không dùng kubeconfig current-context. Không gắn target nghiệm thu vào kind hoặc chấp nhận fallback local.
+- Terraform bootstrap sở hữu hạ tầng target AWS với state riêng. Provisioner sở hữu PostgreSQL StatefulSet/PVC/Service trên target AWS, với state database riêng; Argo CD sở hữu frontend/backend Deployment/Service/ConfigMap trên AWS. Bootstrap sở hữu namespace, secret, metadata database và Argo CD. Không có object do hai controller quản lý; không tạo sẵn database ứng dụng ngoài UC3. Storage/PVC phải được kiểm chứng trên cloud; chưa yêu cầu RDS.
+- Trước provision phải ghi cấu hình EKS hoặc Kubernetes trên EC2, network/access, storage, registry, vị trí Argo CD và chi phí. Host, AWS nodes và Argo CD repo-server phải truy cập/xác thực registry được. Argo CD local phải đăng ký AWS destination rõ ràng; in-cluster kind không phải AWS. API IDP loopback hoặc frontend localhost qua tunnel là vị trí truy cập, không phải nơi chạy workload.
 - Một resource scope là `(application_id, environment, resource_requirement_id, deployment_target)`. Một deployment scope là `(application_id, environment, deployment_target)`.
 - MVP chỉ CREATE/REUSE database với parameter cố định từ catalog; `allowed_overrides = {}`, confirm chỉ nhận `overrides = {}`. UPDATE/resize/replace, cross-application sharing và secret rotation nằm ngoài scope. Yêu cầu khác trả `UNSUPPORTED_MVP_OPERATION`, không ngầm thay database.
 
@@ -114,6 +117,8 @@ APPLICATION_READY chỉ SUCCEEDED khi đúng Application UID/source/revision; Ar
 400 malformed request; 401/403 authentication/scope; 404 unknown identity; 409 PLAN_CHANGED/ALREADY_ACCEPTED/IDEMPOTENCY_KEY_REUSED/SCOPE_BUSY/RECOVERY_REQUIRED; 422 invalid binding/secret/unsupported parameter; 503 provider preflight unavailable. Error response không chứa plaintext/provider environment dump. Lỗi sau 202 được đọc qua query, không đổi response confirm cũ.
 
 ## 10. Giới hạn đã chọn và tài liệu nguồn
+
+Nghiệm thu mốc đầu: prepare/confirm/worker thật → Terraform provision PostgreSQL trên AWS → render/publish → Argo CD sync frontend/backend tới AWS → CRUD thành công. Lưu account/region/cluster/resource/revision và kết quả smoke test. **Xóa ngay tài nguyên AWS của task sau kiểm thử, không giữ demo chạy chờ bàn giao.** Cleanup theo dependency order: workload/CD, database, target/network/registry; giữ state cho tới khi đối chiếu inventory và AWS API xác minh cleanup. Nếu thất bại/phải dừng, lưu chẩn đoán và xác minh writer đã dừng trước teardown an toàn. Không đụng tài nguyên tồn tại trước task; báo rõ tài nguyên còn sót nếu cleanup bị chặn. Cloud bị chặn là chưa hoàn thành, không thay bằng kết quả kind.
 
 R3 staging và R9 demo không configuration được DEFERRED_MVP; không claim đã giải quyết use case tổng quát. R1/R2/R4–R8/R10 chỉ đóng ở mức thiết kế khi artifacts đồng bộ và các kịch bản ở review acceptance đi qua được; runtime acceptance cần code/test sau merge.
 

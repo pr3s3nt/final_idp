@@ -1,6 +1,8 @@
 # Use case realization — MVP profile
 
-Phạm vi đã chốt: [MVP_SCOPE.md](MVP_SCOPE.md). Quyết định triển khai: [MVP_DEPLOYMENT_DESIGN.md](MVP_DEPLOYMENT_DESIGN.md). Bản này dùng Go, Terraform, Argo CD, một environment dev và một target kind-idp-mvp; đây là nguồn realization hiện tại cho MVP.
+Phạm vi hiện tại: [MVP_SCOPE.md](MVP_SCOPE.md). Quyết định triển khai: [MVP_DEPLOYMENT_DESIGN.md](MVP_DEPLOYMENT_DESIGN.md). Bản này dùng Go, Terraform, Argo CD, một environment dev và một target Kubernetes trên AWS. **UC3 happy path phải deploy workloads/database lên AWS thật**; kind chỉ hỗ trợ phát triển/test, không là target nghiệm thu. Cấu hình dịch vụ AWS cụ thể/chi phí cần chốt trước provision.
+
+[Prompt triển khai](plab_mvp.md) giới hạn mốc đầu ở deploy lần đầu + CRUD + cleanup. REUSE/redeploy, recovery tool và UC-04 đầy đủ bên dưới là thiết kế mở rộng, không yêu cầu code hết trong mốc này.
 
 ## UC-01 — Create / Configure Application (editor deferred)
 
@@ -22,22 +24,26 @@ Secret metadata: target/namespace/name/UID/key, immutable Secret do bootstrap t�
 
 ### Actor, input và hậu điều kiện
 
-Developer gọi API local đã xác thực; application/environment/target được allowlist. Input gồm fixture identity, target/context và image version của frontend/backend. Registry resolve image thành digest trước snapshot.
+Developer gọi API IDP đã xác thực (được phép chạy local); application/environment/target AWS được allowlist. Input gồm fixture identity, AWS account/region/cluster context và image version của frontend/backend. Registry mà cloud truy cập được resolve image thành digest trước snapshot. Vị trí API không quyết định nơi chạy ứng dụng: frontend/backend/PostgreSQL phải ở AWS.
 
 Hậu điều kiện HTTP confirm là durable tracking ID + QUEUED job. Hậu điều kiện worker success là infrastructure ready, configuration resolved, manifest generated và Argo Application source được acknowledge; Deployment SUBMITTED không khẳng định workload Healthy.
 
 ### Luồng chính
+
+Prerequisite: Terraform bootstrap hạ tầng target AWS bằng state riêng; namespace/Secret/metadata/Argo CD sẵn sàng, registry và storage truy cập được. Database ứng dụng chưa được bootstrap sẵn; UC3 phải provision thật.
 
 1. createDeployment đọc source nhất quán, lưu immutable snapshot, image digests/context, typed transient plan và fingerprint; trả AWAITING_CONFIRMATION để review.
 2. Planner tìm resource qua exact active binding ở mọi status. CREATE khi chưa có hoặc recovery-approved reserved identity; compatible READY -> REUSE. Unknown/failed/busy -> recovery required; update/shared/overrides bị từ chối trong MVP.
 3. confirmDeployment nhận expectedPlanFingerprint, overrides={} và idempotencyKey. Tìm accepted request trước; cùng key/hash trả cùng tracking ID. So client token với stored và rebuilt; mismatch trả PLAN_CHANGED, kể cả khi DB đã refresh sau một response bị mất.
 4. Transaction accept lấy deployment scope guard, đổi lifecycle, tạo record/ba steps/job. Một worker dưới exclusive host lock claim đúng một lần.
 5. Worker đọc snapshot, kiểm lại current catalog/resource plan trước side effects, reserve deterministic resource/state/binding trước Terraform.
-6. Terraform CREATE hoặc inspect REUSE PostgreSQL; checkpoint READY, chuyển từ infrastructure step sang configuration step atomically.
+6. Terraform CREATE PostgreSQL trên target AWS (inspect REUSE thuộc mốc sau); checkpoint READY, chuyển từ infrastructure step sang configuration step atomically.
 7. Trong CONFIGURATION_RESOLVED: đọc provider outputs từ durable state; tính Workload Output từ naming policy; resolve source references.
 8. Trong MANIFEST_GENERATED: generate spec, score-k8s render, target adaptation và materialize config/secretKeyRef. Final names/digests/deployment-id annotation phải khớp snapshot.
-9. Publish OCI artifact, lưu digest/expected Argo Application trước Argo API write, upsert owned Application với targetRevision=digest.
+9. Publish OCI artifact, lưu digest/expected Argo Application trước Argo API write, upsert owned Application với targetRevision=digest và destination cluster AWS đã xác minh.
 10. Một transaction hoàn tất delivery acknowledgment, Deployment/Record SUBMITTED, job SUCCEEDED và release guard.
+
+Nghiệm thu tiếp tục chờ đúng revision Ready trên AWS, chạy CRUD và lưu bằng chứng cloud; sau đó cleanup đúng tài nguyên task theo scope. Chỉ SUBMITTED hoặc CRUD trên kind không đủ.
 
 ### Ngoại lệ và recovery
 
