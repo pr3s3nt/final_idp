@@ -1,0 +1,296 @@
+# Nhật ký quyết định thiết kế
+
+Tài liệu này ghi lại quyết định cho từng vấn đề thiết kế khi rà soát lại tài liệu trên nhánh `refine_design` (bắt đầu từ `11ad582`). Danh sách 11 vấn đề lấy theo commit message của `88585cc`; các cách sửa trong commit đó chỉ dùng để tham khảo, chưa được xác nhận là đúng.
+
+Cách làm: bàn và chốt lần lượt từng vấn đề, ghi quyết định vào đây; sau khi chốt hết mới sửa tài liệu một lượt theo thứ tự **use case → sequence diagram → VOPC → domain model → ERD → operation contracts → state machine → traceability**.
+
+## Tổng quan
+
+| # | Vấn đề | Quyết định | Trạng thái áp dụng |
+|---|---|---|---|
+| 1 | Bản nháp UC-01/UC-02 được giữ ở đâu giữa các request | Hoãn sau MVP | Đã ghi vào `deferred_issues.md` (D1) |
+| 2 | Giá trị Workload Output do ai tính | Triển khai theo thứ tự phụ thuộc (theo tầng) | Đã sửa `usecase_realization_step_1_3.md`; các file khác chưa sửa |
+| 3 | Scope khi tìm Resource Instance để reuse | Mặc định riêng; dùng chung phải khai báo tường minh ở Resource Definition (theo mô hình Humanitec) | Chưa sửa file nào |
+| 4 | UC-04 gọi provider khi thiếu điều kiện | Hoãn, giải quyết sau | Đã ghi vào `deferred_issues.md` (D2) |
+| 5 | Xóa definition làm hỏng FK/lịch sử | Định nghĩa app có phiên bản; deploy chọn phiên bản vào từng environment (staging, production); hạ tầng/pod bị gỡ khi environment deploy phiên bản không còn thành phần đó | Chưa sửa file nào |
+| 6 | Infrastructure Plan chưa có typed model | Hoãn, xem xét sau | Đã ghi vào `deferred_issues.md` (D3) |
+| 7 | Ai ghi progress marker | Hoãn, giải quyết sau | Đã ghi vào `deferred_issues.md` (D4) |
+| 8 | Lẫn lifecycle status với CD delivery status | Hoãn, giải quyết sau | Đã ghi vào `deferred_issues.md` (D5) |
+| 9 | Literal ENUM chưa chốt | Một bảng danh mục ENUM duy nhất trong `schema.md`; chốt giá trị cho các ENUM thuộc vấn đề đã chốt, ghi giá trị dự kiến cho các ENUM thuộc D3/D4/D5 | Chưa sửa file thiết kế nào; giá trị dự kiến đã ghi vào D3, D4, D5 |
+| 10 | Confirm chạy tác vụ dài trong HTTP request | `confirmDeployment` chỉ nhận việc (đổi status + tạo job trong DB cùng một transaction) và trả lời ngay; Deployment Worker chạy nền. Phục hồi khi worker chết: hoãn | Chưa sửa file thiết kế nào; phần hoãn đã ghi vào `deferred_issues.md` (D6) |
+| 11 | Secret bị orphan khi save lỗi | Hoãn, giải quyết sau | Đã ghi vào `deferred_issues.md` (D7) |
+
+## Vấn đề 1 — Bản nháp UC-01/UC-02
+
+**Quyết định:** chưa giải quyết ở MVP.
+
+**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D1.
+
+## Vấn đề 2 — Workload Output / triển khai theo thứ tự phụ thuộc
+
+**Vấn đề:** UC-02 cho phép gán `BACKEND_URL ← backend.endpoint`, nhưng UC-03 không có thành phần nào lấy được giá trị output của workload; `workload.exposed_outputs` chỉ là danh sách tên.
+
+**Quyết định:**
+
+1. Đồ thị: node là Resource Requirement và Workload; cạnh chỉ lấy từ Dependency khai báo ở UC-01. Không khai báo thì hai thành phần độc lập. Đồ thị có vòng → A1.
+2. UC-02 chỉ cho tham chiếu output (resource output, sensitive output, workload output) của thành phần mà workload đã khai báo depends on; ngược lại → A1.
+3. Thực thi theo tầng. Mỗi tầng: resolve cấu hình → triển khai → chờ sẵn sàng → thu output.
+4. Workload "sẵn sàng" nghĩa là pod healthy.
+5. Cơ chế đọc workload output để ở mức trừu tượng (Workload Output Collector đọc từ workload đang chạy), chưa chi tiết.
+6. Cho phép deploy một phần app. Workload phụ thuộc không nằm trong deployment thì lấy output từ bản đang chạy cùng environment + target; chưa từng chạy → A1.
+7. Output của một thành phần đổi sau khi deploy lại → tự động đưa các thành phần phụ thuộc (bắc cầu) vào các tầng sau của cùng deployment, dùng image version đang chạy. Plan hiển thị trước danh sách thành phần có thể bị deploy lại. So sánh bằng dấu vân tay (hash) output, không lưu giá trị.
+8. Deploy một phần chỉ reconcile resource mà các workload được chọn phụ thuộc trực tiếp; workload phụ thuộc không được chọn thì đọc output từ bản đang chạy, không đi sâu tiếp.
+9. Thêm aggregate Workload Instance: mỗi workload một dòng theo environment + target, gồm image đang chạy, trạng thái, dấu vân tay output; đối xứng Resource Instance, có repository riêng (thành sáu repository).
+10. `deployment.status` rút gọn thành `AWAITING_CONFIRMATION → CONFIRMED → DEPLOYING → SUCCEEDED | FAILED`; tiến trình chi tiết theo tầng/thành phần/bước nằm ở `deployment_step`. `SUCCEEDED` nghĩa là mọi workload trong phạm vi healthy.
+
+**Bổ sung khi sửa use case (đã được duyệt):**
+
+- Thêm thành phần **Deployment Wave Planner** chịu trách nhiệm chia tầng và lan truyền thay đổi output.
+- UC-04 đọc **Workload Instance Repository** để cho biết deployment đang xem có còn là bản đang chạy hay không.
+
+**Đã áp dụng:**
+
+- `usecase_realization_step_1_3.md`: UC-01, UC-02, UC-03, UC-04 và Bước 1–3.
+
+**Chưa áp dụng (sẽ sửa trong lượt sửa chung):**
+
+- Sequence diagram: `uc_02`, `uc_03`, `uc_04`.
+- VOPC: `vopc_uc02`, `vopc_uc03`, `vopc_uc04`, `design_class_diagram.puml`, `README.md`.
+- Domain model: `domain_model.puml`, `domain_objects.md`, `persistence_classification.md`.
+- ERD: `schema.md`, `erd.puml`.
+- Operation contracts.
+- State machines (Deployment; thêm Workload Instance).
+- Traceability matrix.
+- `deferred_issues.md`: thêm mục hoãn — cơ chế cụ thể đọc workload output.
+
+**Lưu ý cho các vấn đề sau:** quyết định 10 đụng tới vấn đề 7, 8, 9; việc chờ pod healthy qua nhiều tầng đụng tới vấn đề 10.
+
+## Vấn đề 3 — Tìm Resource Instance để dùng lại theo tiêu chí nào
+
+**Vấn đề:** UC-03 tìm Resource Instance có sẵn bằng `findResourceInstances(resolvedResources, target)`, tức chỉ theo loại Resource Definition và deployment target. Resource Instance trong domain model và ERD cũng chỉ lưu `resourceDefinitionId` và `deploymentTarget`, không ghi thuộc app, environment hay requirement nào. Hệ quả là IDP có thể dùng nhầm resource:
+
+- Hai app khác nhau cùng cần PostgreSQL RDS trên target `prod` → app sau dùng nhầm database của app trước.
+- Hai environment (`dev`, `staging`) cùng deploy lên một cluster → dùng chung database ngoài ý muốn.
+- Một app có hai requirement cùng loại (`orders-db`, `users-db`) → không phân biệt được instance nào của requirement nào.
+
+Vấn đề này cũng ảnh hưởng vấn đề 2: deploy một phần phải đọc output của đúng resource mà workload phụ thuộc, và dấu vân tay output được lưu trên Resource Instance.
+
+**Quyết định:** mặc định mỗi resource là riêng; dùng chung phải khai báo tường minh — theo mô hình Humanitec.
+
+1. **Resource Instance thuộc về đúng một chủ:** application + environment + resource requirement + deployment target. Tìm để dùng lại theo đủ bộ này; không khớp thì tạo mới. Resource Instance tương ứng với "active resource" của Humanitec.
+2. **Dùng chung giữa các app hoặc environment được khai báo ở Resource Definition** (do platform quản lý): platform tạo definition trỏ tới resource có sẵn, kèm điều kiện áp dụng (ví dụ mọi app ở environment `dev`). App khớp điều kiện thì Resource Instance của nó trỏ tới resource chung đó. Không dùng bảng binding cấp quyền giữa các app (hướng của `88585cc` không được chọn).
+3. **Resource Instance trỏ tới resource có sẵn không được tạo, sửa hay xóa hạ tầng thật**, chỉ đọc output. Nhờ vậy deploy của app này không thể làm thay đổi resource mà app khác đang dùng.
+
+Dùng chung trong cùng app + environment đã có sẵn trong thiết kế: nhiều workload cùng depends on một Resource Requirement thì dùng chung Resource Instance của requirement đó. Mức "resource riêng của từng workload" chưa cần trong giai đoạn này.
+
+**Hệ quả cần xử lý khi sửa tài liệu:**
+
+- `resource_instance` thêm liên kết tới application, environment, resource requirement; khóa tìm kiếm là (application, environment, resource requirement, deployment target).
+- Bỏ ràng buộc `UNIQUE` trên `resource_instance.infrastructure_reference`, vì nhiều Resource Instance có thể trỏ cùng một resource chung.
+- Resource Definition cần phân biệt loại **quản lý hạ tầng** (tạo/sửa/xóa) với loại **trỏ tới resource có sẵn** (chỉ đọc output).
+- `findResourceInstances(...)` đổi tiêu chí tìm theo đủ bộ chủ sở hữu.
+
+**Hoãn (ghi vào `deferred_issues.md` khi sửa tài liệu):**
+
+- Khi output của resource dùng chung thay đổi, chỉ app nào deploy lần sau mới phát hiện qua dấu vân tay output; IDP không tự deploy lại các app khác đang dùng chung.
+- Resource riêng của từng workload (mức private theo workload của Humanitec).
+
+**Đã áp dụng:** chưa sửa file nào.
+
+**Sẽ ảnh hưởng:** use case UC-03 (quy tắc nghiệp vụ về reuse/dùng chung), sequence UC-03, VOPC (`Resource Instance Repository`), domain model (Resource Instance, Resource Definition), ERD (`resource_instance`, `resource_definition`), operation contracts 4–6, state machine Resource Instance (instance trỏ resource có sẵn không đi qua provisioning), traceability.
+
+## Vấn đề 4 — UC-04 gọi hệ thống bên ngoài mà không kiểm tra điều kiện
+
+**Vấn đề:** khi Developer mở bất kỳ deployment nào, sequence UC-04 (`uc_04_view_deployment_result.puml:38-53`) luôn gọi đủ `getInfrastructureStatus`, `getCDStatus`, `getWorkloadStatus`, `getDeploymentEndpoints` mà không kiểm tra deployment đã tới bước tương ứng chưa. Hệ quả:
+
+- Deployment thất bại trước khi gửi sang CD vẫn bị gọi `getCDStatus(NULL)` vì `delivery_reference` rỗng.
+- **Hiển thị "Healthy" giả:** Kubernetes trả lời về workload đang chạy trên cluster, không phải của deployment đang xem. Deployment #42 thất bại trước khi deploy vẫn hiện "backend Healthy" — thực ra là bản của #41 đang chạy. Mở lại một deployment cũ thì bị gán health của bản mới hơn.
+- Deployment ở `AWAITING_CONFIRMATION` chưa có record, hạ tầng hay delivery nhưng vẫn bị hỏi.
+
+**Quyết định:** chưa giải quyết lúc này, để lại xử lý sau.
+
+**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D2 — gồm các kịch bản lỗi, hướng giải quyết đã đề xuất (kết quả lấy từ DB; trạng thái trực tiếp chỉ hỏi khi đủ điều kiện) và các câu hỏi cần chốt.
+
+**Lưu ý khi giải quyết sau:** tận dụng hai quyết định của vấn đề 2 — `deployment_step` theo tầng/thành phần (kết quả của deployment đã có trong DB) và Workload Instance (biết deployment đang xem còn là bản đang chạy hay không). Khi sửa sequence UC-04 trong lượt sửa chung cho vấn đề 2, không được làm lỗi này nặng thêm.
+
+**Đã áp dụng:** `deferred_issues.md` (D2). Chưa sửa file thiết kế nào.
+
+## Vấn đề 5 — Xóa thành phần khỏi application làm hỏng lịch sử
+
+**Vấn đề:** Contract 1 (`saveApplicationDefinition`) quy định thành phần bị loại khỏi definition thì **bị xóa hẳn** row, nhưng cũng trong contract đó cam kết không tạo, xóa hay sửa `Deployment`, `Workload Deployment`, `Environment Configuration`, `Resource Instance`. Hai điều này mâu thuẫn, vì nhiều bảng đang trỏ tới workload/definition qua khóa ngoại:
+
+| Bảng | Trỏ tới |
+|---|---|
+| `workload_deployment.workload_id` | workload đã deploy (lịch sử) |
+| `environment_variable.variable_definition_id`, `secret.secret_definition_id` | cấu hình theo environment |
+| `configuration_value.workload_id`, `configuration_value.resource_requirement_id` | tham chiếu output |
+| `dependency.target_workload_id`, `dependency.target_resource_requirement_id` | quan hệ phụ thuộc |
+
+Vấn đề 2 và 3 còn thêm Workload Instance → workload và Resource Instance → resource requirement.
+
+Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã workload (W7) rồi tra bảng `workload` để hiển thị tên. Xóa hẳn dòng W7 thì chỉ có ba khả năng, đều sai: DB từ chối xóa (không bao giờ xóa được workload đã deploy); DB xóa dây chuyền (mất lịch sử); hoặc lịch sử trỏ vào chỗ trống (UC-04 hiển thị `???`). Thiết kế cũng không nói hạ tầng thật (database trên AWS, pod trên cluster) xử lý thế nào khi thành phần bị xóa.
+
+**Quá trình bàn:**
+
+1. Người dùng đưa quy tắc: muốn xóa một thành phần thì phải sửa trước những gì đang dùng nó (dependency, biến môi trường tham chiếu output của nó).
+2. Quy tắc đó xử lý được phần "đang dùng" nhưng không xử lý được lịch sử; đã cân nhắc "ngừng dùng" (`retired_at`) và "lịch sử lưu bản chụp" (snapshot).
+3. Gỡ hạ tầng ngay khi Save ở UC-01 bị loại: UC-01 không biết environment nào, app đang chạy vẫn còn dùng, hủy database là không lấy lại được, resource dùng chung không được hủy.
+4. Phát hiện gốc vấn đề: cả hai environment dùng chung **một** bản định nghĩa app bị ghi đè khi Save, nên developer không thể thử thay đổi ở staging mà giữ nguyên production.
+
+**Quyết định (cách B — định nghĩa app có phiên bản):**
+
+1. **Environment cố định:** mọi application có đúng hai environment `staging` và `production`; không khai báo environment ở UC-01.
+2. **Application Definition có phiên bản bất biến:** mỗi lần Save ở UC-01 tạo một phiên bản mới; phiên bản cũ không bao giờ bị sửa hay xóa.
+3. **Deploy chọn phiên bản:** UC-03 deploy một phiên bản cụ thể vào một environment. Thử ở staging xong thì deploy cùng phiên bản đó lên production (promote).
+4. **Xóa thành phần** nghĩa là phiên bản mới không còn thành phần đó. Lịch sử deploy trỏ tới phiên bản đã dùng nên vẫn hiển thị đúng; không cần snapshot riêng.
+5. **Kiểm tra khi Save ở UC-01** chỉ trong nội bộ phiên bản: dependency trỏ tới thành phần có thật, không tạo vòng.
+6. **Kiểm tra khi deploy phiên bản X vào environment Y (UC-03):** cấu hình của Y phải khớp với X; biến còn tham chiếu output của thành phần không có trong X → A1.
+7. **Gỡ pod và hạ tầng thật** khi một environment deploy phiên bản không còn thành phần đó: plan hiển thị `REMOVE` (workload) hoặc `DESTROY` (resource, kèm cảnh báo mất dữ liệu) và developer xác nhận. Resource dùng chung (vấn đề 3) chỉ gỡ liên kết, không hủy hạ tầng. Giữa lúc Save và lần deploy đó, mọi thứ đang chạy giữ nguyên.
+8. **Đổi sang phiên bản mới phải deploy toàn bộ app;** deploy một phần (vấn đề 2) chỉ dùng phiên bản đang chạy ở environment đó, ví dụ đổi image của một workload. *(Đề xuất đi kèm, ghi nhận cùng cách B.)*
+9. **Cấu hình ở UC-02 chưa có phiên bản:** vẫn quản lý theo environment như hiện tại và được kiểm tra khớp với phiên bản khi deploy. *(Đề xuất đi kèm, ghi nhận cùng cách B.)*
+
+**Hệ quả cần xử lý khi sửa tài liệu:**
+
+- Workload và Resource Requirement cần **identity logic ổn định qua các phiên bản**, để Resource Instance và Workload Instance (vấn đề 2, 3) không bị tạo mới mỗi khi có phiên bản mới.
+- Deployment ghi phiên bản Application Definition đã dùng.
+- Contract 1 bỏ quy định xóa thành phần bị loại, thay bằng tạo phiên bản mới.
+- Plan của UC-03 thêm hành động `REMOVE`/`DESTROY` (liên quan vấn đề 6).
+- UC-01 A1 chỉ còn lỗi nội bộ phiên bản; UC-03 A1 thêm lỗi cấu hình environment không khớp phiên bản.
+- Ví dụ environment `dev staging production` trong UC-02 đổi thành `staging`, `production`.
+- Liên quan vấn đề 9: environment trở thành tập giá trị cố định.
+
+**Sẽ ảnh hưởng:** use case UC-01, UC-02, UC-03; sequence UC-01, UC-03; VOPC; domain model (Application Definition có phiên bản, Deployment trỏ phiên bản); ERD (bảng phiên bản, identity logic); operation contracts 1, 3, 4, 5; state machine Deployment (nếu cần); traceability.
+
+**Đã áp dụng:** chưa sửa file nào.
+
+## Vấn đề 6 — Plan của UC-03 chưa có cấu trúc rõ ràng
+
+**Vấn đề:** plan của UC-03 (dùng để hiển thị cho Developer, cho override tham số, và tính fingerprint phát hiện thay đổi giữa lúc lập plan và lúc xác nhận) được nhắc ở sequence, VOPC, contract 4–5 và schema, nhưng không có class trong domain model: VOPC ghi `-plan: Object`, override là `Map` không kiểu, contract 4 chỉ liệt kê trường đưa vào fingerprint bằng một đoạn văn. Hệ quả là fingerprint có thể báo `PLAN_CHANGED` giả hoặc bỏ sót thay đổi thật, và không rõ override gắn vào resource nào. Sau vấn đề 2, 3, 5, plan còn phải chứa phiên bản định nghĩa, các tầng, workload, hành động `REMOVE`/`DESTROY` và resource dùng chung.
+
+**Quyết định:** xem xét sau. Vấn đề chỉ gây hại khi dữ liệu đầu vào của plan bị thay đổi giữa lúc lập plan và lúc xác nhận (ví dụ người khác sửa cấu hình hoặc định nghĩa trong lúc đó); chưa cần lo ở giai đoạn hiện tại.
+
+**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D3 — gồm bảng các nơi nhắc tới plan, các tình huống gây hại, hướng đã đề xuất (Deployment Plan có cấu trúc theo tầng) và câu hỏi cần chốt.
+
+**Lưu ý khi sửa tài liệu:** use case và sequence UC-03 vẫn mô tả nội dung plan ở mức khái niệm (tầng, action create/update/reuse/remove/destroy, override được phép) để thể hiện quyết định của vấn đề 2, 3, 5; chỉ phần cấu trúc chi tiết và cách tính fingerprint là để sau.
+
+**Đã áp dụng:** `deferred_issues.md` (D3). Chưa sửa file thiết kế nào.
+
+## Vấn đề 7 — Ai ghi các bước tiến trình của deployment
+
+**Vấn đề:** UC-04 hiển thị tiến trình bằng các dấu kiểm Infrastructure Ready, Configuration Resolved, Manifest Generated, CD Synced, Application Ready — mỗi dấu kiểm là một dòng `deployment_step`. Nhưng trong sequence UC-03, `deployment_step` chỉ được ghi một lần trong `saveDeploymentRecord` ở bước cuối (sau khi gửi sang CD), nên:
+
+- Khi deployment đang chạy, UC-04 không thấy bước nào.
+- `CD Synced` và `Application Ready` xảy ra sau `saveDeploymentRecord`, mà `05_state_machines/README.md` ghi rõ không có operation nào sau đó, còn UC-04 chỉ đọc — nên hai dấu kiểm này không bao giờ được ghi.
+
+**Quyết định:** chưa giải quyết lúc này, để lại xử lý sau.
+
+**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D4 — gồm hướng đã đề xuất (Deployment Orchestrator ghi từng bước ngay khi bắt đầu/kết thúc, tập bước theo loại thành phần, tạo sẵn `PENDING`/`SKIPPED`), ví dụ và câu hỏi cần chốt.
+
+**Lưu ý khi sửa tài liệu:** quyết định 10 của vấn đề 2 vẫn được thể hiện ở mức khái niệm (tiến trình theo tầng/thành phần được ghi lại, UC-04 đọc được); chi tiết ai ghi và ghi lúc nào để lại cho D4. Vấn đề này liên quan D2 (UC-04 không nên tự suy tiến trình từ Kubernetes).
+
+**Đã áp dụng:** `deferred_issues.md` (D4). Chưa sửa file thiết kế nào.
+
+## Vấn đề 8 — Trạng thái deployment bị trộn với trạng thái của hệ thống CD
+
+**Vấn đề:** Contract 9 (`saveDeploymentRecord`) quy định `deployment_record.status` phản ánh delivery status mà CD báo về, rồi `deployment.status` được cập nhật đồng nhất với record. Tức là CD báo gì (ví dụ `Synced`, `Progressing`, `OutOfSync` của Argo CD) thì trạng thái vòng đời của deployment mang theo giá trị đó. Hệ quả:
+
+- `deployment.status` có thể nhận giá trị không nằm trong state machine, làm các guard dựa trên status mất ý nghĩa.
+- Phá quy tắc không phụ thuộc trực tiếp vào Argo CD/Flux.
+- `deployment.status` và `deployment_record.status` lưu cùng một thứ ở hai nơi, dễ lệch nhau.
+
+**Quyết định:** chưa giải quyết lúc này, để lại xử lý sau.
+
+**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D5 — gồm hướng đã đề xuất (status chỉ là lifecycle của IDP; bỏ `deployment_record.status`; trạng thái CD lưu riêng với tập giá trị trung lập) và câu hỏi cần chốt.
+
+**Lưu ý khi sửa tài liệu:** vấn đề 2 đã chốt `deployment.status` là `AWAITING_CONFIRMATION → CONFIRMED → DEPLOYING → SUCCEEDED | FAILED` do IDP tự quyết; khi sửa tài liệu không được mô tả status nhận giá trị từ CD. Liên quan D4 (bước `CD_SYNCED`) và D2 (trạng thái CD ở UC-04).
+
+**Đã áp dụng:** `deferred_issues.md` (D5). Chưa sửa file thiết kế nào.
+
+## Vấn đề 9 — Các giá trị ENUM chưa được chốt
+
+**Vấn đề:** `03_database_erd/schema.md` có ba cột ENUM đã ghi giá trị (`dependency.target_type`, `configuration_value.value_source`, `secret.value_source`), nhưng bốn cột trạng thái chỉ ghi `ENUM` mà không có giá trị: `resource_instance.status`, `deployment.status`, `deployment_record.status`, `deployment_step.status`. Chính `operation_contracts.md` (dòng 3) và `05_state_machines/README.md` (dòng 5) ghi nhận "chưa chốt tập literal vật lý". Hệ quả:
+
+- Contract và state machine dùng tên "logical state", còn DB không nói giá trị thật; khi code mỗi người tự đặt tên (`READY`, `Ready`, `AVAILABLE`…).
+- Guard và truy vấn dựa trên giá trị cụ thể (ví dụ `status = 'AWAITING_CONFIRMATION'`, chỉ tìm Resource Instance `READY`) sẽ không khớp khi giá trị không thống nhất.
+
+**Quyết định:**
+
+1. **Một bảng danh mục ENUM duy nhất trong `schema.md`** liệt kê mọi cột ENUM và tập giá trị; contract, state machine, domain model dùng đúng các giá trị trong bảng này.
+2. **Quy ước tên:** `UPPER_SNAKE_CASE`, như các ENUM đang có.
+3. **`environment` là ENUM** với hai giá trị cố định (theo vấn đề 5).
+4. **Gỡ xong thì giữ dòng Instance với trạng thái kết thúc** (`DESTROYED`, `UNLINKED`, `REMOVED`) thay vì xóa dòng, vì deployment record cũ vẫn trỏ tới Instance (tránh lỗi lịch sử trỏ vào chỗ trống của vấn đề 5).
+5. **Danh mục chia hai phần:** "Đã chốt" và "Dự kiến, chưa chốt" (ghi rõ chốt khi giải quyết D3/D4/D5), để không nhầm giá trị dự kiến là đã chốt.
+
+**ENUM đã chốt:**
+
+| ENUM | Giá trị | Nguồn |
+|---|---|---|
+| `dependency.target_type` | `WORKLOAD`, `RESOURCE` | Có sẵn |
+| `configuration_value.value_source` | `DIRECT`, `RESOURCE_OUTPUT`, `WORKLOAD_OUTPUT` | Có sẵn |
+| `secret.value_source` | `SECRET_REF`, `RESOURCE_OUTPUT` | Có sẵn |
+| `deployment.status` | `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED`, `FAILED` | Vấn đề 2 |
+| `resource_instance.status` | `PLANNED`, `PROVISIONING`, `READY`, `FAILED`, `DESTROYED`, `UNLINKED` | State machine + vấn đề 3, 5 |
+| `workload_instance.status` | `DEPLOYING`, `HEALTHY`, `FAILED`, `REMOVED` | Vấn đề 2, 5 |
+| `environment` | `STAGING`, `PRODUCTION` | Vấn đề 5 |
+| `workload_deployment.inclusion_reason` | `SELECTED`, `CASCADED` | Vấn đề 2 |
+| Loại quản lý của `resource_definition` | `MANAGED` (IDP tạo/sửa/hủy), `EXISTING` (trỏ tới resource có sẵn, chỉ đọc) | Vấn đề 3 |
+
+`UNLINKED` dành cho Resource Instance trỏ tới resource dùng chung: app thôi dùng thì chỉ gỡ liên kết, hạ tầng thật vẫn còn.
+
+**ENUM dự kiến, chưa chốt:**
+
+| ENUM | Giá trị dự kiến | Chốt khi |
+|---|---|---|
+| Loại thành phần trong plan | `RESOURCE`, `WORKLOAD` | D3 |
+| Action cho resource | `CREATE`, `UPDATE`, `REUSE`, `DESTROY`, `UNLINK` | D3 |
+| Action cho workload | `DEPLOY`, `REMOVE` | D3 |
+| `deployment_step.status` | `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `SKIPPED` | D4 |
+| `deployment_step.step_name` (đổi từ VARCHAR sang ENUM) | `INFRASTRUCTURE_READY`, `CONFIGURATION_RESOLVED`, `MANIFEST_GENERATED`, `CD_SYNCED`, `APPLICATION_READY`, `REMOVED`, `DESTROYED`, `UNLINKED` | D4 |
+| `deployment_record.status` | Bỏ cột, dùng `deployment.status` | D5 |
+| `delivery_status` (trường riêng, nếu lưu) | `ACCEPTED`, `SYNCING`, `SYNCED`, `FAILED` | D5 |
+
+**Sẽ ảnh hưởng:** `schema.md` (bảng danh mục ENUM, các cột status), `erd.puml`, domain model, operation contracts (dòng 3 và các status được nhắc), `05_state_machines/README.md` (dòng 5) cùng các state machine, traceability.
+
+**Đã áp dụng:** giá trị dự kiến đã ghi vào `deferred_issues.md` các mục D3, D4, D5. Chưa sửa file thiết kế nào.
+
+## Vấn đề 10 — Toàn bộ việc triển khai chạy trong request `confirmDeployment`
+
+**Vấn đề:** trong `sequence_digrams/uc_03_deploy_application.puml`, sau khi nhận `confirmDeployment`, toàn bộ chuỗi `reconcileInfrastructure` → `collectResourceOutputs` → `resolveEnvironmentConfiguration` → sinh/adapt/materialize manifest → `publishDesiredDeploymentState` → `saveDeploymentRecord` chạy trong cùng request; trình duyệt chờ tới khi tất cả xong mới nhận "Deployment created". Hệ quả:
+
+- **Request quá lâu bị cắt:** tạo database có thể mất 10–20 phút, trong khi trình duyệt/load balancer/API gateway thường cắt kết nối sau khoảng 30–60 giây; UI báo lỗi dù việc có thể vẫn chạy hoặc đã dừng giữa chừng.
+- **Server khởi động lại giữa chừng thì không ai làm tiếp:** việc chạy trong bộ nhớ của request, deployment kẹt ở `CONFIRMED` hoặc nửa chừng, không ai tiếp tục hay đánh dấu thất bại.
+- **Không xem được tiến trình** vì kết quả chỉ trả về khi xong (liên quan D4).
+- **Vấn đề 2 làm việc này nặng hơn:** worker phải chờ pod healthy qua nhiều tầng và có thể tự deploy lại thành phần phụ thuộc; một lần deploy có thể kéo dài hàng chục phút.
+
+**Quyết định:**
+
+1. **`confirmDeployment` chỉ nhận việc và trả lời ngay:** kiểm tra như hiện tại (status `AWAITING_CONFIRMATION`, override hợp lệ); rồi trong **cùng một transaction DB** đổi `deployment.status` thành `CONFIRMED` **và** tạo một job "thực thi deployment". Không bao giờ có deployment `CONFIRMED` mà không có job, hay job mà deployment chưa được xác nhận. UI nhận "Đã nhận, đang triển khai" và chuyển sang theo dõi ở UC-04.
+2. **Deployment Worker chạy nền:** một tiến trình riêng lấy job và chạy toàn bộ chuỗi theo tầng của vấn đề 2; bắt đầu thì đổi status sang `DEPLOYING`, xong thì `SUCCEEDED` hoặc `FAILED`.
+3. **Job lưu trong bảng DB**, không dùng message queue riêng: đơn giản, job còn nguyên khi server restart, và tránh trường hợp DB đã lưu mà queue chưa nhận (hoặc ngược lại).
+4. **Phục hồi khi worker chết giữa chừng:** hoãn — xem `deferred_issues.md`, mục D6.
+
+**Hệ quả cần xử lý khi sửa tài liệu:**
+
+- Thêm bảng job (ví dụ `deployment_execution_job`) gắn với deployment.
+- Giá trị override mà Developer chọn khi xác nhận phải được **lưu cùng job**, vì worker chạy sau, không còn giữ request xác nhận.
+- Sequence UC-03 tách thành hai phần: request xác nhận (dừng ở tạo job, trả lời UI) và luồng của Deployment Worker.
+- Thêm thành phần **Deployment Worker** (UC-03 Bước 3, VOPC); Deployment Orchestrator ở phía request chỉ còn tạo và xác nhận deployment.
+- Contract 5 (`confirmDeployment`) đổi hậu điều kiện: không còn gọi `reconcileInfrastructure` trực tiếp, mà tạo job cùng transaction với việc đổi status.
+- State machine Deployment: `CONFIRMED` nghĩa là đã xác nhận và job đã được tạo; worker chuyển sang `DEPLOYING`.
+- Trạng thái của job cần có giá trị ENUM; giá trị dự kiến ghi ở D6 vì phụ thuộc cách phục hồi.
+
+**Sẽ ảnh hưởng:** use case UC-03 (Bước 2, Bước 3), sequence UC-03, VOPC UC-03 và design class diagram, domain model và persistence classification (job), ERD (bảng job), operation contracts 5–9, state machine Deployment, traceability.
+
+**Đã áp dụng:** phần hoãn đã ghi vào `deferred_issues.md` (D6). Chưa sửa file thiết kế nào.
+
+## Vấn đề 11 — Secret bị bỏ rơi trong Secret Store
+
+**Vấn đề:** trong sequence UC-02, secret được ghi vào Secret Store ngay lúc Developer nhập (`storeSecret`), còn secret reference chỉ được lưu vào DB khi bấm Save. Mọi trường hợp không đi tới được bước lưu DB đều để lại secret không ai trỏ tới: Developer đóng tab không Save, validate thất bại rồi bỏ đi, lưu DB lỗi, nhập lại secret nhiều lần, hoặc đổi secret ở lần cấu hình sau (bản cũ vẫn còn). Hậu quả là secret thật tồn tại mà không ai quản lý hay thu hồi (rủi ro bảo mật), rác tích tụ theo thời gian, và contract 3 không nói gì về việc dọn dẹp.
+
+**Quyết định:** chưa giải quyết lúc này, để lại xử lý sau.
+
+**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D7 — gồm bảng các tình huống sinh secret orphan, ba hướng có thể cân nhắc (ghi lúc Save kèm xóa bù; lưu tạm có hạn dùng; dọn rác định kỳ) và câu hỏi cần chốt.
+
+**Lưu ý:** vấn đề này gắn với D1 (bản nháp — secret nằm ở đâu trước khi Save); nên cân nhắc giải quyết cùng lúc. Khi sửa tài liệu cho các vấn đề đã chốt, giữ nguyên luồng lưu secret hiện tại của UC-02.
+
+**Đã áp dụng:** `deferred_issues.md` (D7). Chưa sửa file thiết kế nào.
