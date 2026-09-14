@@ -47,7 +47,7 @@ package "Boundary/UI" {
   class "Deployment API / Controller" as DeploymentAPI <<control>> {
     -orchestrator: DeploymentOrchestrator
     +loadDeploymentForm(applicationId, environment, target)
-    +createDeployment(applicationId, environment, target, images, context)
+    +createDeployment(applicationId, version, environment, target, images, context)
     +confirmDeployment(deploymentId, overrides)
   }
   class "Deployment Query API / Controller" as DeploymentQueryAPI <<control>> {
@@ -85,14 +85,19 @@ package "Application services" {
     -deploymentId: String
     -deploymentContext: Object
     +loadDeploymentContext(applicationId, environment, target)
-    +createDeployment(applicationId, environment, target, images, context)
+    +createDeployment(applicationId, version, environment, target, images, context)
     +validateDeploymentInput()
     +computePlanFingerprint(plan, allowedOverrides, algo)
     +confirmDeployment(deploymentId, overrides)
   }
+  class "Deployment Worker" as DeploymentWorker <<control>> {
+    -currentJob: DeploymentExecutionJob
+    -finalPlan: Object
+  }
   class "Deployment Query Service" as DeploymentQueryService <<control>> {
     -deploymentRepository: DeploymentRepository
     -resourceRepository: ResourceInstanceRepository
+    -workloadInstanceRepository: WorkloadInstanceRepository
     +listDeployments(applicationId)
     +getDeploymentDetail(deploymentId)
     +getDeploymentFailureDetail(deploymentId)
@@ -106,7 +111,7 @@ package "Domain components" {
   }
   class "Application Specification Generator" as ApplicationSpecificationGenerator <<control>> {
     -specificationFormat: String
-    +generateApplicationSpecification(applicationDefinition)
+    +generateApplicationSpecification(applicationDefinitionVersion)
   }
   class "Resource Output Catalog / Resource Definition Query" as ResourceOutputCatalog <<control>> {
     -resourceDefinitions: List
@@ -123,7 +128,12 @@ package "Domain components" {
   }
   class "Deployment Graph Builder" as DeploymentGraphBuilder <<control>> {
     -graph: Object
-    +buildDeploymentGraph(applicationDefinition, configuration, images, context)
+    +buildDeploymentGraph(applicationDefinitionVersion, configuration, images, context)
+  }
+  class "Deployment Wave Planner" as DeploymentWavePlanner <<control>> {
+    -waves: List
+    +planDeploymentWaves(graph, selectedWorkloads, runningWorkloadInstances)
+    +propagateOutputChanges(waves, waveComponents, collectedOutputs)
   }
   class "Resource Definition Resolver" as ResourceDefinitionResolver <<control>> {
     -resolvedDefinitions: List
@@ -132,13 +142,13 @@ package "Domain components" {
   class "Infrastructure Planner" as InfrastructurePlanner <<control>> {
     -plan: Object
     -allowedOverrides: Map
-    +planInfrastructureChanges(graph, resolvedDefinitions, currentInstances)
+    +planInfrastructureChanges(graph, waves, resolvedDefinitions, currentInstances, runningWorkloadInstances)
     +loadInfrastructureOverrides(plan)
     +applyInfrastructureOverrides(plan, overrides)
   }
   class "Infrastructure Reconciler" as InfrastructureReconciler <<control>> {
     -infrastructureReferences: List
-    +reconcileInfrastructure(finalPlan)
+    +reconcileInfrastructure(finalPlan, planItems)
   }
   class "Resource Output Resolver / Collector" as ResourceOutputCollector <<control>> {
     -resourceOutputs: Map
@@ -146,11 +156,15 @@ package "Domain components" {
   }
   class "Environment Configuration Resolver" as EnvironmentConfigurationResolver <<control>> {
     -resolvedConfiguration: Map
-    +resolveEnvironmentConfiguration(configuration, resourceOutputs, workloadOutputs)
+    +resolveEnvironmentConfiguration(configuration, waveWorkloads, resourceOutputs, workloadOutputs)
+  }
+  class "Workload Output Collector" as WorkloadOutputCollector <<control>> {
+    -workloadOutputs: Map
+    +collectWorkloadOutputs(target, workloads)
   }
   class "Resolved Specification Generator" as ResolvedSpecificationGenerator <<control>> {
     -resolvedSpecification: Object
-    +generateResolvedApplicationSpecification(applicationDefinition, images, resolvedConfiguration)
+    +generateResolvedApplicationSpecification(applicationDefinitionVersion, images, resolvedConfiguration)
   }
   class "Manifest Generator / Score Renderer" as ManifestGenerator <<control>> {
     -baseManifest: Object
@@ -170,7 +184,7 @@ package "Domain components" {
   }
   class "Deployment Result Aggregator" as DeploymentResultAggregator <<control>> {
     -viewModel: Object
-    +aggregate(deploymentRecord, progress, images, infrastructureStatus, cdStatus, workloadStatus, endpoints)
+    +aggregate(deploymentRecord, version, progress, images, workloadInstances, infrastructureStatus, cdStatus, workloadStatus, endpoints)
   }
 }
 
@@ -181,7 +195,8 @@ package "Integration abstractions" {
   }
   interface "Provisioner Adapter / Provisioner Interface" as ProvisionerAdapter <<interface>> {
     -provisioningContext: Object
-    +reconcile(finalPlan)
+    +reconcile(planItems)
+    +destroy(planItems)
   }
   interface "CD Integration / CD Provider Interface" as CDIntegration <<interface>> {
     -deliveryReference: String
@@ -195,6 +210,8 @@ package "Integration abstractions" {
     -target: String
     +getWorkloadStatus(target, workloads)
     +getDeploymentEndpoints(target, workloads)
+    +waitForWorkloadsHealthy(target, workloads)
+    +readWorkloadOutputs(target, workloads)
   }
 }
 
@@ -211,7 +228,8 @@ package "External systems" {
   class "Terraform/OpenTofu Runner" as IaCRunner <<boundary>> {
     -moduleSource: String
     -workspace: String
-    +applyInfrastructureModules(finalPlan)
+    +applyInfrastructureModules(planItems)
+    +destroyInfrastructureModules(planItems)
   }
   class "score-k8s" as ScoreK8s <<boundary>> {
     -rendererVersion: String
@@ -229,14 +247,18 @@ package "External systems" {
     +deployWorkloadsAndConfiguration(desiredState)
     +queryWorkloadHealthAndEndpoints(target, workloads)
     +queryExposedEndpoints(target, workloads)
+    +watchPodHealth(target, workloads)
+    +readWorkloadRuntimeData(target, workloads)
   }
 }
 
 package "Persistence" {
   class "Application Repository" as ApplicationRepository <<entity>> {
-    -applicationDefinitions: Collection
-    +findById(applicationId)
-    +save(applicationDefinition)
+    -applicationDefinitionVersions: Collection
+    +findLatestVersion(applicationId)
+    +saveNewVersion(applicationDefinition)
+    +listVersions(applicationId)
+    +findVersion(applicationId, version)
   }
   class "Specification Repository / Config Repo Service" as SpecificationRepository <<entity>> {
     -applicationSpecifications: Collection
@@ -254,19 +276,30 @@ package "Persistence" {
   }
   class "Resource Instance Repository" as ResourceInstanceRepository <<entity>> {
     -resourceInstances: Collection
-    +findResourceInstances(resolvedResources, target)
+    +findResourceInstances(applicationId, environment, resourceRequirementIds, target)
     +saveResourceInstances(resourceState)
     +loadResourceOutputs(infrastructureReferences)
+    +loadOutputFingerprints(resources)
+    +updateOutputFingerprints(resources)
     +getInfrastructureStatus(infrastructureReferences)
+  }
+  class "Workload Instance Repository" as WorkloadInstanceRepository <<entity>> {
+    -workloadInstances: Collection
+    +findWorkloadInstances(applicationId, environment, target)
+    +saveWorkloadInstances(workloads, status)
+    +updateWorkloadInstances(workloads, status, outputFingerprints)
+    +loadOutputFingerprintsAndRunningImages(workloads, dependents)
   }
   class "Deployment Repository" as DeploymentRepository <<entity>> {
     -deploymentRecords: Collection
-    +persistDeployment(deployment, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
+    -executionJobs: Collection
+    +persistDeployment(deployment, applicationDefinitionVersion, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
     +findByIdWithPersistedInputs(deploymentId)
     +compareAndSetPlanFingerprint(deploymentId, expectedStatus, expectedFingerprint, newFingerprint)
+    +confirmDeploymentAndCreateJob(deploymentId, expectedStatus, overrides)
+    +claimNextExecutionJob()
     +updateDeploymentStatus(deploymentId, expectedStatus, newStatus)
-    +updateDeploymentStatus(deploymentId, status)
-    +saveDeploymentRecord(environment, target, images, infrastructureReferences, deliveryStatus)
+    +saveDeploymentRecord(deployment, workloadImages, infrastructureReferences, deliveryReferences, removedComponents)
     +findByApplication(applicationId)
     +getDeploymentDetail(deploymentId)
     +getDeploymentFailureDetail(deploymentId)
@@ -298,31 +331,50 @@ DeploymentAPI "1" --> "1" DeploymentOrchestrator
 DeploymentOrchestrator "1" --> "1" ApplicationRepository
 DeploymentOrchestrator "1" --> "1" EnvironmentConfigurationRepository
 DeploymentOrchestrator ..> DeploymentGraphBuilder
+DeploymentOrchestrator ..> DeploymentWavePlanner
 DeploymentOrchestrator ..> ResourceDefinitionResolver
 DeploymentOrchestrator ..> InfrastructurePlanner
-DeploymentOrchestrator ..> InfrastructureReconciler
-DeploymentOrchestrator ..> ResourceOutputCollector
-DeploymentOrchestrator ..> EnvironmentConfigurationResolver
-DeploymentOrchestrator ..> ResolvedSpecificationGenerator
-DeploymentOrchestrator ..> ManifestGenerator
-DeploymentOrchestrator ..> TargetManifestAdapter
-DeploymentOrchestrator ..> EnvironmentConfigurationMaterializer
-DeploymentOrchestrator ..> SecretMaterializer
-DeploymentOrchestrator ..> CDIntegration
-DeploymentOrchestrator "1" --> "1" DeploymentRepository
 DeploymentOrchestrator "1" --> "1" ResourceInstanceRepository
+DeploymentOrchestrator "1" --> "1" WorkloadInstanceRepository
+DeploymentOrchestrator "1" --> "1" DeploymentRepository
+
+DeploymentWorker "1" --> "1" DeploymentRepository
+DeploymentWorker "1" --> "1" ApplicationRepository
+DeploymentWorker "1" --> "1" EnvironmentConfigurationRepository
+DeploymentWorker ..> DeploymentGraphBuilder
+DeploymentWorker ..> DeploymentWavePlanner
+DeploymentWorker ..> ResourceDefinitionResolver
+DeploymentWorker ..> InfrastructurePlanner
+DeploymentWorker ..> InfrastructureReconciler
+DeploymentWorker ..> ResourceOutputCollector
+DeploymentWorker ..> WorkloadOutputCollector
+DeploymentWorker ..> EnvironmentConfigurationResolver
+DeploymentWorker ..> ResolvedSpecificationGenerator
+DeploymentWorker ..> ManifestGenerator
+DeploymentWorker ..> TargetManifestAdapter
+DeploymentWorker ..> EnvironmentConfigurationMaterializer
+DeploymentWorker ..> SecretMaterializer
+DeploymentWorker ..> CDIntegration
+DeploymentWorker ..> WorkloadStatusProvider
+DeploymentWorker "1" --> "1" ResourceInstanceRepository
+DeploymentWorker "1" --> "1" WorkloadInstanceRepository
+
+DeploymentWavePlanner "1" --> "1" ResourceInstanceRepository
+DeploymentWavePlanner "1" --> "1" WorkloadInstanceRepository
 InfrastructureReconciler ..> ProvisionerAdapter
 InfrastructureReconciler "1" --> "1" ResourceInstanceRepository
 ResourceOutputCollector "1" --> "1" ResourceInstanceRepository
+WorkloadOutputCollector ..> WorkloadStatusProvider
 ManifestGenerator ..> ScoreK8s
 CDIntegration <|.. ConcreteCDProvider
-ProvisionerAdapter ..> IaCRunner : reconcile() delegates applyInfrastructureModules()
+ProvisionerAdapter ..> IaCRunner : reconcile()/destroy() delegate apply/destroyInfrastructureModules()
 ConcreteCDProvider ..> CDSystem
 CDSystem ..> KubernetesCluster
 
 DeploymentQueryAPI "1" --> "1" DeploymentQueryService
 DeploymentQueryService "1" --> "1" DeploymentRepository
 DeploymentQueryService "1" --> "1" ResourceInstanceRepository
+DeploymentQueryService "1" --> "1" WorkloadInstanceRepository
 DeploymentQueryService ..> CDStatusProvider
 DeploymentQueryService ..> WorkloadStatusProvider
 DeploymentQueryService ..> DeploymentResultAggregator
@@ -337,6 +389,18 @@ end note
 note right of WorkloadStatusProvider
   The source names the abstraction and
   Kubernetes adapter as one participant.
+end note
+
+note right of DeploymentWorker
+  Active background process: claims execution jobs
+  from Deployment Repository and receives no inbound
+  message, so it owns no operation. Recovery when a
+  worker dies mid-job is deferred (D6).
+end note
+
+note right of ApplicationRepository
+  Application Definition versions are immutable;
+  components keep stable IDs across versions.
 end note
 
 @enduml

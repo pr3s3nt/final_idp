@@ -86,4 +86,11 @@ note right of SecretStore
   in UC-02.
 end note
 
+note right of Validator
+  Validates against the latest Application Definition version:
+  every referenced output must belong to a resource or workload
+  that the owning workload depends on.
+  Environment is one of STAGING, PRODUCTION.
+end note
+
 @enduml

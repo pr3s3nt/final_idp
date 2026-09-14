@@ -10,6 +10,7 @@ package "Boundary/UI" {
   class "Web UI" as WebUI <<boundary>> {
     -selectedEnvironment: String
     -selectedTarget: String
+    -selectedVersion: String
     -selectedImages: Map
     +showDeploymentForm()
     +showInfrastructurePlan()
@@ -18,7 +19,7 @@ package "Boundary/UI" {
   class "Deployment API / Controller" as API <<control>> {
     -orchestrator: Orchestrator
     +loadDeploymentForm(applicationId, environment, target)
-    +createDeployment(applicationId, environment, target, images, context)
+    +createDeployment(applicationId, version, environment, target, images, context)
     +confirmDeployment(deploymentId, overrides)
   }
 }
@@ -28,17 +29,26 @@ package "Application services" {
     -deploymentId: String
     -deploymentContext: Object
     +loadDeploymentContext(applicationId, environment, target)
-    +createDeployment(applicationId, environment, target, images, context)
+    +createDeployment(applicationId, version, environment, target, images, context)
     +validateDeploymentInput()
     +computePlanFingerprint(plan, allowedOverrides, algo)
     +confirmDeployment(deploymentId, overrides)
+  }
+  class "Deployment Worker" as Worker <<control>> {
+    -currentJob: DeploymentExecutionJob
+    -finalPlan: Object
   }
 }
 
 package "Domain components" {
   class "Deployment Graph Builder" as GraphBuilder <<control>> {
     -graph: Object
-    +buildDeploymentGraph(applicationDefinition, configuration, images, context)
+    +buildDeploymentGraph(applicationDefinitionVersion, configuration, images, context)
+  }
+  class "Deployment Wave Planner" as WavePlanner <<control>> {
+    -waves: List
+    +planDeploymentWaves(graph, selectedWorkloads, runningWorkloadInstances)
+    +propagateOutputChanges(waves, waveComponents, collectedOutputs)
   }
   class "Resource Definition Resolver" as ResourceResolver <<control>> {
     -resolvedDefinitions: List
@@ -47,13 +57,13 @@ package "Domain components" {
   class "Infrastructure Planner" as InfraPlanner <<control>> {
     -plan: Object
     -allowedOverrides: Map
-    +planInfrastructureChanges(graph, resolvedDefinitions, currentInstances)
+    +planInfrastructureChanges(graph, waves, resolvedDefinitions, currentInstances, runningWorkloadInstances)
     +loadInfrastructureOverrides(plan)
     +applyInfrastructureOverrides(plan, overrides)
   }
   class "Infrastructure Reconciler" as InfraReconciler <<control>> {
     -infrastructureReferences: List
-    +reconcileInfrastructure(finalPlan)
+    +reconcileInfrastructure(finalPlan, planItems)
   }
   class "Resource Output Resolver / Collector" as OutputCollector <<control>> {
     -resourceOutputs: Map
@@ -61,11 +71,15 @@ package "Domain components" {
   }
   class "Environment Configuration Resolver" as ConfigResolver <<control>> {
     -resolvedConfiguration: Map
-    +resolveEnvironmentConfiguration(configuration, resourceOutputs, workloadOutputs)
+    +resolveEnvironmentConfiguration(configuration, waveWorkloads, resourceOutputs, workloadOutputs)
+  }
+  class "Workload Output Collector" as WorkloadOutputCollector <<control>> {
+    -workloadOutputs: Map
+    +collectWorkloadOutputs(target, workloads)
   }
   class "Resolved Specification Generator" as SpecGenerator <<control>> {
     -resolvedSpecification: Object
-    +generateResolvedApplicationSpecification(applicationDefinition, images, resolvedConfiguration)
+    +generateResolvedApplicationSpecification(applicationDefinitionVersion, images, resolvedConfiguration)
   }
   class "Manifest Generator / Score Renderer" as ManifestGenerator <<control>> {
     -baseManifest: Object
@@ -88,11 +102,17 @@ package "Domain components" {
 package "Integration abstractions" {
   interface "Provisioner Adapter / Provisioner Interface" as Provisioner <<interface>> {
     -provisioningContext: Object
-    +reconcile(finalPlan)
+    +reconcile(planItems)
+    +destroy(planItems)
   }
   interface "CD Integration / CD Provider Interface" as CDIntegration <<interface>> {
     -deliveryReference: String
     +publishDesiredDeploymentState(desiredState)
+  }
+  interface "Workload Status Provider / Kubernetes Adapter" as WorkloadStatusProvider <<interface>> {
+    -target: String
+    +waitForWorkloadsHealthy(target, workloads)
+    +readWorkloadOutputs(target, workloads)
   }
 }
 
@@ -108,7 +128,8 @@ package "External systems" {
   class "Terraform/OpenTofu Runner" as IaCRunner <<boundary>> {
     -moduleSource: String
     -workspace: String
-    +applyInfrastructureModules(finalPlan)
+    +applyInfrastructureModules(planItems)
+    +destroyInfrastructureModules(planItems)
   }
   class "score-k8s" as ScoreK8s <<boundary>> {
     -rendererVersion: String
@@ -123,13 +144,16 @@ package "External systems" {
     -clusterId: String
     -apiEndpoint: String
     +deployWorkloadsAndConfiguration(desiredState)
+    +watchPodHealth(target, workloads)
+    +readWorkloadRuntimeData(target, workloads)
   }
 }
 
 package "Persistence" {
   class "Application Repository" as AppRepo <<entity>> {
-    -applicationDefinitions: Collection
-    +findById(applicationId)
+    -applicationDefinitionVersions: Collection
+    +listVersions(applicationId)
+    +findVersion(applicationId, version)
   }
   class "Environment Configuration Repository" as ConfigRepo <<entity>> {
     -environmentConfigurations: Collection
@@ -138,18 +162,29 @@ package "Persistence" {
   }
   class "Resource Instance Repository" as ResourceRepo <<entity>> {
     -resourceInstances: Collection
-    +findResourceInstances(resolvedResources, target)
+    +findResourceInstances(applicationId, environment, resourceRequirementIds, target)
     +saveResourceInstances(resourceState)
     +loadResourceOutputs(infrastructureReferences)
+    +loadOutputFingerprints(resources)
+    +updateOutputFingerprints(resources)
+  }
+  class "Workload Instance Repository" as WorkloadInstanceRepo <<entity>> {
+    -workloadInstances: Collection
+    +findWorkloadInstances(applicationId, environment, target)
+    +saveWorkloadInstances(workloads, status)
+    +updateWorkloadInstances(workloads, status, outputFingerprints)
+    +loadOutputFingerprintsAndRunningImages(workloads, dependents)
   }
   class "Deployment Repository" as DeploymentRepo <<entity>> {
     -deploymentRecords: Collection
-    +persistDeployment(deployment, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
+    -executionJobs: Collection
+    +persistDeployment(deployment, applicationDefinitionVersion, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
     +findByIdWithPersistedInputs(deploymentId)
     +compareAndSetPlanFingerprint(deploymentId, expectedStatus, expectedFingerprint, newFingerprint)
+    +confirmDeploymentAndCreateJob(deploymentId, expectedStatus, overrides)
+    +claimNextExecutionJob()
     +updateDeploymentStatus(deploymentId, expectedStatus, newStatus)
-    +updateDeploymentStatus(deploymentId, status)
-    +saveDeploymentRecord(environment, target, images, infrastructureReferences, deliveryStatus)
+    +saveDeploymentRecord(deployment, workloadImages, infrastructureReferences, deliveryReferences, removedComponents)
   }
 }
 
@@ -158,26 +193,52 @@ API "1" --> "1" Orchestrator
 Orchestrator "1" --> "1" AppRepo
 Orchestrator "1" --> "1" ConfigRepo
 Orchestrator ..> GraphBuilder
+Orchestrator ..> WavePlanner
 Orchestrator ..> ResourceResolver
 Orchestrator ..> InfraPlanner
-Orchestrator ..> InfraReconciler
-Orchestrator ..> OutputCollector
-Orchestrator ..> ConfigResolver
-Orchestrator ..> SpecGenerator
-Orchestrator ..> ManifestGenerator
-Orchestrator ..> TargetAdapter
-Orchestrator ..> ConfigMaterializer
-Orchestrator ..> SecretMaterializer
-Orchestrator ..> CDIntegration
-Orchestrator "1" --> "1" DeploymentRepo
 Orchestrator "1" --> "1" ResourceRepo
+Orchestrator "1" --> "1" WorkloadInstanceRepo
+Orchestrator "1" --> "1" DeploymentRepo
+
+Worker "1" --> "1" DeploymentRepo
+Worker "1" --> "1" AppRepo
+Worker "1" --> "1" ConfigRepo
+Worker ..> GraphBuilder
+Worker ..> WavePlanner
+Worker ..> ResourceResolver
+Worker ..> InfraPlanner
+Worker ..> InfraReconciler
+Worker ..> OutputCollector
+Worker ..> WorkloadOutputCollector
+Worker ..> ConfigResolver
+Worker ..> SpecGenerator
+Worker ..> ManifestGenerator
+Worker ..> TargetAdapter
+Worker ..> ConfigMaterializer
+Worker ..> SecretMaterializer
+Worker ..> CDIntegration
+Worker ..> WorkloadStatusProvider
+Worker "1" --> "1" ResourceRepo
+Worker "1" --> "1" WorkloadInstanceRepo
+
+WavePlanner "1" --> "1" ResourceRepo
+WavePlanner "1" --> "1" WorkloadInstanceRepo
 InfraReconciler ..> Provisioner
 InfraReconciler "1" --> "1" ResourceRepo
 OutputCollector "1" --> "1" ResourceRepo
+WorkloadOutputCollector ..> WorkloadStatusProvider
 ManifestGenerator ..> ScoreK8s
-Provisioner ..> IaCRunner : reconcile() delegates applyInfrastructureModules()
+Provisioner ..> IaCRunner : reconcile()/destroy() delegate apply/destroyInfrastructureModules()
 CDIntegration <|.. CDProvider
 CDProvider ..> CDSystem
 CDSystem ..> Kubernetes
+WorkloadStatusProvider ..> Kubernetes
+
+note right of Worker
+  Active background process: claims execution jobs
+  from Deployment Repository and receives no inbound
+  message, so it owns no operation. Recovery when a
+  worker dies mid-job is deferred (D6).
+end note
 
 @enduml

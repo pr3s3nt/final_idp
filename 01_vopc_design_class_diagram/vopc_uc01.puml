@@ -44,15 +44,15 @@ package "Domain components" {
   }
   class "Application Specification Generator" as SpecGenerator <<control>> {
     -specificationFormat: String
-    +generateApplicationSpecification(applicationDefinition)
+    +generateApplicationSpecification(applicationDefinitionVersion)
   }
 }
 
 package "Persistence" {
   class "Application Repository" as AppRepo <<entity>> {
-    -applicationDefinitions: Collection
-    +findById(applicationId)
-    +save(applicationDefinition)
+    -applicationDefinitionVersions: Collection
+    +findLatestVersion(applicationId)
+    +saveNewVersion(applicationDefinition)
   }
   class "Specification Repository / Config Repo Service" as SpecRepo <<entity>> {
     -applicationSpecifications: Collection
@@ -66,5 +66,11 @@ ApplicationService ..> Validator
 ApplicationService "1" --> "1" AppRepo
 ApplicationService ..> SpecGenerator
 ApplicationService "1" --> "1" SpecRepo
+
+note right of AppRepo
+  Every save creates a new immutable Application Definition version.
+  Existing versions are never updated or deleted; components keep
+  stable IDs across versions.
+end note
 
 @enduml

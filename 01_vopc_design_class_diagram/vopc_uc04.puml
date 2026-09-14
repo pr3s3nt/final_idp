@@ -24,6 +24,7 @@ package "Application services" {
   class "Deployment Query Service" as QueryService <<control>> {
     -deploymentRepository: DeploymentRepo
     -resourceRepository: ResourceRepo
+    -workloadInstanceRepository: WorkloadInstanceRepo
     +listDeployments(applicationId)
     +getDeploymentDetail(deploymentId)
     +getDeploymentFailureDetail(deploymentId)
@@ -33,7 +34,7 @@ package "Application services" {
 package "Domain components" {
   class "Deployment Result Aggregator" as Aggregator <<control>> {
     -viewModel: Object
-    +aggregate(deploymentRecord, progress, images, infrastructureStatus, cdStatus, workloadStatus, endpoints)
+    +aggregate(deploymentRecord, version, progress, images, workloadInstances, infrastructureStatus, cdStatus, workloadStatus, endpoints)
   }
 }
 
@@ -84,12 +85,17 @@ package "Persistence" {
     -resourceInstances: Collection
     +getInfrastructureStatus(infrastructureReferences)
   }
+  class "Workload Instance Repository" as WorkloadInstanceRepo <<entity>> {
+    -workloadInstances: Collection
+    +findWorkloadInstances(applicationId, environment, target)
+  }
 }
 
 WebUI "1" --> "1" API
 API "1" --> "1" QueryService
 QueryService "1" --> "1" DeploymentRepo
 QueryService "1" --> "1" ResourceRepo
+QueryService "1" --> "1" WorkloadInstanceRepo
 QueryService ..> CDStatusProvider
 QueryService ..> WorkloadProvider
 QueryService ..> Aggregator
