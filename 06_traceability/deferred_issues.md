@@ -2,7 +2,7 @@
 
 Tài liệu này ghi các vấn đề thiết kế đã được nhận diện nhưng **chưa cần giải quyết ở MVP**. Mỗi mục giữ đủ bối cảnh để sau này quay lại xử lý mà không phải dò lại từ đầu.
 
-Nguồn đối chiếu: commit `88585ccdd1a7896c615ad43fbb0d0f6b62d231ef` (nhánh `draft`, "Vá 11 vấn đề thiết kế + 2 finding review") — commit này đề xuất cách sửa cho 11 vấn đề, nhưng các đề xuất đó chưa được xác nhận là đúng; chỉ dùng để tham khảo. Nhánh `refine_design` bắt đầu từ `11ad58249f58e06108ab86da787223254be9b05f`, tức là **trước** commit đó, nên thiết kế hiện tại vẫn ở trạng thái chưa sửa.
+Nguồn đối chiếu: commit `88585ccdd1a7896c615ad43fbb0d0f6b62d231ef` (nhánh `draft`, "Vá 11 vấn đề thiết kế + 2 finding review") — commit này đề xuất cách sửa cho 11 vấn đề, nhưng các đề xuất đó chưa được xác nhận là đúng; chỉ dùng để tham khảo. Nhánh `refine_design` bắt đầu từ `11ad58249f58e06108ab86da787223254be9b05f`, tức là **trước** commit đó. Các vấn đề đã chốt (2, 3, 5, 9, 10) đã được áp dụng vào tài liệu thiết kế trên nhánh này; các mục dưới đây là phần còn hoãn (xem `design_decisions.md`).
 
 ## Danh sách theo dõi
 
@@ -15,6 +15,8 @@ Nguồn đối chiếu: commit `88585ccdd1a7896c615ad43fbb0d0f6b62d231ef` (nhán
 | D5 | Trạng thái vòng đời của deployment bị trộn với trạng thái giao hàng của hệ thống CD | DEFERRED | 14/09/2026 |
 | D6 | Phục hồi khi Deployment Worker chết giữa chừng (làm tiếp hay làm lại, chống chạy trùng, không tạo trùng hạ tầng) | DEFERRED | 14/09/2026 |
 | D7 | Secret bị bỏ rơi (orphan) trong Secret Store khi cấu hình không được lưu hoặc secret bị thay | DEFERRED | 14/09/2026 |
+| D8 | Cơ chế cụ thể để đọc Workload Output từ workload đã healthy hoặc đang chạy | DEFERRED | 14/09/2026 |
+| D9 | Output của resource dùng chung thay đổi không lan sang application khác; chưa có resource riêng theo từng workload | DEFERRED | 14/09/2026 |
 
 ## D1 — Bản nháp UC-01/UC-02 được giữ ở đâu giữa các request
 
@@ -470,3 +472,47 @@ Hậu quả:
 ### Điều kiện đóng
 
 Sequence UC-02, contract 3 và VOPC (Secret Store) thể hiện rõ thời điểm ghi secret, cách xử lý khi validate/lưu DB thất bại và khi secret bị thay; không tình huống nào trong bảng trên để lại secret không ai quản lý mà không có cơ chế dọn.
+
+## D8 — Cơ chế cụ thể để đọc Workload Output
+
+**Tương ứng:** quyết định 5 của vấn đề 2 trong `design_decisions.md`.
+
+**Quyết định:** để ở mức trừu tượng, chưa chốt cơ chế.
+
+### Bối cảnh
+
+Theo vấn đề 2, UC-03 triển khai theo tầng: sau khi workload của một tầng healthy, IDP thu thập Workload Output (ví dụ `backend.endpoint`) để resolve configuration của các tầng sau; khi deploy một phần, IDP đọc output từ workload phụ thuộc đang chạy ngoài phạm vi. Tài liệu hiện chỉ quy định:
+
+- `Workload Output Collector.collectWorkloadOutputs(target, workloads)` (contract 10) trả về tập `Workload Output` transient.
+- Collector gọi `Workload Status Provider / Kubernetes Adapter.readWorkloadOutputs(target, workloads)`, adapter đọc dữ liệu runtime từ Kubernetes Cluster (`readWorkloadRuntimeData`).
+- `Workload.exposedOutputs` chỉ là danh sách tên output.
+
+### Vấn đề chưa giải quyết
+
+- Mỗi output trong `exposedOutputs` được lấy từ đâu (Service DNS/endpoint, Ingress, annotation, trạng thái của resource Kubernetes…) và ai khai báo cách lấy.
+- Output có cần khai báo thêm thông tin (ví dụ kiểu, port, scheme) để đọc được một cách tất định không.
+- Cách chuẩn hóa output trước khi tính dấu vân tay, để không báo "thay đổi" giả (ví dụ thứ tự, định dạng).
+
+### Điều kiện đóng
+
+Domain model/ERD mô tả đủ thông tin để đọc từng loại output; sequence UC-03 và contract 10 chỉ rõ nguồn đọc; cách chuẩn hóa output trước khi hash được đặc tả.
+
+## D9 — Resource dùng chung và resource riêng theo workload
+
+**Tương ứng:** mục "Hoãn" của vấn đề 3 trong `design_decisions.md`.
+
+**Quyết định:** chưa giải quyết lúc này, để lại xử lý sau.
+
+### Vấn đề
+
+1. **Output của resource dùng chung thay đổi không lan sang application khác.** Resource Definition loại `EXISTING` cho nhiều application/environment trỏ cùng một resource thật. Khi output của resource đó thay đổi (ví dụ host mới), `propagateOutputChanges` (contract 11) chỉ lan truyền trong phạm vi application đang deploy; các application khác chỉ phát hiện qua dấu vân tay output ở lần deploy sau của chính chúng. IDP không tự deploy lại các application đó.
+2. **Chưa có resource riêng theo từng workload.** Thiết kế hiện tại đặt Resource Requirement ở mức application (theo phiên bản); nhiều workload cùng depends on một requirement thì dùng chung một Resource Instance. Mức "resource riêng của một workload" (private theo workload như Humanitec) chưa được mô hình hóa.
+
+### Câu hỏi cần chốt khi giải quyết
+
+1. Khi output của resource `EXISTING` thay đổi, có cần thông báo hoặc tự tạo deployment cho các application đang dùng chung không? Ai phát hiện thay đổi đó (platform hay IDP)?
+2. Có cần resource riêng theo workload không, và nếu có thì khóa chủ sở hữu của Resource Instance thêm workload như thế nào?
+
+### Điều kiện đóng
+
+Contract 11 và use case UC-03 mô tả rõ phạm vi lan truyền với resource dùng chung; domain model/ERD thể hiện quyết định về resource riêng theo workload.

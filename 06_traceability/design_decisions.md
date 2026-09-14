@@ -18,15 +18,15 @@ Trong mỗi Bước, từng use case là một mục con `## UC 01 …`, `## UC 
 | # | Vấn đề | Quyết định | Trạng thái áp dụng |
 |---|---|---|---|
 | 1 | Bản nháp UC-01/UC-02 được giữ ở đâu giữa các request | Hoãn sau MVP | Đã ghi vào `deferred_issues.md` (D1) |
-| 2 | Giá trị Workload Output do ai tính | Triển khai theo thứ tự phụ thuộc (theo tầng) | Đã sửa `usecase_realization_step_1_3.md`; các file khác chưa sửa |
-| 3 | Scope khi tìm Resource Instance để reuse | Mặc định riêng; dùng chung phải khai báo tường minh ở Resource Definition (theo mô hình Humanitec) | Chưa sửa file nào |
+| 2 | Giá trị Workload Output do ai tính | Triển khai theo thứ tự phụ thuộc (theo tầng) | Đã áp dụng vào toàn bộ tài liệu thiết kế; phần hoãn ghi vào D8 |
+| 3 | Scope khi tìm Resource Instance để reuse | Mặc định riêng; dùng chung phải khai báo tường minh ở Resource Definition (theo mô hình Humanitec) | Đã áp dụng vào toàn bộ tài liệu thiết kế; phần hoãn ghi vào D9 |
 | 4 | UC-04 gọi provider khi thiếu điều kiện | Hoãn, giải quyết sau | Đã ghi vào `deferred_issues.md` (D2) |
-| 5 | Xóa definition làm hỏng FK/lịch sử | Định nghĩa app có phiên bản; deploy chọn phiên bản vào từng environment (staging, production); hạ tầng/pod bị gỡ khi environment deploy phiên bản không còn thành phần đó | Chưa sửa file nào |
+| 5 | Xóa definition làm hỏng FK/lịch sử | Định nghĩa app có phiên bản; deploy chọn phiên bản vào từng environment (staging, production); hạ tầng/pod bị gỡ khi environment deploy phiên bản không còn thành phần đó | Đã áp dụng vào toàn bộ tài liệu thiết kế |
 | 6 | Infrastructure Plan chưa có typed model | Hoãn, xem xét sau | Đã ghi vào `deferred_issues.md` (D3) |
 | 7 | Ai ghi progress marker | Hoãn, giải quyết sau | Đã ghi vào `deferred_issues.md` (D4) |
 | 8 | Lẫn lifecycle status với CD delivery status | Hoãn, giải quyết sau | Đã ghi vào `deferred_issues.md` (D5) |
-| 9 | Literal ENUM chưa chốt | Một bảng danh mục ENUM duy nhất trong `schema.md`; chốt giá trị cho các ENUM thuộc vấn đề đã chốt, ghi giá trị dự kiến cho các ENUM thuộc D3/D4/D5 | Chưa sửa file thiết kế nào; giá trị dự kiến đã ghi vào D3, D4, D5 |
-| 10 | Confirm chạy tác vụ dài trong HTTP request | `confirmDeployment` chỉ nhận việc (đổi status + tạo job trong DB cùng một transaction) và trả lời ngay; Deployment Worker chạy nền. Phục hồi khi worker chết: hoãn | Chưa sửa file thiết kế nào; phần hoãn đã ghi vào `deferred_issues.md` (D6) |
+| 9 | Literal ENUM chưa chốt | Một bảng danh mục ENUM duy nhất trong `schema.md`; chốt giá trị cho các ENUM thuộc vấn đề đã chốt, ghi giá trị dự kiến cho các ENUM thuộc D3/D4/D5 | Đã áp dụng vào toàn bộ tài liệu thiết kế (danh mục ENUM trong `schema.md`); giá trị dự kiến đã ghi vào D3, D4, D5, D6 |
+| 10 | Confirm chạy tác vụ dài trong HTTP request | `confirmDeployment` chỉ nhận việc (đổi status + tạo job trong DB cùng một transaction) và trả lời ngay; Deployment Worker chạy nền. Phục hồi khi worker chết: hoãn | Đã áp dụng vào toàn bộ tài liệu thiết kế; phần hoãn ghi vào `deferred_issues.md` (D6) |
 | 11 | Secret bị orphan khi save lỗi | Hoãn, giải quyết sau | Đã ghi vào `deferred_issues.md` (D7) |
 
 ## Vấn đề 1 — Bản nháp UC-01/UC-02
@@ -57,20 +57,17 @@ Trong mỗi Bước, từng use case là một mục con `## UC 01 …`, `## UC 
 - Thêm thành phần **Deployment Wave Planner** chịu trách nhiệm chia tầng và lan truyền thay đổi output.
 - UC-04 đọc **Workload Instance Repository** để cho biết deployment đang xem có còn là bản đang chạy hay không.
 
-**Đã áp dụng:**
+**Đã áp dụng (lượt sửa chung, nhánh `refine_design`):**
 
-- `usecase_realization_step_1_3.md`: UC-01, UC-02, UC-03, UC-04 và Bước 1–3.
-
-**Chưa áp dụng (sẽ sửa trong lượt sửa chung):**
-
-- Sequence diagram: `uc_02`, `uc_03`, `uc_04`.
-- VOPC: `vopc_uc02`, `vopc_uc03`, `vopc_uc04`, `design_class_diagram.puml`, `README.md`.
-- Domain model: `domain_model.puml`, `domain_objects.md`, `persistence_classification.md`.
-- ERD: `schema.md`, `erd.puml`.
-- Operation contracts.
-- State machines (Deployment; thêm Workload Instance).
+- `usecase_realization_step_1_3.md`: đặc tả UC-01 đến UC-04 và Bước 1–3.
+- Sequence diagram: `uc_02`, `uc_03` (luồng request và luồng Deployment Worker theo tầng), `uc_04`.
+- VOPC: `vopc_uc02`, `vopc_uc03`, `vopc_uc04`, `design_class_diagram.puml`, `README.md` (Deployment Wave Planner, Workload Output Collector, Workload Instance Repository).
+- Domain model: Workload Instance, Workload Output, Deployment Graph có phạm vi/tầng, Workload Deployment có `inclusionReason`/`waveNumber`.
+- ERD: `workload_instance`, `output_fingerprint`, `inclusion_reason`, `wave_number`.
+- Operation contracts: C4, C6–C9; thêm C10 `collectWorkloadOutputs`, C11 `propagateOutputChanges`.
+- State machines: Deployment (`DEPLOYING`/`SUCCEEDED`), thêm Workload Instance.
 - Traceability matrix.
-- `deferred_issues.md`: thêm mục hoãn — cơ chế cụ thể đọc workload output.
+- `deferred_issues.md`: D8 — cơ chế cụ thể đọc workload output.
 
 **Lưu ý cho các vấn đề sau:** quyết định 10 đụng tới vấn đề 7, 8, 9; việc chờ pod healthy qua nhiều tầng đụng tới vấn đề 10.
 
@@ -99,14 +96,14 @@ Dùng chung trong cùng app + environment đã có sẵn trong thiết kế: nhi
 - Resource Definition cần phân biệt loại **quản lý hạ tầng** (tạo/sửa/xóa) với loại **trỏ tới resource có sẵn** (chỉ đọc output).
 - `findResourceInstances(...)` đổi tiêu chí tìm theo đủ bộ chủ sở hữu.
 
-**Hoãn (ghi vào `deferred_issues.md` khi sửa tài liệu):**
+**Hoãn (đã ghi vào `deferred_issues.md`, mục D9):**
 
 - Khi output của resource dùng chung thay đổi, chỉ app nào deploy lần sau mới phát hiện qua dấu vân tay output; IDP không tự deploy lại các app khác đang dùng chung.
 - Resource riêng của từng workload (mức private theo workload của Humanitec).
 
-**Đã áp dụng:** chưa sửa file nào.
+**Đã áp dụng (lượt sửa chung, nhánh `refine_design`):** use case realization (UC-03, Bước 2, Bước 3), sequence UC-03, VOPC (`findResourceInstances` theo khóa chủ sở hữu), domain model (Resource Instance có chủ sở hữu; Resource Definition có `managementMode`), ERD (`resource_instance` có cột chủ sở hữu, partial UNIQUE, bỏ UNIQUE `infrastructure_reference`; `resource_definition.management_mode`), contracts 4–6, state machine Resource Instance (`EXISTING` → `READY`, `UNLINKED`), traceability; phần hoãn ghi vào D9.
 
-**Sẽ ảnh hưởng:**
+**Sẽ ảnh hưởng (danh sách ban đầu):**
 
 - `usecase_realization_step_1_3.md`:
   - Đặc tả UC-03: quy tắc nghiệp vụ về tìm resource để dùng lại theo chủ sở hữu và dùng chung khai báo ở Resource Definition.
@@ -186,7 +183,12 @@ Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã worklo
   - Bước 3: Application Repository (lưu và đọc theo phiên bản), Infrastructure Reconciler (gỡ/hủy).
 - Các artifact khác: sequence UC-01, UC-03; VOPC; domain model (Application Definition có phiên bản, Deployment trỏ phiên bản); ERD (bảng phiên bản, identity logic); operation contracts 1, 3, 4, 5; state machine Deployment (nếu cần); traceability.
 
-**Đã áp dụng:** chưa sửa file nào.
+**Quyết định bổ sung (chốt khi lập plan cho lượt sửa chung):**
+
+10. **ID cố định qua phiên bản:** Workload, Resource Requirement, Environment Variable Definition và Secret Definition có ID logic không đổi qua các phiên bản; đổi tên vẫn giữ ID. Cấu hình UC-02, Resource Instance, Workload Instance và Workload Deployment tham chiếu ID logic này.
+11. **Lưu phiên bản bằng bảng phiên bản + dòng con:** bảng `application_definition_version` cùng các dòng `workload`, `resource_requirement`, `environment_variable_definition`, `secret_definition`, `dependency` theo từng phiên bản; ID logic nằm ở identity table `application_component`; giữ khóa ngoại đầy đủ (không lưu phiên bản dạng khối JSON).
+
+**Đã áp dụng (lượt sửa chung, nhánh `refine_design`):** use case realization (đặc tả UC-01 đến UC-04, Bước 1–3), sequence UC-01 và UC-03, VOPC (Application Repository theo phiên bản), domain model (Application Definition Version, Deployment trỏ phiên bản), ERD (`application_definition_version`, `application_component`, bảng theo phiên bản, `environment` ENUM, `removed_components`), contracts 1–5 và 8–9 (phiên bản, gỡ workload), state machines (`DESTROYED`, `UNLINKED`, `REMOVED`), traceability.
 
 ## Vấn đề 6 — Plan của UC-03 chưa có cấu trúc rõ ràng
 
@@ -276,7 +278,7 @@ Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã worklo
 
 **Sẽ ảnh hưởng:** `schema.md` (bảng danh mục ENUM, các cột status), `erd.puml`, domain model, operation contracts (dòng 3 và các status được nhắc), `05_state_machines/README.md` (dòng 5) cùng các state machine, traceability.
 
-**Đã áp dụng:** giá trị dự kiến đã ghi vào `deferred_issues.md` các mục D3, D4, D5. Chưa sửa file thiết kế nào.
+**Đã áp dụng (lượt sửa chung, nhánh `refine_design`):** mục **Danh mục ENUM** trong `03_database_erd/schema.md` (đã chốt / dự kiến, thêm `application_component.component_type` và `deployment_execution_job.status` dự kiến theo D6), các cột status trong `schema.md`/`erd.puml`, domain model, đoạn mở đầu operation contracts, `05_state_machines/README.md` cùng ba state machine; giá trị dự kiến đã ghi vào `deferred_issues.md` các mục D3, D4, D5, D6.
 
 ## Vấn đề 10 — Toàn bộ việc triển khai chạy trong request `confirmDeployment`
 
@@ -313,7 +315,7 @@ Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã worklo
   - Bước 3 UC-03: thêm Deployment Worker; Deployment Orchestrator chỉ còn tạo và xác nhận deployment; Deployment Repository lưu job.
 - Các artifact khác: sequence UC-03, VOPC UC-03 và design class diagram, domain model và persistence classification (job), ERD (bảng job), operation contracts 5–9, state machine Deployment, traceability.
 
-**Đã áp dụng:** phần hoãn đã ghi vào `deferred_issues.md` (D6). Chưa sửa file thiết kế nào.
+**Đã áp dụng (lượt sửa chung, nhánh `refine_design`):** use case realization (đặc tả UC-03, Bước 1–3 tách nhận yêu cầu và thực thi nền), sequence UC-03 (request trả lời ngay; luồng Deployment Worker), VOPC (Deployment Worker; `confirmDeploymentAndCreateJob`, `claimNextExecutionJob`), domain model và persistence classification (Deployment Execution Job), ERD (`deployment_execution_job`), contracts 5–9, state machine Deployment (`CONFIRMED` có job → `DEPLOYING`), traceability; phần hoãn ghi vào `deferred_issues.md` (D6).
 
 ## Vấn đề 11 — Secret bị bỏ rơi trong Secret Store
 
