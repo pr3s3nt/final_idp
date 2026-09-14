@@ -32,7 +32,9 @@ participant "Argo CD Application API" as Argo
 group Prepare: C2
 note over UI, Terraform
   AWS target infrastructure is bootstrapped with separate Terraform state.
-  UC3 provisions PostgreSQL on AWS; Argo CD deploys both workloads to AWS.
+  AWS context resolves postgres -> Aurora PostgreSQL (private VPC).
+  Kind/local context resolves postgres -> StatefulSet/PVC/Service for tests.
+  Argo CD deploys both workloads to AWS for acceptance.
   Kind is development-only, not the acceptance target.
   REUSE/full recovery branches describe later milestones.
 end note
@@ -45,8 +47,8 @@ Orchestrator -> SnapshotBuilder: buildInputSnapshot(source, images, context)
 SnapshotBuilder -> Registry: resolveImageDigest(repository, selectedTag) for each workload
 Registry --> SnapshotBuilder: Immutable image digests
 SnapshotBuilder --> Orchestrator: Source snapshot + image digests + input fingerprint
-Orchestrator -> Secrets: validateReferences(snapshot.secretRefs)
-Secrets --> Orchestrator: UID/key/immutable verified; no credentials returned
+Orchestrator -> Secrets: validateSecretIntents(snapshot.secretRefs, target)
+Secrets --> Orchestrator: kind UID/key verified or AWS resource intent valid; no credentials returned
 Orchestrator -> GraphBuilder: buildDeploymentGraph(snapshot)
 GraphBuilder --> Orchestrator: Graph
 Orchestrator -> Catalog: resolveResourceDefinitions(graph, context)
@@ -123,7 +125,7 @@ note right of Repo
   INFRASTRUCTURE_READY RUNNING.
   Every write requires matching workerRunId.
 end note
-Worker -> Secrets: validateReferences(snapshot.secretRefs)
+Worker -> Secrets: validateSecretIntents(snapshot.secretRefs, target)
 Worker -> GraphBuilder: buildDeploymentGraph(snapshot)
 Worker -> Catalog: resolveResourceDefinitions(graph, context)
 Worker -> ResourceRepo: findScopedInstances(exact active tuple)
@@ -146,7 +148,7 @@ end note
 Reconciler -> Provisioner: reconcileOrInspect(scope, durable state reference)
 Provisioner -> Terraform: apply CREATE / inspect REUSE (state lock)
 Terraform --> Provisioner: Actual owned resource/state
-Provisioner --> Reconciler: Durable identity and result
+Provisioner --> Reconciler: Aurora ARN or Kubernetes object identity and result
 Reconciler -> ResourceRepo: checkpointReady(fingerprints, version, reference)
 break Provider drift/error/uncertain outcome
   Worker -> Repo: failExecution(error, RECOVERY_REQUIRED)
@@ -158,7 +160,7 @@ end
 group Configuration: C6
 Worker -> Outputs: collectResourceOutputs(references)
 Outputs -> Provisioner: readOutputsFromDurableState(references)
-Provisioner --> Outputs: Non-sensitive host/port
+Provisioner --> Outputs: Endpoint/port/database/username + credential ARN reference
 Outputs --> Worker: Resource outputs
 Worker -> WorkloadOutputs: resolvePlanTimeWorkloadOutputs(snapshot naming policy)
 WorkloadOutputs --> Worker: Backend Service URL

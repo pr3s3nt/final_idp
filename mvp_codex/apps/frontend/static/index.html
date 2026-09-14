@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IDP Notes</title></head>
+<body>
+<main><h1>IDP Notes</h1><form id="form"><input id="body" maxlength="2000" required><button>Add note</button></form><ul id="notes"></ul></main>
+<script>
+const notes=document.querySelector('#notes');
+async function refresh(){const response=await fetch('/api/notes');const data=await response.json();notes.replaceChildren(...data.map(note=>{const item=document.createElement('li');item.textContent=note.body;return item}))}
+document.querySelector('#form').addEventListener('submit',async event=>{event.preventDefault();const body=document.querySelector('#body');await fetch('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:body.value})});body.value='';await refresh()});
+refresh();
+</script>
+</body>
+</html>

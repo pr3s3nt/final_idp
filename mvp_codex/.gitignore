@@ -1,0 +1,7 @@
+/.state/
+/.runtime/
+/bin/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.auto.tfvars.json

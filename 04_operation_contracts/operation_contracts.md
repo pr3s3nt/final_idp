@@ -2,7 +2,7 @@
 
 Normative MVP: [scope](../MVP_SCOPE.md), [deployment design](../MVP_DEPLOYMENT_DESIGN.md). Names/columns map Step 2/3; transitions map Step 5. API/worker/provider are Go + Terraform + Argo CD. No automatic pipeline replay, shared consumer, UPDATE/resize or staged Secret API in this profile.
 
-Current milestone: UC3 first-deploy happy path on **AWS**, not kind/local. Terraform bootstraps the AWS target separately; C5 provisions the application database on that target, and C8 delivers both workloads there. AWS service topology/cost must be recorded before provisioning. C12 full recovery, REUSE/redeploy and full UC4 queries remain broader design, not first-milestone completion requirements; retain fail-closed interruption handling. See [implementation prompt](../plab_mvp.md).
+Current milestone: UC3 first-deploy happy path on **AWS**, not kind/local. Terraform bootstraps the AWS target/private network separately; C5 resolves the AWS Resource Definition and provisions Aurora PostgreSQL, and C8 delivers both workloads there. The same logical requirement resolves to a PostgreSQL StatefulSet on kind/local for development tests only. AWS service topology/cost must be recorded before provisioning.
 
 ## C1. Fixture import (UC-01/02 subset, internal)
 
@@ -10,7 +10,7 @@ Current milestone: UC3 first-deploy happy path on **AWS**, not kind/local. Terra
 - Validate active topology, ownership, unique names, dependencies, images and direct/non-sensitive output bindings; reject cycles/runtime-only same-deployment output. Existing referenced identities are retained/retired, not hard-deleted.
 - Save application aggregate, generated current specification and environment configuration atomically in metadata DB. Source edits remain allowed; existing Deployment snapshots never change.
 - Environment configuration may be empty when the fixture has no requirements; the frontend/backend/database demo has required configuration. Full UC-01/02 editor is deferred.
-- Secret source is permanent Kubernetes Secret reference only. Validate target/namespace/name/UID/key and immutable flag via Secret Reference Adapter; no plaintext or staged reference in DB. No stage/promote/revoke operation is invoked.
+- Secret source is target-specific metadata only: kind/local uses a validated immutable Kubernetes Secret identity; AWS uses a `RESOURCE_SECRET` intent resolved after Aurora READY to a Secrets Manager ARN/reference and ExternalSecret destination. No plaintext or staged secret is stored or returned.
 - API preflight cannot atomically prevent external Secret deletion; bootstrap/operator must not mutate/delete referenced resources during execution. Missing/replaced reference is an explicit failure, not a fallback credential.
 
 ## C2. createDeployment(applicationId, environment, target, images, context)
@@ -26,7 +26,7 @@ Current milestone: UC3 first-deploy happy path on **AWS**, not kind/local. Terra
 
 - Authenticate before lookup. Normalize request, compute request_fingerprint. Existing accepted job with same key/hash returns same trackingId before checking lifecycle/catalog; same key/different payload returns IDEMPOTENCY_KEY_REUSED; another key returns ALREADY_ACCEPTED.
 - Lock Deployment and re-read accepted job/key/hash before status checks, so a concurrent winner returns the same tracking result. If still unaccepted, lock deployment_scope_guard. Status must be AWAITING_CONFIRMATION; EXECUTING/RECOVERY_REQUIRED scope cannot be acquired.
-- Rebuild from immutable snapshot + current catalog + all-status bindings, validate permanent secret metadata again. Compare client expected fingerprint with BOTH stored and rebuilt fingerprint.
+- Rebuild from immutable snapshot + current catalog + all-status bindings. Validate kind/local permanent Secret identity or AWS resource-secret intent as appropriate. Compare client expected fingerprint with BOTH stored and rebuilt fingerprint.
 - Mismatch: while still awaiting, refresh stored fingerprint and return 409 PLAN_CHANGED + new plan/token; no job/guard acquisition. A lost response/retry with old token cannot accept refreshed plan.
 - Overrides must equal {}; unsupported key/value returns 422 without writes.
 - Match: in one transaction CAS lifecycle+fingerprint, guard EXECUTING, one QUEUED job with idempotency/request hash/accepted fingerprint, record QUEUED/NOT_PUBLISHED, exactly three PENDING step rows. Return 202 only after commit.
@@ -44,7 +44,7 @@ Current milestone: UC3 first-deploy happy path on **AWS**, not kind/local. Terra
 
 - Preconditions: accepted preflight passed, exclusive worker ownership, stable resource scope. MVP CREATE or REUSE only; no shared binding or UPDATE.
 - Before CREATE, atomically reserve PLANNED Resource Instance, deterministic durable provider_state_reference, OWNER binding and record association. Recovery-approved reserved identity is reused; do not allocate a new identity. Before apply, write PROVISIONING, recovery_verified=false and resource version increment.
-- Provider applies only within deterministic state path/namespace/object ownership on the allowlisted AWS target; database state is separate from target bootstrap state. READY result persists infrastructure_reference, parameter/definition fingerprints, resource version and timestamps. Repository association is written before provider call so failure/partial progress is queryable.
+- Provider uses only the pinned module chosen by the accepted Resource Definition. AWS applies Aurora into the allowlisted region/subnet group/security groups; kind/local applies StatefulSet/PVC/Service to the explicit kube context. Database state is separate from bootstrap state. READY persists infrastructure_reference, fingerprints, version and timestamps.
 - REUSE inspects provider state and objects, expected identity and parameters; drift/missing object fails and requires recovery instead of implicit recreate.
 - Complete infrastructure and start CONFIGURATION_RESOLVED in one transaction. Do not recompute accepted CREATE fingerprint after reservation/provision.
 - Unknown apply outcome records resource failure/available state and retains scope RECOVERY_REQUIRED. No rollback/deletion of a created database.
@@ -52,9 +52,9 @@ Current milestone: UC3 first-deploy happy path on **AWS**, not kind/local. Terra
 ## C6. resolveEnvironmentConfiguration(snapshot, resourceReferences, workerRunId)
 
 - CONFIGURATION_RESOLVED is already RUNNING before any output collection.
-- Resource Output Collector reads provider using durable state/identity, never memory from an earlier process. Only READY resources produce non-sensitive host/port outputs.
+- Resource Output Collector reads provider using durable state/identity, never memory from an earlier process. Only READY resources produce non-sensitive endpoint/port/database/username and credential ARN/reference metadata; credential values are never outputs.
 - Workload Output Resolver uses snapshot naming policy/namespace/port to generate backend Service URL. No same-deployment runtime endpoint/cycle.
-- Resolve direct values and logical output references; Secret Materializer receives only validated secretKeyRef metadata. No credentials resolved into IDP DB or artifact.
+- Resolve direct values and logical output references. On AWS, Secret Materializer maps the provider ARN/reference to an ExternalSecret and the workload's `secretKeyRef`; on kind/local it keeps the validated Kubernetes `secretKeyRef`. No credential value enters IDP DB or artifact.
 - On success, atomically finish configuration and start MANIFEST_GENERATED. Collector/resolver failure belongs to this step and calls C10.
 
 ## C7. generateKubernetesManifest(snapshot, resolvedConfiguration)

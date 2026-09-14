@@ -2,14 +2,14 @@
 
 Tài liệu này chốt các quyết định triển khai của [MVP_SCOPE.md](MVP_SCOPE.md). Domain, schema, contracts, sequence, VOPC và state machines ở các thư mục 01–06 hiện thực cùng các quy tắc dưới đây. UC-01/02 đầy đủ và shared-resource administration là thiết kế mở rộng, không phải API cần code trong mốc này.
 
-Mốc triển khai hiện tại là **UC3 happy path trên AWS thật**, theo [prompt triển khai](plab_mvp.md). Các mục REUSE/redeploy, recovery tool và query đầy đủ bên dưới giữ làm thiết kế mốc sau, không buộc code hết trước demo lần đầu. Kind/local chỉ phục vụ phát triển hoặc chạy control plane IDP, không thay thế target cloud. Lựa chọn dịch vụ Kubernetes AWS cụ thể chưa chốt; cần cấu hình cloud/chi phí trước provision như scope quy định.
+Mốc triển khai hiện tại là **UC3 happy path trên AWS thật**, theo [prompt triển khai](plab_mvp.md). Các mục REUSE/redeploy, recovery tool và query đầy đủ bên dưới giữ làm thiết kế mốc sau, không buộc code hết trước demo lần đầu. Kind/local chỉ phục vụ phát triển hoặc chạy control plane IDP, không thay thế target cloud. Target đã chốt là EKS 1.35 với một `t3.small` On-Demand; Aurora Serverless v2 0.5–1 ACU, ECR và Argo CD local/kind.
 
 ## 1. Ranh giới và ownership
 
 - IDP Go API/worker chạy trên một máy; một worker duy nhất, được supervisor quản lý cả process group chứa Terraform/renderer. Metadata PostgreSQL, Terraform state directory và worker lock nằm trên storage bền vững, tách database ứng dụng.
 - Target được allowlist là một cluster Kubernetes trên AWS với account/region/cluster identity/context đã xác minh, namespace ứng dụng `idp-demo-dev`; mọi adapter truyền target rõ ràng, không dùng kubeconfig current-context. Không gắn target nghiệm thu vào kind hoặc chấp nhận fallback local.
-- Terraform bootstrap sở hữu hạ tầng target AWS với state riêng. Provisioner sở hữu PostgreSQL StatefulSet/PVC/Service trên target AWS, với state database riêng; Argo CD sở hữu frontend/backend Deployment/Service/ConfigMap trên AWS. Bootstrap sở hữu namespace, secret, metadata database và Argo CD. Không có object do hai controller quản lý; không tạo sẵn database ứng dụng ngoài UC3. Storage/PVC phải được kiểm chứng trên cloud; chưa yêu cầu RDS.
-- Trước provision phải ghi cấu hình EKS hoặc Kubernetes trên EC2, network/access, storage, registry, vị trí Argo CD và chi phí. Host, AWS nodes và Argo CD repo-server phải truy cập/xác thực registry được. Argo CD local phải đăng ký AWS destination rõ ràng; in-cluster kind không phải AWS. API IDP loopback hoặc frontend localhost qua tunnel là vị trí truy cập, không phải nơi chạy workload.
+- Terraform bootstrap sở hữu target Kubernetes, private network và prerequisite với state riêng. Resource Definition Resolver chọn `postgres-aurora` cho AWS; provisioner sở hữu Aurora cluster/instance và RDS-managed Secrets Manager credential bằng state resource riêng. Với kind/local, resolver chọn `postgres-kubernetes` và provisioner sở hữu StatefulSet/PVC/Service trong cluster. Argo CD sở hữu frontend/backend cùng ExternalSecret materialization trên AWS. Không có object do hai controller quản lý và không tạo sẵn database ứng dụng ngoài UC3.
+- Bootstrap tạo EKS 1.35 với một `t3.small` On-Demand trong public subnet, bật private endpoint cho node và giới hạn public API theo IP runner; không tạo NAT Gateway/load balancer. Aurora Serverless v2 0.5–1 ACU dùng private subnet group hai AZ và security group chỉ nhận từ EKS. ECR phục vụ images/OCI; Argo CD local phải đăng ký AWS destination rõ ràng. Giá nền kiểm tra khoảng 0.2314 USD/giờ tại `ap-southeast-1`, chưa gồm storage/I/O/data transfer/tax.
 - Một resource scope là `(application_id, environment, resource_requirement_id, deployment_target)`. Một deployment scope là `(application_id, environment, deployment_target)`.
 - MVP chỉ CREATE/REUSE database với parameter cố định từ catalog; `allowed_overrides = {}`, confirm chỉ nhận `overrides = {}`. UPDATE/resize/replace, cross-application sharing và secret rotation nằm ngoài scope. Yêu cầu khác trả `UNSUPPORTED_MVP_OPERATION`, không ngầm thay database.
 
@@ -23,11 +23,11 @@ Snapshot là bản sao **source input**, không chứa resolved Resource Output,
 
 Naming policy `mvp-v1` sinh Service/Deployment names từ application/workload identity, ổn định giữa các deployment. Pod template có annotation `idp.deployment-id` bằng deployment UUID. Backend Service URL được tính từ chính tên/namespace/port này; target adapter phải kiểm manifest cuối còn khớp naming policy. Frontend Go nhận URL đó, proxy `/api`; trình duyệt không dùng Service DNS.
 
-## 3. Secret reference
+## 3. Secret reference và materialization
 
-Bootstrap tạo Kubernetes Secret với tên có phiên bản, `immutable: true`, trong namespace demo. Snapshot chỉ giữ `target + namespace + name + uid + key`; adapter xác minh tồn tại, UID, immutable và key tại prepare, confirm và worker precheck. Dữ liệu Secret nếu API trả kèm chỉ được kiểm tra trong adapter rồi loại bỏ, không log/trả về service/repository. Manifest chỉ sinh `secretKeyRef`; Terraform chỉ nhận tên/key, không đọc secret value vào state.
+Với AWS, Aurora bật RDS-managed master password. Provider output chỉ trả Secrets Manager ARN/reference, không trả secret value. Snapshot giữ logical `RESOURCE_SECRET` intent gồm resource requirement/output, remote property và Kubernetes destination name/key. Sau infrastructure READY, Secret Materializer kiểm tra ARN thuộc resource/target mong đợi và sinh ExternalSecret reference; backend vẫn dùng `secretKeyRef`. IDP, Terraform input/state và OCI artifact không chứa plaintext credential.
 
-Không xóa/tạo lại hoặc rotate Secret trong một execution; UID thay đổi bị từ chối với `SECRET_REFERENCE_CHANGED`. Immutability bảo vệ nội dung, UID check phát hiện replacement trước execute; operator không được thay đổi resource ngoài IDP trong khi scope đang chạy. MVP không claim distributed atomicity giữa Kubernetes và DB.
+Với kind/local, bootstrap tạo Kubernetes Secret `immutable: true`; snapshot giữ `target + namespace + name + uid + key`, adapter xác minh tồn tại/UID/immutable/key trước confirm và worker. Không xóa/tạo lại hoặc rotate secret trong một execution. MVP không claim distributed atomicity giữa Kubernetes, AWS Secrets Manager và metadata DB.
 
 Không có stage/promote/revoke API trong MVP. R3 được hoãn theo phạm vi, không được đánh dấu đã sửa giao thức staging. Fixture loader chỉ lưu references tới permanent Secret đã tồn tại, không công bố staged configuration.
 
@@ -118,7 +118,7 @@ APPLICATION_READY chỉ SUCCEEDED khi đúng Application UID/source/revision; Ar
 
 ## 10. Giới hạn đã chọn và tài liệu nguồn
 
-Nghiệm thu mốc đầu: prepare/confirm/worker thật → Terraform provision PostgreSQL trên AWS → render/publish → Argo CD sync frontend/backend tới AWS → CRUD thành công. Lưu account/region/cluster/resource/revision và kết quả smoke test. **Xóa ngay tài nguyên AWS của task sau kiểm thử, không giữ demo chạy chờ bàn giao.** Cleanup theo dependency order: workload/CD, database, target/network/registry; giữ state cho tới khi đối chiếu inventory và AWS API xác minh cleanup. Nếu thất bại/phải dừng, lưu chẩn đoán và xác minh writer đã dừng trước teardown an toàn. Không đụng tài nguyên tồn tại trước task; báo rõ tài nguyên còn sót nếu cleanup bị chặn. Cloud bị chặn là chưa hoàn thành, không thay bằng kết quả kind.
+Nghiệm thu mốc đầu: prepare/confirm/worker thật → resolver chọn `postgres-aurora` → Terraform provision Aurora private → materialize credential reference → render/publish → Argo CD sync frontend/backend tới AWS → CRUD thành công. Lưu account/region/cluster/Aurora ARN/revision và kết quả smoke test. **Xóa ngay tài nguyên AWS của task sau kiểm thử, không giữ demo chạy chờ bàn giao.** Cleanup theo dependency order: workload/CD, Aurora, target/network/registry; giữ state cho tới khi đối chiếu inventory và AWS API xác minh cleanup. Nếu thất bại/phải dừng, lưu chẩn đoán và xác minh writer đã dừng trước teardown an toàn. Không đụng tài nguyên tồn tại trước task; báo rõ tài nguyên còn sót nếu cleanup bị chặn. Cloud bị chặn là chưa hoàn thành, không thay bằng kết quả kind.
 
 R3 staging và R9 demo không configuration được DEFERRED_MVP; không claim đã giải quyết use case tổng quát. R1/R2/R4–R8/R10 chỉ đóng ở mức thiết kế khi artifacts đồng bộ và các kịch bản ở review acceptance đi qua được; runtime acceptance cần code/test sau merge.
 
