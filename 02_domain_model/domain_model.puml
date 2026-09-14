@@ -13,6 +13,12 @@ class "Application Definition" as ApplicationDefinition <<aggregate root>> {
   updatedAt: DateTime
 }
 
+class "Application Definition Version" as ApplicationDefinitionVersion <<entity>> {
+  versionId: String
+  versionNumber: Integer
+  createdAt: DateTime
+}
+
 class "Workload" as Workload <<entity>> {
   workloadId: String
   name: String
@@ -59,7 +65,7 @@ class "Application Specification" as ApplicationSpecification <<artifact>> {
 class "Environment Configuration" as EnvironmentConfiguration <<aggregate root>> {
   environmentConfigurationId: String
   applicationId: String
-  environment: String
+  environment: STAGING | PRODUCTION
   createdAt: DateTime
   updatedAt: DateTime
 }
@@ -105,16 +111,20 @@ class "Resource Definition" as ResourceDefinition <<entity>> {
   allowedOverrides: Map
   exposedOutputs: List<String>
   sensitiveOutputs: List<String>
+  managementMode: MANAGED | EXISTING
+  applicabilityConditions: Map [0..1]
+  existingResourceReference: String [0..1]
 }
 
 class "Deployment" as Deployment <<aggregate root>> {
   deploymentId: String
   applicationId: String
-  environment: String
+  applicationDefinitionVersionId: String
+  environment: STAGING | PRODUCTION
   deploymentTarget: String
   planFingerprint: String
   planFingerprintAlgo: String
-  status: String
+  status: AWAITING_CONFIRMATION | CONFIRMED | DEPLOYING | SUCCEEDED | FAILED
   createdAt: DateTime
   updatedAt: DateTime
 }
@@ -124,6 +134,16 @@ class "Workload Deployment" as WorkloadDeployment <<entity>> {
   workloadId: String
   imageRepository: String
   imageVersion: String
+  inclusionReason: SELECTED | CASCADED
+  waveNumber: Integer
+}
+
+class "Deployment Execution Job" as DeploymentExecutionJob <<entity>> {
+  jobId: String
+  selectedOverrides: Map
+  status: String
+  createdAt: DateTime
+  updatedAt: DateTime
 }
 
 class "Deployment Context" as DeploymentContext <<value object>> {
@@ -138,6 +158,9 @@ class "Deployment Graph" as DeploymentGraph <<transient>> {
   resourceRequirementIds: List<String>
   dependencyIds: List<String>
   configurationReferenceIds: List<String>
+  scopeComponentIds: List<String>
+  waves: List<List<String>>
+  potentialRedeployComponentIds: List<String>
 }
 
 class "Resource Resolution" as ResourceResolution <<transient>> {
@@ -149,11 +172,15 @@ class "Resource Resolution" as ResourceResolution <<transient>> {
 
 class "Resource Instance" as ResourceInstance <<aggregate root>> {
   resourceInstanceId: String
+  applicationId: String
+  environment: STAGING | PRODUCTION
+  resourceRequirementId: String
   resourceDefinitionId: String
   deploymentTarget: String
   infrastructureReference: String
   providerStateReference: String [0..1]
-  status: String
+  status: PLANNED | PROVISIONING | READY | FAILED | DESTROYED | UNLINKED
+  outputFingerprint: String [0..1]
   createdAt: DateTime
   updatedAt: DateTime
 }
@@ -163,6 +190,25 @@ class "Resource Output" as ResourceOutput <<transient>> {
   outputName: String
   resolvedValue: String
   sensitive: Boolean
+}
+
+class "Workload Instance" as WorkloadInstance <<aggregate root>> {
+  workloadInstanceId: String
+  applicationId: String
+  workloadId: String
+  environment: STAGING | PRODUCTION
+  deploymentTarget: String
+  currentWorkloadDeploymentId: String
+  status: DEPLOYING | HEALTHY | FAILED | REMOVED
+  outputFingerprint: String [0..1]
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+class "Workload Output" as WorkloadOutput <<transient>> {
+  workloadInstanceId: String
+  outputName: String
+  resolvedValue: String
 }
 
 class "Resolved Configuration" as ResolvedConfiguration <<transient>> {
@@ -182,10 +228,11 @@ class "Resolved Specification" as ResolvedSpecification <<transient>> {
 
 class "Deployment Record" as DeploymentRecord <<entity>> {
   deploymentRecordId: String
-  environment: String
+  environment: STAGING | PRODUCTION
   deploymentTarget: String
   infrastructureReferences: List<String>
   deliveryReference: String [0..1]
+  removedComponents: List<String>
   status: String
   errorSummary: String [0..1]
   createdAt: DateTime
@@ -195,6 +242,7 @@ class "Deployment Record" as DeploymentRecord <<entity>> {
 class "Deployment Step" as DeploymentStep <<entity>> {
   deploymentStepId: String
   sequenceNumber: Integer
+  waveNumber: Integer
   stepName: String
   status: String
   relatedComponentReference: String [0..1]
@@ -204,10 +252,12 @@ class "Deployment Step" as DeploymentStep <<entity>> {
 }
 
 ' Application Definition aggregate
-ApplicationDefinition "1" *-- "1..*" Workload : workloads
-ApplicationDefinition "1" *-- "0..*" ResourceRequirement : resource requirements
-ApplicationDefinition "1" *-- "0..*" Dependency : dependencies
+ApplicationDefinition "1" *-- "1..*" ApplicationDefinitionVersion : immutable versions
+ApplicationDefinitionVersion "1" *-- "1..*" Workload : workloads
+ApplicationDefinitionVersion "1" *-- "0..*" ResourceRequirement : resource requirements
+ApplicationDefinitionVersion "1" *-- "0..*" Dependency : dependencies
 ApplicationDefinition "1" *-- "0..1" ApplicationSpecification : generated specification
+ApplicationDefinitionVersion "1" ..> "0..1" ApplicationSpecification : generated from
 Workload "1" *-- "0..*" EnvironmentVariableDefinition : variable definitions
 Workload "1" *-- "0..*" SecretDefinition : secret definitions
 Dependency "0..*" --> "1" Workload : source
@@ -217,6 +267,16 @@ Dependency "0..*" --> "0..1" ResourceRequirement : target resource
 note right of Dependency
   Exactly one target is set:
   Workload or Resource Requirement.
+  Dependencies of one version form an acyclic graph;
+  they define deployment order and which outputs
+  a workload may reference.
+end note
+
+note right of ApplicationDefinitionVersion
+  Every save creates a new immutable version.
+  Workload, Resource Requirement, Environment Variable
+  Definition and Secret Definition keep stable IDs
+  across versions (renaming keeps the ID).
 end note
 
 ' Environment Configuration aggregate
@@ -236,6 +296,15 @@ ConfigurationValue <|-- WorkloadOutputReference
 ResourceOutputReference "0..*" --> "1" ResourceRequirement : references
 WorkloadOutputReference "0..*" --> "1" Workload : references
 ResourceOutputReference "0..*" ..> "0..1" ResourceOutput : resolves to at deployment
+WorkloadOutputReference "0..*" ..> "0..1" WorkloadOutput : resolves to at deployment
+
+note right of EnvironmentConfiguration
+  Not versioned. Variables, secrets and output references
+  point to stable component IDs and are validated against
+  the latest version on save and against the deployed
+  version in UC-03. A referenced output must belong to a
+  component that the owning workload depends on.
+end note
 
 note right of Secret
   A Secret has exactly one source: secretReference
@@ -244,10 +313,11 @@ note right of Secret
 end note
 
 ' Deployment aggregate and execution-time objects
-Deployment "0..*" --> "1" ApplicationDefinition : deploys
+Deployment "0..*" --> "1" ApplicationDefinitionVersion : deploys
 Deployment "0..*" --> "1" EnvironmentConfiguration : uses
 Deployment "1" *-- "1..*" WorkloadDeployment : workload images
 Deployment "1" *-- "1" DeploymentContext : context
+Deployment "1" *-- "0..1" DeploymentExecutionJob : execution job
 Deployment "1" *-- "0..1" DeploymentRecord : produces
 WorkloadDeployment "0..*" --> "1" Workload : deploys
 DeploymentRecord "1" *-- "1..*" DeploymentStep : progress
@@ -266,17 +336,40 @@ ResourceResolution "0..*" --> "1" ResourceRequirement : resolves
 ResourceResolution "0..*" --> "1" ResourceDefinition : selects
 ResourceResolution "0..*" --> "0..1" ResourceInstance : create, update, or reuse
 ResourceInstance "0..*" --> "1" ResourceDefinition : instantiated from
+ResourceInstance "0..*" --> "1" ApplicationDefinition : owner application
+ResourceInstance "0..*" --> "1" ResourceRequirement : owner requirement (stable ID)
 ResourceInstance ..> ResourceOutput : exposes at runtime
 
+WorkloadInstance "0..*" --> "1" Workload : instance of (stable ID)
+WorkloadInstance "0..*" --> "1" WorkloadDeployment : currently running
+WorkloadInstance ..> WorkloadOutput : exposes at runtime
+
 note right of Deployment
-  Infrastructure Plan remains TRANSIENT.
+  Infrastructure Plan remains TRANSIENT (typed structure deferred, D3).
   Only planFingerprint and planFingerprintAlgo
   are persistent on the Deployment.
+  status is decided by IDP, never copied from CD (D5).
+  CONFIRMED always comes with exactly one Deployment Execution Job,
+  created in the same transaction.
+end note
+
+note right of ResourceInstance
+  One active instance per owner:
+  application + environment + resource requirement + target.
+  EXISTING (shared) instances only link to real infrastructure
+  and never create, update or destroy it.
+  Only an output fingerprint is stored, never output values.
+end note
+
+note right of WorkloadInstance
+  One instance per workload + environment + target.
+  Kept with status REMOVED after the workload is removed.
 end note
 
 Deployment "1" ..> "0..1" ResolvedConfiguration : resolves
 ResolvedConfiguration "1" --> "1" EnvironmentConfiguration : derived from
 ResolvedConfiguration "1" --> "0..*" ResourceOutput : consumes
+ResolvedConfiguration "1" --> "0..*" WorkloadOutput : consumes
 Deployment "1" ..> "0..1" ResolvedSpecification : generates
 ResolvedSpecification "1" *-- "1" ResolvedConfiguration : embeds
 
