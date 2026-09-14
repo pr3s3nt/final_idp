@@ -21,6 +21,15 @@ note over API, SecretStore
   are internal query/integration messages, not UC system operations.
 end note
 
+note over UI, AppRepo
+  Every application has exactly two environments: STAGING and PRODUCTION.
+  Configuration is not versioned: it is validated against the latest
+  Application Definition version on save and re-validated against the
+  deployed version in UC-03. References use stable component IDs.
+  For each variable or secret, the UI only offers resources and workloads
+  that the owning workload depends on.
+end note
+
 note right of SecretStore
   Secret values are stored securely.
   Only a Secret reference is returned and persisted
@@ -29,11 +38,11 @@ note right of SecretStore
 end note
 
 Developer -> UI: Open application Configuration page
-Developer -> UI: Select environment
+Developer -> UI: Select environment (staging or production)
 UI -> API: selectEnvironment(applicationId, environment)
 API -> Service: selectEnvironment(applicationId, environment)
 Service -> AppRepo: loadConfigurationRequirements(applicationId)
-AppRepo --> Service: Workloads, variables, secrets, dependencies
+AppRepo --> Service: Workloads, variables, secrets and dependencies\nof the latest Application Definition version
 Service --> API: Configuration requirements
 API --> UI: Display variables and secrets by workload
 
@@ -44,7 +53,7 @@ loop For each Environment Variable
         UI -> API: setDirectConfigurationValue(variable, value)
         API -> Service: setDirectConfigurationValue(variable, value)
     else Resource Output
-        Developer -> UI: Select resource
+        Developer -> UI: Select a resource that the workload depends on
         UI -> API: requestResourceOutputs(resource)
         API -> Service: requestResourceOutputs(resource)
         Service -> ResourceCatalog: listValidOutputs(resource)
@@ -55,7 +64,7 @@ loop For each Environment Variable
         UI -> API: bindResourceOutput(variable, resource, output)
         API -> Service: bindResourceOutput(variable, resource, output)
     else Workload Output
-        Developer -> UI: Select workload and output
+        Developer -> UI: Select a workload that the workload depends on
         UI -> API: requestWorkloadOutputs(workload)
         API -> Service: requestWorkloadOutputs(workload)
         Service -> WorkloadCatalog: listValidOutputs(workload)
@@ -77,7 +86,7 @@ loop For each Secret
         Service -> SecretStore: storeSecret(applicationId, environment, secretValue)
         SecretStore --> Service: Secret reference
     else Sensitive Resource Output
-        Developer -> UI: Select resource and sensitive output
+        Developer -> UI: Select a resource that the workload depends on\nand its sensitive output
         UI -> API: requestResourceOutputs(resource)
         API -> Service: requestResourceOutputs(resource)
         Service -> ResourceCatalog: listValidSensitiveOutputs(resource)
@@ -94,6 +103,11 @@ Developer -> UI: Select Save Configuration
 UI -> API: saveEnvironmentConfiguration(configuration)
 API -> Service: saveEnvironmentConfiguration(configuration)
 Service -> Validator: validateEnvironmentConfiguration(configuration)
+note right of Validator
+  Checks required values and valid outputs, and that every
+  referenced output belongs to a resource or workload that the
+  owning workload depends on in the latest Application Definition version.
+end note
 Validator --> Service: Validation successful
 Service -> ConfigRepo: save(configuration with value references)
 ConfigRepo --> Service: Environment Configuration saved

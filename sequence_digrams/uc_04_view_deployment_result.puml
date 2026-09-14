@@ -10,6 +10,7 @@ control "Deployment Query API / Controller" as API
 control "Deployment Query Service" as QueryService
 entity "Deployment Repository" as DeploymentRepo
 entity "Resource Instance Repository" as ResourceRepo
+entity "Workload Instance Repository" as WorkloadInstanceRepo
 participant "CD Integration / CD Status Provider" as CDStatusProvider <<interface>>
 control "Concrete CD Provider" as CDProvider
 participant "CD System" as CDSystem
@@ -30,11 +31,19 @@ UI -> API: getDeploymentDetail(deploymentId)
 API -> QueryService: getDeploymentDetail(deploymentId)
 
 QueryService -> DeploymentRepo: getDeploymentDetail(deploymentId)
-DeploymentRepo --> QueryService: Deployment Record and target
+DeploymentRepo --> QueryService: Deployment Record, environment, target\nand Application Definition version
 QueryService -> DeploymentRepo: getDeploymentProgress(deploymentId)
-DeploymentRepo --> QueryService: Deployment progress
+DeploymentRepo --> QueryService: Deployment progress by wave and component
 QueryService -> DeploymentRepo: getDeploymentImages(deploymentId)
-DeploymentRepo --> QueryService: Actual workload images and versions
+DeploymentRepo --> QueryService: Actual workload images and versions,\nselected or cascaded, and removed components
+QueryService -> WorkloadInstanceRepo: findWorkloadInstances(applicationId,\nenvironment, target)
+WorkloadInstanceRepo --> QueryService: Currently running workload deployment per workload\n(is this deployment still the running one?)
+note right of WorkloadInstanceRepo
+  Progress is read from persisted steps; who writes them
+  and when is deferred (D4). Guards for the live CD and
+  Kubernetes calls below are deferred (D2); this change
+  adds no new external call.
+end note
 QueryService -> ResourceRepo: getInfrastructureStatus(infrastructureReferences)
 ResourceRepo --> QueryService: Infrastructure status
 QueryService -> CDStatusProvider: getCDStatus(deliveryReference)
@@ -52,10 +61,10 @@ WorkloadProvider -> Kubernetes: Query exposed endpoints
 Kubernetes --> WorkloadProvider: Endpoints
 WorkloadProvider --> QueryService: Deployment endpoints
 
-QueryService -> Aggregator: aggregate(deploymentRecord, progress, images,\ninfrastructureStatus, cdStatus, workloadStatus, endpoints)
+QueryService -> Aggregator: aggregate(deploymentRecord, version, progress, images,\nworkloadInstances, infrastructureStatus, cdStatus, workloadStatus, endpoints)
 Aggregator --> QueryService: Deployment result view model
 QueryService --> API: Deployment result
-API --> UI: Display environment, target, images, progress,\ninfrastructure, CD status, workload health and endpoints
+API --> UI: Display environment, target, version, images (selected or cascaded),\nremoved components, progress by wave, infrastructure, CD status,\nworkload health and endpoints
 
 opt Deployment failed (A1)
   UI -> API: getDeploymentFailureDetail(deploymentId)

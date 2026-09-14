@@ -8,12 +8,15 @@ actor Developer
 boundary "Web UI" as UI
 control "Deployment API / Controller" as API
 control "Deployment Orchestrator" as Orchestrator
+control "Deployment Worker" as Worker
 entity "Application Repository" as AppRepo
 entity "Environment Configuration Repository" as ConfigRepo
 control "Deployment Graph Builder" as GraphBuilder
+control "Deployment Wave Planner" as WavePlanner
 control "Resource Definition Resolver" as ResourceResolver
 control "Infrastructure Planner" as InfraPlanner
 entity "Resource Instance Repository" as ResourceRepo
+entity "Workload Instance Repository" as WorkloadInstanceRepo
 control "Infrastructure Reconciler" as InfraReconciler
 participant "Provisioner Adapter" as Provisioner <<interface>>
 participant "Terraform/OpenTofu Runner" as IaCRunner
@@ -29,33 +32,53 @@ participant "CD Integration / CD Provider Interface" as CDIntegration <<interfac
 control "Concrete CD Provider" as CDProvider
 participant "CD System" as CDSystem
 participant "Kubernetes Cluster" as Kubernetes
+participant "Workload Status Provider /\nKubernetes Adapter" as WorkloadStatusProvider <<interface>>
+control "Workload Output Collector" as WorkloadOutputCollector
 entity "Deployment Repository" as DeploymentRepo
 
 Developer -> UI: Select Deploy Application
-Developer -> UI: Select environment and deployment target
+Developer -> UI: Select environment (staging or production)\nand deployment target
 UI -> API: loadDeploymentForm(applicationId, environment, target)
 API -> Orchestrator: loadDeploymentContext(applicationId, environment, target)
-Orchestrator -> AppRepo: findById(applicationId)
-AppRepo --> Orchestrator: Application Definition and workloads
-Orchestrator --> API: Workloads and image repositories
-API --> UI: Display workloads and image repositories
+Orchestrator -> AppRepo: listVersions(applicationId)
+AppRepo --> Orchestrator: Application Definition versions
+Orchestrator -> WorkloadInstanceRepo: findWorkloadInstances(applicationId,\nenvironment, target)
+WorkloadInstanceRepo --> Orchestrator: Running version, workloads and images
+Orchestrator --> API: Versions, running version, workloads,\nimage repositories and running images
+API --> UI: Display deployment form
 
-Developer -> UI: Select or confirm image version\nfor each workload
+Developer -> UI: Select Application Definition version,\nworkloads to deploy and image version for each
 Developer -> UI: Enter remaining deployment context
-UI -> API: createDeployment(applicationId, environment,\ntarget, images, context)
-API -> Orchestrator: createDeployment(applicationId, environment,\ntarget, images, context)
+UI -> API: createDeployment(applicationId, version, environment,\ntarget, images, context)
+API -> Orchestrator: createDeployment(applicationId, version, environment,\ntarget, images, context)
+Orchestrator -> AppRepo: findVersion(applicationId, version)
+AppRepo --> Orchestrator: Selected Application Definition version
 Orchestrator -> ConfigRepo: findByApplicationAndEnvironment(applicationId, environment)
 ConfigRepo --> Orchestrator: Environment Configuration
 Orchestrator -> Orchestrator: validateDeploymentInput()
+note right of Orchestrator
+  Configuration must match the selected version: required values are set
+  and no reference points to a component missing from the version or not
+  depended on in it. Partial deployment is allowed only when the selected
+  version equals the version running on this environment and target.
+end note
 
-Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinition,\nconfiguration, images, context)
-GraphBuilder --> Orchestrator: Deployment graph
+Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinitionVersion,\nconfiguration, images, context)
+GraphBuilder --> Orchestrator: Deployment graph (no depends-on cycle)
+Orchestrator -> WavePlanner: planDeploymentWaves(graph, selectedWorkloads,\nrunningWorkloadInstances)
+WavePlanner --> Orchestrator: Scope, ordered waves and components\nthat may be redeployed
 Orchestrator -> ResourceResolver: resolveResourceDefinitions(graph, context)
-ResourceResolver --> Orchestrator: Resolved Resource Definitions
-Orchestrator -> ResourceRepo: findResourceInstances(resolvedResources, target)
-ResourceRepo --> Orchestrator: Current resource instances
-Orchestrator -> InfraPlanner: planInfrastructureChanges(graph,\nresolvedDefinitions, currentInstances)
-InfraPlanner --> Orchestrator: Infrastructure plan (create/update/reuse)
+ResourceResolver --> Orchestrator: Resolved Resource Definitions\n(MANAGED or EXISTING)
+Orchestrator -> ResourceRepo: findResourceInstances(applicationId, environment,\nresourceRequirementIds, target)
+ResourceRepo --> Orchestrator: Resource instances of this owner,\nincluding those no longer in the version
+Orchestrator -> InfraPlanner: planInfrastructureChanges(graph, waves,\nresolvedDefinitions, currentInstances, runningWorkloadInstances)
+InfraPlanner --> Orchestrator: Infrastructure plan
+note right of InfraPlanner
+  Conceptual plan content (typed structure deferred, D3):
+  per wave, resources to CREATE, UPDATE, REUSE or link to an
+  EXISTING shared resource; for a new version, workloads to REMOVE,
+  managed resources to DESTROY and shared resources to UNLINK.
+end note
 Orchestrator -> InfraPlanner: loadInfrastructureOverrides(plan)
 InfraPlanner --> Orchestrator: Allowed override parameters from\nresource_definition.allowed_overrides
 Orchestrator -> Orchestrator: computePlanFingerprint(plan, allowedOverrides, "sha256-v1")
@@ -71,33 +94,35 @@ note right of Orchestrator
   target. Changes to those Resource Definition fields change the fingerprint
   directly; no version column is used.
 end note
-Orchestrator -> DeploymentRepo: persistDeployment(deployment, workloadDeployments,\ndeploymentContext, planFingerprint, planFingerprintAlgo,\nAWAITING_CONFIRMATION)
+Orchestrator -> DeploymentRepo: persistDeployment(deployment, applicationDefinitionVersion,\nworkloadDeployments, deploymentContext, planFingerprint,\nplanFingerprintAlgo, AWAITING_CONFIRMATION)
 DeploymentRepo --> Orchestrator: Deployment aggregate persisted
-Orchestrator --> API: Infrastructure plan, allowed overrides, fingerprint, and algorithm
-API --> UI: Display infrastructure plan, overrides, fingerprint, and algorithm
+Orchestrator --> API: Waves, infrastructure plan (including removals),\ncomponents that may be redeployed, allowed overrides,\nfingerprint and algorithm
+API --> UI: Display waves, plan with data-loss warnings for DESTROY,\ncomponents that may be redeployed, overrides,\nfingerprint and algorithm
 
 Developer -> UI: Set permitted overrides and select Deploy
 UI -> API: confirmDeployment(deploymentId, overrides)
 API -> Orchestrator: confirmDeployment(deploymentId, overrides)
 Orchestrator -> DeploymentRepo: findByIdWithPersistedInputs(deploymentId)
-DeploymentRepo --> Orchestrator: Deployment, workload images, context,\nstored fingerprint and algorithm
+DeploymentRepo --> Orchestrator: Deployment, Application Definition version,\nworkload images, context, stored fingerprint and algorithm
 Orchestrator -> Orchestrator: check status = AWAITING_CONFIRMATION
 
 alt [status != AWAITING_CONFIRMATION]
   Orchestrator --> API: Error DEPLOYMENT_ALREADY_CONFIRMED
   API --> UI: Display confirmation conflict
 else [status = AWAITING_CONFIRMATION]
-  Orchestrator -> AppRepo: findById(deployment.applicationId)
-  AppRepo --> Orchestrator: Current Application Definition and workloads
+  Orchestrator -> AppRepo: findVersion(deployment.applicationId,\ndeployment.applicationDefinitionVersion)
+  AppRepo --> Orchestrator: Deployed Application Definition version
   Orchestrator -> ConfigRepo: findById(deployment.environmentConfigurationId)
   ConfigRepo --> Orchestrator: Persisted Environment Configuration
-  Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinition,\nconfiguration, workloadImages, context)
+  Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinitionVersion,\nconfiguration, workloadImages, context)
   GraphBuilder --> Orchestrator: Rebuilt deployment graph
+  Orchestrator -> WavePlanner: planDeploymentWaves(graph, selectedWorkloads,\nrunningWorkloadInstances)
+  WavePlanner --> Orchestrator: Rebuilt scope and waves
   Orchestrator -> ResourceResolver: resolveResourceDefinitions(graph, context)
   ResourceResolver --> Orchestrator: Current resolved Resource Definitions
-  Orchestrator -> ResourceRepo: findResourceInstances(resolvedResources,\ndeployment.deploymentTarget)
-  ResourceRepo --> Orchestrator: Current resource instances
-  Orchestrator -> InfraPlanner: planInfrastructureChanges(graph,\nresolvedDefinitions, currentInstances)
+  Orchestrator -> ResourceRepo: findResourceInstances(deployment.applicationId,\ndeployment.environment, resourceRequirementIds,\ndeployment.deploymentTarget)
+  ResourceRepo --> Orchestrator: Current resource instances of this owner
+  Orchestrator -> InfraPlanner: planInfrastructureChanges(graph, waves,\nresolvedDefinitions, currentInstances, runningWorkloadInstances)
   InfraPlanner --> Orchestrator: Rebuilt infrastructure plan
   Orchestrator -> InfraPlanner: loadInfrastructureOverrides(rebuiltPlan)
   InfraPlanner --> Orchestrator: Current allowed override parameters from\nresource_definition.allowed_overrides
@@ -110,77 +135,166 @@ else [status = AWAITING_CONFIRMATION]
     API --> UI: Re-present changed plan for review and re-confirmation
   else [rebuiltPlanFingerprint = storedFingerprint]
     Orchestrator -> InfraPlanner: applyInfrastructureOverrides(rebuiltPlan, overrides)\n(validate permitted set/type/range first)
-    InfraPlanner --> Orchestrator: Final infrastructure plan
-    Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId,\nAWAITING_CONFIRMATION, CONFIRMED) <<atomic CAS>>
+    InfraPlanner --> Orchestrator: Validated overrides
+    Orchestrator -> DeploymentRepo: confirmDeploymentAndCreateJob(deploymentId,\nAWAITING_CONFIRMATION, overrides) <<single transaction>>
+    note right of DeploymentRepo
+      In one DB transaction: atomic compare-and-swap of deployment.status
+      from AWAITING_CONFIRMATION to CONFIRMED, and creation of a deployment
+      execution job holding the selected override values. There is never a
+      CONFIRMED deployment without a job, nor a job without CONFIRMED.
+    end note
     DeploymentRepo --> Orchestrator: Affected row count
 
     alt [affected rows = 0]
       Orchestrator --> API: Error DEPLOYMENT_ALREADY_CONFIRMED
       API --> UI: Display confirmation conflict
     else [affected rows = 1]
-      Orchestrator -> InfraReconciler: reconcileInfrastructure(finalPlan)
-InfraReconciler -> Provisioner: reconcile(finalPlan)
-Provisioner -> IaCRunner: apply infrastructure modules
-IaCRunner --> Provisioner: Infrastructure ready and raw outputs
-Provisioner --> InfraReconciler: Resource state and outputs
-InfraReconciler -> ResourceRepo: saveResourceInstances(resourceState)
-ResourceRepo --> InfraReconciler: Resource instances saved
-InfraReconciler --> Orchestrator: Infrastructure references
-Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, INFRASTRUCTURE_READY)
-DeploymentRepo --> Orchestrator: Deployment status persisted
-
-Orchestrator -> OutputCollector: collectResourceOutputs(infrastructureReferences)
-OutputCollector -> ResourceRepo: loadResourceOutputs(infrastructureReferences)
-ResourceRepo --> OutputCollector: Resource outputs
-OutputCollector --> Orchestrator: Collected Resource Outputs
-
-Orchestrator -> ConfigResolver: resolveEnvironmentConfiguration(configuration,\nresourceOutputs, workloadOutputs)
-note right of ConfigResolver
-  workloadOutputs are logical outputs obtained from
-  the deployment graph; they do not require a separate
-  output collection step in this sequence.
-end note
-ConfigResolver --> Orchestrator: Resolved configuration and dependencies
-Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, CONFIGURATION_RESOLVED)
-DeploymentRepo --> Orchestrator: Deployment status persisted
-Orchestrator -> SpecGenerator: generateResolvedApplicationSpecification(\napplicationDefinition, workloadImages, resolvedConfiguration)
-SpecGenerator --> Orchestrator: Resolved application specification
-
-Orchestrator -> ManifestGenerator: generateKubernetesManifest(resolvedSpecification)
-ManifestGenerator -> ScoreK8s: render(resolvedSpecification)
-ScoreK8s --> ManifestGenerator: Base Kubernetes manifest
-ManifestGenerator --> Orchestrator: Base Kubernetes manifest
-Orchestrator -> TargetAdapter: adaptManifestForTarget(baseManifest,\ndeployment.deploymentTarget)
-TargetAdapter --> Orchestrator: Target-adapted manifest
-Orchestrator -> ConfigMaterializer: materializeEnvironmentConfiguration(\ntargetAdaptedManifest, resolvedEnvironmentVariables)
-ConfigMaterializer --> Orchestrator: Manifest with environment configuration
-Orchestrator -> SecretMaterializer: materializeSecretConfiguration(\nmanifestWithEnvironmentConfiguration, resolvedSecrets)
-SecretMaterializer --> Orchestrator: Desired deployment state
-note over ConfigMaterializer, SecretMaterializer
-  The target-adapted manifest becomes Desired Deployment State
-  only after resolved environment variables and secret values
-  or secret references have been fully materialized.
-end note
-
-Orchestrator -> CDIntegration: publishDesiredDeploymentState(desiredState)
-CDIntegration -> CDProvider: publish(desiredState)
-CDProvider -> CDSystem: synchronize(desiredState)
-CDSystem -> Kubernetes: Deploy workloads and configuration
-Kubernetes --> CDSystem: Deployment accepted
-CDSystem --> CDProvider: Synchronization started
-CDProvider --> CDIntegration: Delivery reference and status
-CDIntegration --> Orchestrator: Delivery reference and status
-Orchestrator -> DeploymentRepo: updateDeploymentStatus(deploymentId, SUBMITTED)
-DeploymentRepo --> Orchestrator: Deployment status persisted
-
-Orchestrator -> DeploymentRepo: saveDeploymentRecord(deployment.environment,\ndeployment.deploymentTarget, workloadImages,\ninfrastructureReferences, deliveryStatus)
-DeploymentRepo --> Orchestrator: Deployment Record saved
-Orchestrator --> API: Deployment created
-API --> UI: Display deployment tracking information
-UI --> Developer: Deployment submitted
-
+      Orchestrator --> API: Deployment accepted
+      API --> UI: Display deployment tracking (UC-04)
+      UI --> Developer: Deployment accepted and running in the background
     end
   end
 end
+
+== Deployment Worker (background execution) ==
+
+Worker -> DeploymentRepo: claimNextExecutionJob()
+DeploymentRepo --> Worker: Execution job (deploymentId, selected overrides)
+note right of Worker
+  Recovery when a worker dies in the middle of a job
+  (lease, retry, resume) is deferred (D6).
+end note
+Worker -> DeploymentRepo: updateDeploymentStatus(deploymentId, CONFIRMED, DEPLOYING)
+DeploymentRepo --> Worker: Deployment status persisted
+Worker -> DeploymentRepo: findByIdWithPersistedInputs(deploymentId)
+DeploymentRepo --> Worker: Deployment, Application Definition version,\nworkload images and context
+Worker -> AppRepo: findVersion(deployment.applicationId,\ndeployment.applicationDefinitionVersion)
+AppRepo --> Worker: Deployed Application Definition version
+Worker -> ConfigRepo: findById(deployment.environmentConfigurationId)
+ConfigRepo --> Worker: Environment Configuration
+Worker -> GraphBuilder: buildDeploymentGraph(applicationDefinitionVersion,\nconfiguration, workloadImages, context)
+GraphBuilder --> Worker: Deployment graph
+Worker -> WavePlanner: planDeploymentWaves(graph, selectedWorkloads,\nrunningWorkloadInstances)
+WavePlanner --> Worker: Scope and ordered waves
+Worker -> ResourceResolver: resolveResourceDefinitions(graph, context)
+ResourceResolver --> Worker: Resolved Resource Definitions
+Worker -> ResourceRepo: findResourceInstances(deployment.applicationId,\ndeployment.environment, resourceRequirementIds,\ndeployment.deploymentTarget)
+ResourceRepo --> Worker: Current resource instances of this owner
+Worker -> InfraPlanner: planInfrastructureChanges(graph, waves,\nresolvedDefinitions, currentInstances, runningWorkloadInstances)
+InfraPlanner --> Worker: Infrastructure plan
+Worker -> InfraPlanner: applyInfrastructureOverrides(plan, job.overrides)
+InfraPlanner --> Worker: Final infrastructure plan
+Worker -> WorkloadOutputCollector: collectWorkloadOutputs(deployment.deploymentTarget,\nrunningDependenciesOutsideScope)
+WorkloadOutputCollector -> WorkloadStatusProvider: readWorkloadOutputs(target, workloads)
+WorkloadStatusProvider -> Kubernetes: Read runtime data of running workloads
+Kubernetes --> WorkloadStatusProvider: Runtime data
+WorkloadStatusProvider --> WorkloadOutputCollector: Runtime data
+WorkloadOutputCollector --> Worker: Outputs of running dependencies outside the scope
+note right of WorkloadOutputCollector
+  The concrete mechanism for reading
+  workload outputs is not decided yet (deferred).
+end note
+
+loop For each wave, in dependency order
+  opt [wave contains resources]
+    Worker -> InfraReconciler: reconcileInfrastructure(finalPlan, wave)
+    alt [Resource Definition is MANAGED]
+      InfraReconciler -> Provisioner: reconcile(waveResourceItems)
+      Provisioner -> IaCRunner: apply infrastructure modules
+      IaCRunner --> Provisioner: Infrastructure ready and raw outputs
+      Provisioner --> InfraReconciler: Resource state and outputs
+    else [Resource Definition is EXISTING (shared)]
+      InfraReconciler -> InfraReconciler: Link to the existing shared resource\n(no provisioning, real infrastructure untouched)
+    end
+    InfraReconciler -> ResourceRepo: saveResourceInstances(resourceState)\n(owner key, READY)
+    ResourceRepo --> InfraReconciler: Resource instances saved
+    InfraReconciler --> Worker: Infrastructure references
+    Worker -> OutputCollector: collectResourceOutputs(infrastructureReferences)
+    OutputCollector -> ResourceRepo: loadResourceOutputs(infrastructureReferences)
+    ResourceRepo --> OutputCollector: Resource outputs
+    OutputCollector --> Worker: Collected Resource Outputs
+  end
+
+  opt [wave contains workloads]
+    Worker -> ConfigResolver: resolveEnvironmentConfiguration(configuration,\nwaveWorkloads, resourceOutputs, workloadOutputs)
+    ConfigResolver --> Worker: Resolved configuration for the wave's workloads
+    Worker -> SpecGenerator: generateResolvedApplicationSpecification(\napplicationDefinitionVersion, workloadImages, resolvedConfiguration)
+    SpecGenerator --> Worker: Resolved application specification
+    Worker -> ManifestGenerator: generateKubernetesManifest(resolvedSpecification)
+    ManifestGenerator -> ScoreK8s: render(resolvedSpecification)
+    ScoreK8s --> ManifestGenerator: Base Kubernetes manifest
+    ManifestGenerator --> Worker: Base Kubernetes manifest
+    Worker -> TargetAdapter: adaptManifestForTarget(baseManifest,\ndeployment.deploymentTarget)
+    TargetAdapter --> Worker: Target-adapted manifest
+    Worker -> ConfigMaterializer: materializeEnvironmentConfiguration(\ntargetAdaptedManifest, resolvedEnvironmentVariables)
+    ConfigMaterializer --> Worker: Manifest with environment configuration
+    Worker -> SecretMaterializer: materializeSecretConfiguration(\nmanifestWithEnvironmentConfiguration, resolvedSecrets)
+    SecretMaterializer --> Worker: Desired deployment state
+    Worker -> CDIntegration: publishDesiredDeploymentState(desiredState)
+    CDIntegration -> CDProvider: publish(desiredState)
+    CDProvider -> CDSystem: synchronize(desiredState)
+    CDSystem -> Kubernetes: Deploy workloads and configuration
+    Kubernetes --> CDSystem: Deployment accepted
+    CDSystem --> CDProvider: Synchronization started
+    CDProvider --> CDIntegration: Delivery reference
+    CDIntegration --> Worker: Delivery reference
+    Worker -> WorkloadInstanceRepo: saveWorkloadInstances(waveWorkloads, DEPLOYING)
+    WorkloadInstanceRepo --> Worker: Workload instances saved
+    Worker -> WorkloadStatusProvider: waitForWorkloadsHealthy(deployment.deploymentTarget,\nwaveWorkloads)
+    WorkloadStatusProvider -> Kubernetes: Watch pod health
+    Kubernetes --> WorkloadStatusProvider: Pods healthy
+    WorkloadStatusProvider --> Worker: All workloads of the wave are healthy
+    Worker -> WorkloadOutputCollector: collectWorkloadOutputs(deployment.deploymentTarget,\nwaveWorkloads)
+    WorkloadOutputCollector -> WorkloadStatusProvider: readWorkloadOutputs(target, waveWorkloads)
+    WorkloadStatusProvider --> WorkloadOutputCollector: Runtime data
+    WorkloadOutputCollector --> Worker: Workload Outputs of the wave
+  end
+
+  Worker -> WavePlanner: propagateOutputChanges(waves, waveComponents, collectedOutputs)
+  WavePlanner -> ResourceRepo: loadOutputFingerprints(waveResources)
+  ResourceRepo --> WavePlanner: Previous output fingerprints
+  WavePlanner -> WorkloadInstanceRepo: loadOutputFingerprintsAndRunningImages(\nwaveWorkloads, dependents)
+  WorkloadInstanceRepo --> WavePlanner: Previous fingerprints and running images of dependents
+  WavePlanner --> Worker: Remaining waves; dependents added with their running\nimage version when an output changed
+  Worker -> ResourceRepo: updateOutputFingerprints(waveResources)
+  Worker -> WorkloadInstanceRepo: updateWorkloadInstances(waveWorkloads,\nHEALTHY, outputFingerprints)
+  note right of Worker
+    Progress per wave, component and step is recorded
+    (who writes it and when is deferred, D4).
+    deployment.status never takes values reported by CD (D5).
+  end note
+end
+
+note right of Worker
+  Desired state published in earlier waves still keeps workloads
+  that are not in the deployed version; they are dropped only in
+  the final publish of the removal step below.
+end note
+
+opt [deployed version no longer contains some running components]
+  Worker -> CDIntegration: publishDesiredDeploymentState(\ndesiredStateWithoutRemovedWorkloads)
+  CDIntegration --> Worker: Delivery reference
+  Worker -> WorkloadInstanceRepo: updateWorkloadInstances(removedWorkloads, REMOVED)
+  Worker -> InfraReconciler: reconcileInfrastructure(finalPlan, removals)
+  alt [managed resource]
+    InfraReconciler -> Provisioner: destroy(resourceItems)
+    Provisioner -> IaCRunner: destroy infrastructure modules
+    IaCRunner --> Provisioner: Infrastructure destroyed
+    Provisioner --> InfraReconciler: Resource state
+    InfraReconciler -> ResourceRepo: saveResourceInstances(resourceState, DESTROYED)
+  else [shared EXISTING resource]
+    InfraReconciler -> ResourceRepo: saveResourceInstances(resourceState, UNLINKED)\n(real infrastructure untouched)
+  end
+  InfraReconciler --> Worker: Removal result
+end
+
+Worker -> DeploymentRepo: saveDeploymentRecord(deployment, workloadImages,\ninfrastructureReferences, deliveryReferences, removedComponents)
+DeploymentRepo --> Worker: Deployment Record saved
+Worker -> DeploymentRepo: updateDeploymentStatus(deploymentId, DEPLOYING, SUCCEEDED)
+DeploymentRepo --> Worker: Deployment status persisted
+note right of Worker
+  Main flow only. On a failure in any wave or in the removal step (A2),
+  the Worker stops the remaining work and sets deployment.status to FAILED.
+end note
 
 @enduml

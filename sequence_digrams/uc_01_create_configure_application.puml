@@ -23,9 +23,9 @@ alt Create a new application
 else Update an existing application
     UI -> API: updateApplication(applicationId)
     API -> Service: updateApplication(applicationId)
-    Service -> AppRepo: findById(applicationId)
-    AppRepo --> Service: Application Definition
-    Service --> API: Editable Application Definition draft
+    Service -> AppRepo: findLatestVersion(applicationId)
+    AppRepo --> Service: Latest Application Definition version\n(components with stable IDs)
+    Service --> API: Editable Application Definition draft\nbased on the latest version
     API --> UI: Display application editor
 end
 
@@ -54,14 +54,23 @@ UI -> API: saveApplicationDefinition(applicationDefinition)
 API -> Service: saveApplicationDefinition(applicationDefinition)
 Service -> Validator: validateApplicationDefinition(applicationDefinition)
 Validator --> Service: Validation successful
-Service -> AppRepo: save(applicationDefinition)
-AppRepo --> Service: Saved Application Definition
-Service -> SpecGenerator: generateApplicationSpecification(applicationDefinition)
+Service -> AppRepo: saveNewVersion(applicationDefinition)
+AppRepo --> Service: New Application Definition version saved
+note right of AppRepo
+  Every save creates a new immutable version.
+  Existing versions are never updated or deleted.
+  Workloads, resources, environment variable definitions
+  and secret definitions keep stable IDs across versions:
+  renaming keeps the ID; removing a component only means
+  the new version no longer contains it.
+  No environment changes until the version is deployed (UC-03).
+end note
+Service -> SpecGenerator: generateApplicationSpecification(applicationDefinitionVersion)
 SpecGenerator --> Service: Application specification (for example, score.yaml)
 Service -> SpecRepo: save(applicationSpecification)
 SpecRepo --> Service: Specification saved
-Service --> API: Application saved
+Service --> API: Application version saved
 API --> UI: Show save confirmation
-UI --> Developer: Application Definition and specification saved
+UI --> Developer: New Application Definition version and specification saved
 
 @enduml
