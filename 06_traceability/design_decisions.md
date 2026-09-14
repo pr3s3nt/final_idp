@@ -2,7 +2,9 @@
 
 Tài liệu này ghi lại quyết định cho từng vấn đề thiết kế khi rà soát lại tài liệu trên nhánh `refine_design` (bắt đầu từ `11ad582`). Danh sách 11 vấn đề lấy theo commit message của `88585cc`; các cách sửa trong commit đó chỉ dùng để tham khảo, chưa được xác nhận là đúng.
 
-Cách làm: bàn và chốt lần lượt từng vấn đề, ghi quyết định vào đây; sau khi chốt hết mới sửa tài liệu một lượt theo thứ tự **use case → sequence diagram → VOPC → domain model → ERD → operation contracts → state machine → traceability**.
+Cách làm: bàn và chốt lần lượt từng vấn đề, ghi quyết định vào đây; sau khi chốt hết mới sửa tài liệu một lượt theo thứ tự **use case realization → sequence diagram → VOPC → domain model → ERD → operation contracts → state machine → traceability**.
+
+"Use case realization" là file `usecase_realization_step_1_3.md`, gồm bốn phần phải rà đủ cho mỗi vấn đề: **đặc tả use case** (UC-01 → UC-04), **Bước 1** chốt trách nhiệm của từng use case, **Bước 2** xác định system operation chính, **Bước 3** xác định các thành phần tham gia.
 
 ## Tổng quan
 
@@ -97,7 +99,13 @@ Dùng chung trong cùng app + environment đã có sẵn trong thiết kế: nhi
 
 **Đã áp dụng:** chưa sửa file nào.
 
-**Sẽ ảnh hưởng:** use case UC-03 (quy tắc nghiệp vụ về reuse/dùng chung), sequence UC-03, VOPC (`Resource Instance Repository`), domain model (Resource Instance, Resource Definition), ERD (`resource_instance`, `resource_definition`), operation contracts 4–6, state machine Resource Instance (instance trỏ resource có sẵn không đi qua provisioning), traceability.
+**Sẽ ảnh hưởng:**
+
+- `usecase_realization_step_1_3.md`:
+  - Đặc tả UC-03: quy tắc nghiệp vụ về tìm resource để dùng lại theo chủ sở hữu và dùng chung khai báo ở Resource Definition.
+  - Bước 2 UC-03: mô tả `resolveResourceDefinitions()`, `planInfrastructureChanges()`, `reconcileInfrastructure()` (tìm theo đủ bộ chủ sở hữu; resource loại `EXISTING` chỉ đọc output).
+  - Bước 3 UC-03: Resource Definition Resolver, Infrastructure Planner, Infrastructure Reconciler, Resource Instance Repository.
+- Các artifact khác: sequence UC-03, VOPC (`Resource Instance Repository`), domain model (Resource Instance, Resource Definition), ERD (`resource_instance`, `resource_definition`), operation contracts 4–6, state machine Resource Instance (instance trỏ resource có sẵn không đi qua provisioning), traceability.
 
 ## Vấn đề 4 — UC-04 gọi hệ thống bên ngoài mà không kiểm tra điều kiện
 
@@ -159,7 +167,17 @@ Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã worklo
 - Ví dụ environment `dev staging production` trong UC-02 đổi thành `staging`, `production`.
 - Liên quan vấn đề 9: environment trở thành tập giá trị cố định.
 
-**Sẽ ảnh hưởng:** use case UC-01, UC-02, UC-03; sequence UC-01, UC-03; VOPC; domain model (Application Definition có phiên bản, Deployment trỏ phiên bản); ERD (bảng phiên bản, identity logic); operation contracts 1, 3, 4, 5; state machine Deployment (nếu cần); traceability.
+**Sẽ ảnh hưởng:**
+
+- `usecase_realization_step_1_3.md`:
+  - Đặc tả UC-01: Save tạo phiên bản mới; A1 chỉ còn lỗi nội bộ phiên bản; quy tắc nghiệp vụ về phiên bản.
+  - Đặc tả UC-02: environment cố định `staging`, `production`.
+  - Đặc tả UC-03: chọn phiên bản để deploy, promote từ staging lên production; plan có hành động gỡ/hủy; A1 thêm lỗi cấu hình environment không khớp phiên bản; đổi phiên bản phải deploy toàn bộ.
+  - Đặc tả UC-04: hiển thị phiên bản định nghĩa mà deployment đã dùng.
+  - Bước 1: trách nhiệm của UC-01 (lưu phiên bản) và UC-03 (deploy một phiên bản vào một environment, gỡ thành phần không còn trong phiên bản).
+  - Bước 2: `saveApplicationDefinition()` (tạo phiên bản), `createDeployment()` (chọn phiên bản), `validateDeploymentInput()` (cấu hình khớp phiên bản), `planInfrastructureChanges()`/`reconcileInfrastructure()` (gỡ/hủy).
+  - Bước 3: Application Repository (lưu và đọc theo phiên bản), Infrastructure Reconciler (gỡ/hủy).
+- Các artifact khác: sequence UC-01, UC-03; VOPC; domain model (Application Definition có phiên bản, Deployment trỏ phiên bản); ERD (bảng phiên bản, identity logic); operation contracts 1, 3, 4, 5; state machine Deployment (nếu cần); traceability.
 
 **Đã áp dụng:** chưa sửa file nào.
 
@@ -279,7 +297,14 @@ Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã worklo
 - State machine Deployment: `CONFIRMED` nghĩa là đã xác nhận và job đã được tạo; worker chuyển sang `DEPLOYING`.
 - Trạng thái của job cần có giá trị ENUM; giá trị dự kiến ghi ở D6 vì phụ thuộc cách phục hồi.
 
-**Sẽ ảnh hưởng:** use case UC-03 (Bước 2, Bước 3), sequence UC-03, VOPC UC-03 và design class diagram, domain model và persistence classification (job), ERD (bảng job), operation contracts 5–9, state machine Deployment, traceability.
+**Sẽ ảnh hưởng:**
+
+- `usecase_realization_step_1_3.md`:
+  - Đặc tả UC-03: sau khi Developer chọn Deploy, IDP xác nhận và trả lời ngay; việc triển khai chạy nền và được theo dõi ở UC-04.
+  - Bước 1 UC-03: trách nhiệm tách thành nhận việc (xác nhận, tạo job) và làm việc (Deployment Worker thực thi).
+  - Bước 2 UC-03: `confirmDeployment()` chỉ đổi status và tạo job; các operation thực thi do Deployment Worker chạy.
+  - Bước 3 UC-03: thêm Deployment Worker; Deployment Orchestrator chỉ còn tạo và xác nhận deployment; Deployment Repository lưu job.
+- Các artifact khác: sequence UC-03, VOPC UC-03 và design class diagram, domain model và persistence classification (job), ERD (bảng job), operation contracts 5–9, state machine Deployment, traceability.
 
 **Đã áp dụng:** phần hoãn đã ghi vào `deferred_issues.md` (D6). Chưa sửa file thiết kế nào.
 
