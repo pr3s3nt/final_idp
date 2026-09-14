@@ -4,7 +4,14 @@ Tài liệu này ghi lại quyết định cho từng vấn đề thiết kế k
 
 Cách làm: bàn và chốt lần lượt từng vấn đề, ghi quyết định vào đây; sau khi chốt hết mới sửa tài liệu một lượt theo thứ tự **use case realization → sequence diagram → VOPC → domain model → ERD → operation contracts → state machine → traceability**.
 
-"Use case realization" là file `usecase_realization_step_1_3.md`, gồm bốn phần phải rà đủ cho mỗi vấn đề: **đặc tả use case** (UC-01 → UC-04), **Bước 1** chốt trách nhiệm của từng use case, **Bước 2** xác định system operation chính, **Bước 3** xác định các thành phần tham gia.
+**Về file `usecase_realization_step_1_3.md`.** File được tổ chức theo thứ tự:
+
+1. **Đặc tả use case:** viết lần lượt UC-01, UC-02, UC-03, UC-04 (mục tiêu, tiền/hậu điều kiện, luồng chính, luồng ngoại lệ, dữ liệu chính, quy tắc nghiệp vụ).
+2. **Bước 1:** heading `# Bước 1 Chốt responsibility của từng Use Case`, chốt trách nhiệm cho từng use case.
+3. **Bước 2:** heading `# Bước 2 Xác định các System Operation chính`, liệt kê system operation cho từng use case.
+4. **Bước 3:** heading `# Bước 3 Xác định các thành phần tham gia`, liệt kê thành phần tham gia cho từng use case.
+
+Trong mỗi Bước, từng use case là một mục con `## UC 01 …`, `## UC 02 …`, `## UC 03 …`, `## UC 04 …`. Vì vậy trong nhật ký này, **"Bước 2 UC-03"** nghĩa là mục `## UC 03 Deploy Application` nằm trong phần Bước 2; **"Đặc tả UC-03"** nghĩa là phần đặc tả của UC-03 ở đầu file.
 
 ## Tổng quan
 
