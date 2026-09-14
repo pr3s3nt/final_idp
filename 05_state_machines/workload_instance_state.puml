@@ -1,0 +1,43 @@
+@startuml
+title Step 5 - Workload Instance State Machine
+
+hide empty description
+
+state "Deploying\n(DEPLOYING)" as DEPLOYING
+state "Healthy\n(HEALTHY)" as HEALTHY
+state "Failed\n(FAILED)" as FAILED
+state "Removed\n(REMOVED)" as REMOVED
+
+[*] --> DEPLOYING : publishDesiredDeploymentState [first deployment of the workload\non this environment + target] /\ncreate workload_instance, set current_workload_deployment_id
+
+DEPLOYING --> HEALTHY : waitForWorkloadsHealthy [all pods healthy];\ncollectWorkloadOutputs; propagateOutputChanges /\nupdate output_fingerprint
+DEPLOYING --> FAILED : waitForWorkloadsHealthy [not healthy, A2] /\nDeployment Worker stops later waves
+
+HEALTHY --> DEPLOYING : publishDesiredDeploymentState [workload selected or CASCADED\nin a new deployment] /\nset current_workload_deployment_id
+FAILED --> DEPLOYING : publishDesiredDeploymentState [workload redeployed] /\nset current_workload_deployment_id
+
+HEALTHY --> REMOVED : publishDesiredDeploymentState [final publish without the workload:\ndeployed version no longer contains it]
+FAILED --> REMOVED : publishDesiredDeploymentState [final publish without the workload]
+
+REMOVED --> [*]
+
+note right of DEPLOYING
+  One Workload Instance per workload (stable ID)
+  + environment + deployment target.
+  current_workload_deployment_id always points to the
+  workload deployment (image, version) last published.
+end note
+
+note right of HEALTHY
+  Used by partial deployments (outputs of running
+  dependencies outside the scope) and by cascades
+  (running image of dependents).
+end note
+
+note right of REMOVED
+  Terminal state. The row is kept so that deployment
+  history keeps a valid reference. Workload Output is
+  TRANSIENT; only output_fingerprint is stored.
+end note
+
+@enduml

@@ -7,27 +7,48 @@ state "Planned\n(PLANNED)" as PLANNED
 state "Provisioning\n(PROVISIONING)" as PROVISIONING
 state "Ready\n(READY)" as READY
 state "Failed\n(FAILED)" as FAILED
+state "Destroyed\n(DESTROYED)" as DESTROYED
+state "Unlinked\n(UNLINKED)" as UNLINKED
 
-[*] --> PLANNED : planInfrastructureChanges [create] /\nresolve Resource Definition and target
+[*] --> PLANNED : planInfrastructureChanges [MANAGED create] /\nresolve Resource Definition, owner key and target
+[*] --> READY : reconcileInfrastructure [EXISTING link] /\nlink owner instance to the shared resource;\nno provisioning, real infrastructure untouched
 
-PLANNED --> PROVISIONING : reconcileInfrastructure [create or update] /\ninvoke provisioner apply
+PLANNED --> PROVISIONING : reconcileInfrastructure [MANAGED create or update] /\ninvoke provisioner apply
 PROVISIONING --> READY : provisioner apply success /\npersist infrastructure and provider-state references
 PROVISIONING --> FAILED : provisioner apply failure /\npersist actual provider state and failure status
 
-READY --> PLANNED : planInfrastructureChanges [update] /\nretain Resource Instance identity
+READY --> PLANNED : planInfrastructureChanges [MANAGED update] /\nretain Resource Instance identity
 READY --> READY : reconcileInfrastructure [reuse] /\nconfirm or refresh provider state
-READY --> READY : collectResourceOutputs /\nexpose transient Resource Output values
+READY --> READY : collectResourceOutputs; propagateOutputChanges /\nexpose transient Resource Output values; update output_fingerprint
+
+READY --> DESTROYED : reconcileInfrastructure [MANAGED, not in deployed version] /\ninvoke provisioner destroy
+FAILED --> DESTROYED : reconcileInfrastructure [MANAGED, not in deployed version] /\ninvoke provisioner destroy
+READY --> UNLINKED : reconcileInfrastructure [EXISTING, not in deployed version] /\nremove the link only; real infrastructure untouched
+
+DESTROYED --> [*]
+UNLINKED --> [*]
 
 note right of PLANNED
   For create, planning precedes creation of the durable row.
   The Resource Instance is persisted when provider state and an
   infrastructure reference exist; PLANNED still names the
   lifecycle phase/status defined by the infrastructure plan.
+  Lookup always uses the owner key: application + environment
+  + resource requirement (stable ID) + deployment target.
 end note
 
 note right of READY
   Reuse is a reconciliation decision/transition, not a separate
-  Resource Instance status. Resource Output remains TRANSIENT.
+  Resource Instance status. Resource Output remains TRANSIENT;
+  only output_fingerprint is stored.
+  Instances of an EXISTING (shared) definition never invoke
+  provisioner apply or destroy.
+end note
+
+note right of DESTROYED
+  DESTROYED and UNLINKED are terminal. The row is kept so that
+  deployment records keep a valid reference; a new instance is
+  created if the owner needs the resource again.
 end note
 
 @enduml

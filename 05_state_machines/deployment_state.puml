@@ -6,32 +6,28 @@ hide empty description
 state "Created / Validating\n(execution only)" as CREATED
 state "Rejected / Validation Failed\n(execution only; no persisted row)" as REJECTED
 state "Validated / Awaiting Confirmation\n(AWAITING_CONFIRMATION)" as AWAITING_CONFIRMATION
-state "Infrastructure Reconciling\n(CONFIRMED)" as CONFIRMED
-state "Infrastructure Ready\n(INFRASTRUCTURE_READY)" as INFRASTRUCTURE_READY
-state "Configuration Resolved\n(CONFIGURATION_RESOLVED)" as CONFIGURATION_RESOLVED
-state "Submitted to CD\n(SUBMITTED)" as SUBMITTED
+state "Confirmed, job created\n(CONFIRMED)" as CONFIRMED
+state "Deploying wave by wave\n(DEPLOYING)" as DEPLOYING
+state "Succeeded\n(SUCCEEDED)" as SUCCEEDED
 state "Failed\n(FAILED)" as FAILED
 
-[*] --> CREATED : createDeployment / initialize deployment attempt
+[*] --> CREATED : createDeployment(applicationId, version, environment,\ntarget, images, context) / initialize deployment attempt
 
-CREATED --> AWAITING_CONFIRMATION : validateDeploymentInput [valid] /\nbuildDeploymentGraph; resolveResourceDefinitions;\nplanInfrastructureChanges; computePlanFingerprint; persist Deployment
+CREATED --> AWAITING_CONFIRMATION : validateDeploymentInput [valid] /\nbuildDeploymentGraph; planDeploymentWaves; resolveResourceDefinitions;\nplanInfrastructureChanges; computePlanFingerprint; persist Deployment
 CREATED --> REJECTED : validateDeploymentInput [invalid, A1] /\nreturn validation error; rollback attempt
 REJECTED --> [*]
 
-AWAITING_CONFIRMATION --> AWAITING_CONFIRMATION : confirmDeployment [invalid override, A1] /\nreturn validation error; keep AWAITING_CONFIRMATION
-AWAITING_CONFIRMATION --> AWAITING_CONFIRMATION : confirmDeployment [PLAN_CHANGED: fingerprint mismatch] /\nrefresh fingerprint; re-present rebuilt plan; no reconcile
-AWAITING_CONFIRMATION --> CONFIRMED : confirmDeployment [fingerprint match; valid overrides; CAS succeeds] /\napplyInfrastructureOverrides; atomic status compare-and-swap
+AWAITING_CONFIRMATION --> AWAITING_CONFIRMATION : confirmDeployment [invalid override, A1] /\nreturn validation error; no job
+AWAITING_CONFIRMATION --> AWAITING_CONFIRMATION : confirmDeployment [PLAN_CHANGED: fingerprint mismatch] /\nrefresh fingerprint; re-present rebuilt plan; no job
+AWAITING_CONFIRMATION --> CONFIRMED : confirmDeployment [fingerprint match; valid overrides; CAS succeeds] /\nin one transaction: status compare-and-swap\nand create deployment_execution_job with overrides
 
-CONFIRMED --> INFRASTRUCTURE_READY : reconcileInfrastructure [success] /\npersist create/update/reuse Resource Instances
-CONFIRMED --> FAILED : reconcileInfrastructure [failure, A2] /\nsaveDeploymentRecord(failed step, error summary)
+CONFIRMED --> DEPLOYING : Deployment Worker claimNextExecutionJob /\nupdateDeploymentStatus(CONFIRMED, DEPLOYING)
 
-INFRASTRUCTURE_READY --> CONFIGURATION_RESOLVED : collectResourceOutputs;\nresolveEnvironmentConfiguration [success]
-INFRASTRUCTURE_READY --> FAILED : resolveEnvironmentConfiguration [runtime failure, A2] /\nsaveDeploymentRecord(failed step, error summary)
+DEPLOYING --> DEPLOYING : for each wave: reconcileInfrastructure; collectResourceOutputs;\nresolveEnvironmentConfiguration; generate, adapt and materialize manifest;\npublishDesiredDeploymentState; waitForWorkloadsHealthy;\ncollectWorkloadOutputs; propagateOutputChanges
+DEPLOYING --> SUCCEEDED : all waves healthy and removals done /\nsaveDeploymentRecord; updateDeploymentStatus(DEPLOYING, SUCCEEDED)
+DEPLOYING --> FAILED : failure in a wave or in the removal step [A2] /\nstop remaining work; saveDeploymentRecord(error summary)
 
-CONFIGURATION_RESOLVED --> SUBMITTED : generateResolvedApplicationSpecification;\ngenerateKubernetesManifest; adaptManifestForTarget;\nmaterializeEnvironmentConfiguration; materializeSecretConfiguration;\npublishDesiredDeploymentState [accepted] /\nsaveDeploymentRecord(delivery reference, SUBMITTED)
-CONFIGURATION_RESOLVED --> FAILED : manifest generation/materialization or\npublishDesiredDeploymentState [failure, A2] /\nsaveDeploymentRecord(failed step, error summary)
-
-SUBMITTED --> [*]
+SUCCEEDED --> [*]
 FAILED --> [*]
 
 note right of CREATED
@@ -50,31 +46,39 @@ end note
 note right of AWAITING_CONFIRMATION
   A concurrent confirm that loses the atomic
   AWAITING_CONFIRMATION -> CONFIRMED compare-and-swap
-  returns DEPLOYMENT_ALREADY_CONFIRMED and causes
-  no state transition or infrastructure reconcile.
+  returns DEPLOYMENT_ALREADY_CONFIRMED; its transaction
+  rolls back, so no second job is created.
+end note
+
+note right of CONFIRMED
+  CONFIRMED always has exactly one deployment_execution_job,
+  created in the same transaction. The confirm request returns
+  immediately; execution starts when a Deployment Worker claims
+  the job. Worker recovery (lease, retry) is deferred (D6).
+end note
+
+note right of DEPLOYING
+  Waves run in dependency order. Workloads added by
+  propagateOutputChanges (CASCADED) join later waves.
+  For a new version, components no longer in it are removed
+  after all waves are healthy.
+  Progress per wave and component is kept in deployment_step
+  rows (who writes them and when: D4). deployment.status never
+  takes values reported by CD (D5).
 end note
 
 note right of FAILED
   FAILED is only a persisted post-creation Deployment state.
-  For UC-03 A2, Deployment and Deployment Record use FAILED;
-  the failed Deployment Step stores errorSummary and
-  relatedComponentReference when identifiable.
+  For UC-03 A2, remaining waves and removals are not executed;
+  the Deployment Record keeps the wave, related component and
+  error summary.
 end note
 
-note bottom of SUBMITTED
-  UC-04 progress markers are separate deployment_step rows,
-  not mutually exclusive Deployment.status values:
-  * Infrastructure Ready
-  * Configuration Resolved
-  * Manifest Generated
-  * CD Synced
-  * Application Ready
-
-  Their individual statuses can be displayed simultaneously.
-  UC-04 reads/aggregates repository, CD and workload status;
-  it does not transition the Deployment aggregate. Under the
-  current operation contracts, the aggregate remains SUBMITTED
-  after CD acceptance (or FAILED on a contracted A2 path).
+note bottom of SUCCEEDED
+  SUCCEEDED means every workload in the scope, including
+  CASCADED ones, is healthy and removals are done.
+  UC-04 only reads repository, CD and workload status;
+  it never transitions the Deployment aggregate.
 end note
 
 @enduml
