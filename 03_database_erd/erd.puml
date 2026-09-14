@@ -15,10 +15,26 @@ package "Application Repository" {
     * updated_at : TIMESTAMP <<NOT NULL>>
   }
 
-  entity "workload" as workload {
-    * workload_id : UUID <<PK>>
+  entity "application_definition_version" as application_definition_version {
+    * application_definition_version_id : UUID <<PK>>
     --
     * application_id : UUID <<FK, NOT NULL>>
+    * version_number : INT <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+  }
+
+  entity "application_component" as application_component {
+    * component_id : UUID <<PK>>
+    --
+    * application_id : UUID <<FK, NOT NULL>>
+    * component_type : ENUM(WORKLOAD, RESOURCE_REQUIREMENT, ENVIRONMENT_VARIABLE_DEFINITION, SECRET_DEFINITION) <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+  }
+
+  entity "workload" as workload {
+    * application_definition_version_id : UUID <<PK, FK>>
+    * workload_id : UUID <<PK, FK>>
+    --
     * name : VARCHAR(255) <<NOT NULL>>
     * type : VARCHAR(100) <<NOT NULL>>
     * image_repository : VARCHAR(1024) <<NOT NULL>>
@@ -27,15 +43,16 @@ package "Application Repository" {
   }
 
   entity "resource_requirement" as resource_requirement {
-    * resource_requirement_id : UUID <<PK>>
+    * application_definition_version_id : UUID <<PK, FK>>
+    * resource_requirement_id : UUID <<PK, FK>>
     --
-    * application_id : UUID <<FK, NOT NULL>>
     * name : VARCHAR(255) <<NOT NULL>>
     * resource_type : VARCHAR(100) <<NOT NULL>>
   }
 
   entity "environment_variable_definition" as environment_variable_definition {
-    * variable_definition_id : UUID <<PK>>
+    * application_definition_version_id : UUID <<PK, FK>>
+    * variable_definition_id : UUID <<PK, FK>>
     --
     * workload_id : UUID <<FK, NOT NULL>>
     * name : VARCHAR(255) <<NOT NULL>>
@@ -43,7 +60,8 @@ package "Application Repository" {
   }
 
   entity "secret_definition" as secret_definition {
-    * secret_definition_id : UUID <<PK>>
+    * application_definition_version_id : UUID <<PK, FK>>
+    * secret_definition_id : UUID <<PK, FK>>
     --
     * workload_id : UUID <<FK, NOT NULL>>
     * name : VARCHAR(255) <<NOT NULL>>
@@ -53,7 +71,7 @@ package "Application Repository" {
   entity "dependency" as dependency {
     * dependency_id : UUID <<PK>>
     --
-    * application_id : UUID <<FK, NOT NULL>>
+    * application_definition_version_id : UUID <<FK, NOT NULL>>
     * source_workload_id : UUID <<FK, NOT NULL>>
     * target_type : ENUM(WORKLOAD, RESOURCE) <<NOT NULL>>
     target_workload_id : UUID <<FK>>
@@ -65,7 +83,8 @@ package "Specification Repository / Config Repo Service" {
   entity "application_specification" as application_specification {
     * specification_id : UUID <<PK>>
     --
-    * application_id : UUID <<FK, NOT NULL, UNIQUE>>
+    * application_id : UUID <<FK, NOT NULL>>
+    * application_definition_version_id : UUID <<FK, NOT NULL, UNIQUE>>
     * format : VARCHAR(50) <<NOT NULL>>
     * content : TEXT <<NOT NULL>>
     * version : VARCHAR(100) <<NOT NULL>>
@@ -78,7 +97,7 @@ package "Environment Configuration Repository" {
     * environment_configuration_id : UUID <<PK>>
     --
     * application_id : UUID <<FK, NOT NULL>>
-    * environment : VARCHAR(100) <<NOT NULL>>
+    * environment : ENUM(STAGING, PRODUCTION) <<NOT NULL>>
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
   }
@@ -131,6 +150,9 @@ package "Platform Resource Definition Catalog" {
     * allowed_overrides : JSONB <<NOT NULL>>
     * exposed_outputs : JSONB <<NOT NULL>>
     * sensitive_outputs : JSONB <<NOT NULL>>
+    * management_mode : ENUM(MANAGED, EXISTING) <<NOT NULL>>
+    applicability_conditions : JSONB
+    existing_resource_reference : VARCHAR(2048)
   }
 }
 
@@ -138,11 +160,31 @@ package "Resource Instance Repository" {
   entity "resource_instance" as resource_instance {
     * resource_instance_id : UUID <<PK>>
     --
+    * application_id : UUID <<FK, NOT NULL>>
+    * environment : ENUM(STAGING, PRODUCTION) <<NOT NULL>>
+    * resource_requirement_id : UUID <<FK, NOT NULL>>
     * resource_definition_id : UUID <<FK, NOT NULL>>
     * deployment_target : VARCHAR(255) <<NOT NULL>>
-    * infrastructure_reference : VARCHAR(2048) <<NOT NULL, UNIQUE>>
+    * infrastructure_reference : VARCHAR(2048) <<NOT NULL>>
     provider_state_reference : VARCHAR(2048)
-    * status : ENUM <<NOT NULL>>
+    * status : ENUM(PLANNED, PROVISIONING, READY, FAILED, DESTROYED, UNLINKED) <<NOT NULL>>
+    output_fingerprint : CHAR(64)
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+}
+
+package "Workload Instance Repository" {
+  entity "workload_instance" as workload_instance {
+    * workload_instance_id : UUID <<PK>>
+    --
+    * application_id : UUID <<FK, NOT NULL>>
+    * workload_id : UUID <<FK, NOT NULL>>
+    * environment : ENUM(STAGING, PRODUCTION) <<NOT NULL>>
+    * deployment_target : VARCHAR(255) <<NOT NULL>>
+    * current_workload_deployment_id : UUID <<FK, NOT NULL>>
+    * status : ENUM(DEPLOYING, HEALTHY, FAILED, REMOVED) <<NOT NULL>>
+    output_fingerprint : CHAR(64)
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
   }
@@ -153,12 +195,13 @@ package "Deployment Repository" {
     * deployment_id : UUID <<PK>>
     --
     * application_id : UUID <<FK, NOT NULL>>
+    * application_definition_version_id : UUID <<FK, NOT NULL>>
     * environment_configuration_id : UUID <<FK, NOT NULL>>
-    * environment : VARCHAR(100) <<NOT NULL>>
+    * environment : ENUM(STAGING, PRODUCTION) <<NOT NULL>>
     * deployment_target : VARCHAR(255) <<NOT NULL>>
     * plan_fingerprint : CHAR(64) <<NOT NULL>>
     * plan_fingerprint_algo : VARCHAR(32) <<NOT NULL>>
-    * status : ENUM <<NOT NULL>>
+    * status : ENUM(AWAITING_CONFIRMATION, CONFIRMED, DEPLOYING, SUCCEEDED, FAILED) <<NOT NULL>>
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
   }
@@ -170,6 +213,18 @@ package "Deployment Repository" {
     * workload_id : UUID <<FK, NOT NULL>>
     * image_repository : VARCHAR(1024) <<NOT NULL>>
     * image_version : VARCHAR(255) <<NOT NULL>>
+    * inclusion_reason : ENUM(SELECTED, CASCADED) <<NOT NULL>>
+    * wave_number : INT <<NOT NULL>>
+  }
+
+  entity "deployment_execution_job" as deployment_execution_job {
+    * job_id : UUID <<PK>>
+    --
+    * deployment_id : UUID <<FK, NOT NULL, UNIQUE>>
+    * selected_overrides : JSONB <<NOT NULL>>
+    * status : ENUM <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
   }
 
   entity "deployment_context" as deployment_context {
@@ -185,9 +240,10 @@ package "Deployment Repository" {
     * deployment_record_id : UUID <<PK>>
     --
     * deployment_id : UUID <<FK, NOT NULL, UNIQUE>>
-    * environment : VARCHAR(100) <<NOT NULL>>
+    * environment : ENUM(STAGING, PRODUCTION) <<NOT NULL>>
     * deployment_target : VARCHAR(255) <<NOT NULL>>
     delivery_reference : VARCHAR(2048)
+    * removed_components : JSONB <<NOT NULL>>
     * status : ENUM <<NOT NULL>>
     error_summary : TEXT
     * created_at : TIMESTAMP <<NOT NULL>>
@@ -200,6 +256,7 @@ package "Deployment Repository" {
     * deployment_id : UUID <<FK, NOT NULL>>
     * deployment_record_id : UUID <<FK, NOT NULL>>
     * sequence_number : INT <<NOT NULL>>
+    * wave_number : INT <<NOT NULL>>
     * step_name : VARCHAR(255) <<NOT NULL>>
     * status : ENUM <<NOT NULL>>
     related_component_reference : VARCHAR(2048)
@@ -216,35 +273,46 @@ package "Deployment Repository" {
   }
 }
 
-application_definition ||--|{ workload : owns
-application_definition ||--o{ resource_requirement : owns
+application_definition ||--|{ application_definition_version : immutable versions
+application_definition ||--o{ application_component : stable component ids
+application_definition_version ||--|{ workload : contains
+application_definition_version ||--o{ resource_requirement : contains
+application_definition_version ||--o{ dependency : contains
+application_component ||--o{ workload : identity per version
+application_component ||--o{ resource_requirement : identity per version
+application_component ||--o{ environment_variable_definition : identity per version
+application_component ||--o{ secret_definition : identity per version
 workload ||--o{ environment_variable_definition : defines
 workload ||--o{ secret_definition : defines
-application_definition ||--o{ dependency : owns
 workload ||--o{ dependency : source
 workload |o--o{ dependency : target workload
 resource_requirement |o--o{ dependency : target resource
-application_definition ||--o| application_specification : generates
+application_definition_version ||--o| application_specification : generates
 
 application_definition ||--o{ environment_configuration : configured for
 environment_configuration ||--o{ environment_variable : contains
 environment_configuration ||--o{ secret : contains
 environment_configuration ||--o{ configuration_value : stores value sources
-workload ||--o{ environment_variable : configured workload
-environment_variable_definition ||--o{ environment_variable : binding
-workload ||--o{ secret : configured workload
-secret_definition ||--o{ secret : binding
+application_component ||--o{ environment_variable : configured workload / definition
+application_component ||--o{ secret : configured workload / definition
 environment_variable ||--|| configuration_value : has
-resource_requirement |o--o{ configuration_value : referenced resource output
-workload |o--o{ configuration_value : referenced workload output
-resource_requirement |o--o{ secret : referenced sensitive output
+application_component |o--o{ configuration_value : referenced resource or workload output
+application_component |o--o{ secret : referenced sensitive output
 
 resource_definition ||--o{ resource_instance : instantiated as
+application_definition ||--o{ resource_instance : owner application
+application_component ||--o{ resource_instance : owner requirement
+
+application_definition ||--o{ workload_instance : owner application
+application_component ||--o{ workload_instance : instance of workload
+workload_deployment ||--o{ workload_instance : currently running
 
 application_definition ||--o{ deployment : deploys
+application_definition_version ||--o{ deployment : deployed version
 environment_configuration ||--o{ deployment : used by
 deployment ||--|{ workload_deployment : snapshots images
-workload ||--o{ workload_deployment : deployed as
+application_component ||--o{ workload_deployment : deployed as
+deployment ||--o| deployment_execution_job : execution job
 deployment ||--|| deployment_context : has
 deployment ||--o| deployment_record : produces
 deployment ||--o{ deployment_step : has steps
@@ -254,6 +322,19 @@ resource_instance ||--o{ deployment_record_resource_instance : used by
 
 note right of dependency
   CHECK: target_type selects exactly one target FK.
+  Source and target belong to the same version (composite FK).
+  No depends-on cycle inside a version (checked by the service).
+end note
+
+note right of application_definition_version
+  Immutable: rows of a saved version (and its workloads, resource
+  requirements, definitions, dependencies) are never updated or
+  deleted. FKs to versions use ON DELETE RESTRICT.
+end note
+
+note right of application_component
+  Stable component IDs across versions. Tables outside a version
+  (configuration, instances, workload_deployment) reference these IDs.
 end note
 
 note right of configuration_value
@@ -274,6 +355,23 @@ end note
 
 note bottom of resource_instance
   Resource Output is TRANSIENT; therefore no resource_output table exists.
+  Partial UNIQUE (application_id, environment, resource_requirement_id,
+  deployment_target) WHERE status NOT IN (DESTROYED, UNLINKED).
+  infrastructure_reference is not UNIQUE: EXISTING (shared) instances of
+  several owners may point to the same real resource.
+  Only output_fingerprint is stored, never output values.
+end note
+
+note bottom of workload_instance
+  UNIQUE (workload_id, environment, deployment_target).
+  Kept with status REMOVED after removal. Workload Output is TRANSIENT;
+  only output_fingerprint is stored.
+end note
+
+note bottom of deployment_execution_job
+  Created in the same transaction as the CAS
+  deployment.status AWAITING_CONFIRMATION -> CONFIRMED.
+  Job status literals and worker recovery are deferred (D6).
 end note
 
 @enduml
