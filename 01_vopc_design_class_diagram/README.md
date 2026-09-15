@@ -31,11 +31,11 @@ Thư mục này mô tả **View Of Participating Classes (VOPC)** cho bốn use 
 | Web UI | Boundary/UI | Nhận thao tác của Developer và hiển thị application, configuration, deployment plan cùng deployment result. |
 | Application API / Controller | Boundary/UI | Nhận request tạo/cập nhật Application Definition và chuyển sang Application Service. |
 | Environment Configuration API / Controller | Boundary/UI | Nhận request chọn environment, gán value/reference và lưu Environment Configuration. |
-| Deployment API / Controller | Boundary/UI | Nhận deployment input (gồm phiên bản Application Definition), tải deployment form và chuyển xác nhận deploy sang orchestrator. |
+| Deployment API / Controller | Boundary/UI | Nhận deployment input (gồm phiên bản Application Definition, phiên bản catalog và nơi triển khai), tải deployment form và chuyển xác nhận deploy sang orchestrator. |
 | Deployment Query API / Controller | Boundary/UI | Cung cấp read-only API cho deployment history và deployment detail. |
 | Application Service | Application services | Điều phối UC-01 để tạo/cập nhật, validate, lưu Application Definition và sinh specification. |
 | Environment Configuration Service | Application services | Điều phối UC-02 để tải requirement, gán value/reference, bảo vệ Secret, validate và lưu configuration. |
-| Deployment Orchestrator | Application services | Điều phối phần UC-03 trong request của Developer: tải form, tạo deployment theo phiên bản, dựng graph, chia tầng, lập plan; khi xác nhận thì đổi trạng thái và tạo job trong một transaction rồi trả lời ngay. |
+| Deployment Orchestrator | Application services | Điều phối phần UC-03 trong request của Developer: tải form (gồm các phiên bản catalog), tạo deployment theo phiên bản Application Definition và phiên bản catalog, dựng graph, chia tầng, lập plan; khi xác nhận thì đổi trạng thái và tạo job trong một transaction rồi trả lời ngay. |
 | Deployment Worker | Application services | Tiến trình chạy nền lấy job và điều phối phần thực thi UC-03: triển khai theo tầng, chờ workload healthy, thu output, lan truyền thay đổi output, gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản, lưu Deployment Record. |
 | Deployment Query Service | Application services | Điều phối query path UC-04 và thu thập dữ liệu từ repository cùng status provider. |
 | Application Definition Validator | Domain components | Kiểm tra workload, resource, dependency, port, image repository và configuration requirement. |
@@ -43,11 +43,11 @@ Thư mục này mô tả **View Of Participating Classes (VOPC)** cho bốn use 
 | Resource Output Catalog / Resource Definition Query | Domain components | Liệt kê output thường và sensitive output hợp lệ của logical resource. |
 | Workload Output Catalog | Domain components | Liệt kê output hợp lệ mà workload expose, ví dụ endpoint. |
 | Environment Configuration Validator | Domain components | Kiểm tra direct value và các Resource/Workload Output reference của một environment theo phiên bản Application Definition mới nhất, gồm việc output thuộc thành phần mà workload depends on. |
-| Deployment Graph Builder | Domain components | Dựng dependency/resource graph từ phiên bản Application Definition, configuration, images và deployment context; phát hiện depends on tạo vòng. |
-| Deployment Wave Planner | Domain components | Xác định phạm vi deployment, chia tầng theo thứ tự phụ thuộc, và lan truyền khi output thay đổi bằng cách thêm thành phần phụ thuộc vào các tầng sau. |
-| Resource Definition Resolver | Domain components | Chọn Resource Definition phù hợp với logical resource và deployment context; phân biệt loại `MANAGED` và `EXISTING` (dùng chung). |
+| Deployment Graph Builder | Domain components | Dựng dependency/resource graph từ phiên bản Application Definition, configuration, images, phiên bản catalog và deployment context; tự thêm cụm Kubernetes và những gì Resource Definition `requires` (gọi Resource Definition Resolver trong lúc dựng); phát hiện vòng. |
+| Deployment Wave Planner | Domain components | Xác định phạm vi deployment (kể cả cụm/network mà resource cần), chia tầng theo thứ tự phụ thuộc, liệt kê thành phần có thể bị làm lại, và lan truyền khi output thay đổi bằng cách reconcile lại resource phụ thuộc và thêm workload phụ thuộc vào các tầng sau. |
+| Resource Definition Resolver | Domain components | Chọn Resource Definition trong phiên bản catalog được chọn cho logical resource, cụm Kubernetes và network theo deployment context; phân biệt loại `MANAGED` và `EXISTING` (resource dùng chung, cụm nội bộ). |
 | Infrastructure Planner | Domain components | Tìm Resource Instance theo chủ sở hữu, so sánh desired/current state, lập plan (create/update/reuse/liên kết; gỡ/hủy/gỡ liên kết) và quản lý permitted overrides. |
-| Infrastructure Reconciler | Domain components | Điều phối thực thi plan theo tầng: tạo/sửa resource `MANAGED`, liên kết resource `EXISTING`, hủy hoặc gỡ liên kết resource không còn trong phiên bản, lưu resource state/reference. |
+| Infrastructure Reconciler | Domain components | Điều phối thực thi plan theo tầng: tạo/sửa resource `MANAGED` (kể cả VPC, cụm trên cloud) với input từ output của những gì resource cần, liên kết resource `EXISTING` (resource dùng chung, cụm nội bộ), hủy hoặc gỡ liên kết resource không còn trong phiên bản, lưu resource state/reference. |
 | Resource Output Resolver / Collector | Domain components | Thu thập Resource Output từ infrastructure instance đã sẵn sàng. |
 | Workload Output Collector | Domain components | Thu thập Workload Output từ workload đã healthy hoặc đang chạy; cơ chế đọc cụ thể chưa chốt. |
 | Environment Configuration Resolver | Domain components | Resolve direct value, Resource Output và Workload Output thành configuration thực tế cho các workload trong một tầng. |
@@ -66,14 +66,15 @@ Thư mục này mô tả **View Of Participating Classes (VOPC)** cho bốn use 
 | Terraform/OpenTofu Runner | External systems | Thực thi infrastructure module (apply hoặc destroy) và trả resource state cùng raw outputs. |
 | score-k8s | External systems | Render resolved application specification thành base Kubernetes manifest. |
 | CD System | External systems | Nhận desired state, đồng bộ workload xuống cluster và cung cấp CD status. |
-| Kubernetes Cluster | External systems | Chạy workload/configuration; cung cấp pod health, dữ liệu runtime của workload và endpoint. |
-| Application Repository | Persistence | Lưu/đọc Application Definition theo phiên bản bất biến cho UC-01 và UC-03; thành phần giữ ID cố định qua phiên bản. |
+| Kubernetes Cluster | External systems | Chạy workload/configuration; cung cấp pod health, dữ liệu runtime của workload và endpoint. Trên cloud, cụm do IDP dựng qua Provisioner; cụm nội bộ có sẵn. Thông tin kết nối lấy từ output của `k8s-cluster`. |
+| Application Repository | Persistence | Lưu/đọc Application Definition theo phiên bản bất biến cho UC-01 và UC-03; thành phần giữ ID cố định qua phiên bản; tạo Platform Requirement (cụm Kubernetes, network) của application khi cần lần đầu. |
+| Resource Definition Catalog | Persistence | Đọc các phiên bản catalog bất biến và Resource Definition của phiên bản được chọn; catalog do platform quản lý, IDP chỉ đọc. |
 | Specification Repository / Config Repo Service | Persistence | Lưu hoặc version hóa application specification đã sinh. |
 | Application Query / Application Repository | Persistence | Đọc workload, variable, Secret và dependency requirement của phiên bản Application Definition mới nhất phục vụ UC-02. |
 | Environment Configuration Repository | Persistence | Lưu value/reference theo environment (STAGING, PRODUCTION) và đọc lại khi deployment. |
-| Resource Instance Repository | Persistence | Lưu/đọc Resource Instance theo chủ sở hữu (application + environment + resource requirement + target): trạng thái, reference, liên kết resource dùng chung, dấu vân tay output và infrastructure status. |
+| Resource Instance Repository | Persistence | Lưu/đọc Resource Instance theo chủ sở hữu (application + environment + resource requirement hoặc cụm/network + target): trạng thái, reference, liên kết tới thứ có sẵn, dấu vân tay output, dấu vân tay đầu vào lần apply gần nhất và infrastructure status. |
 | Workload Instance Repository | Persistence | Lưu/đọc trạng thái hiện hành của từng workload theo environment và target: workload deployment đang chạy, trạng thái, dấu vân tay output. |
-| Deployment Repository | Persistence | Lưu deployment theo phiên bản, job triển khai (kèm override) và Deployment Record; cung cấp history, detail, progress cùng actual image version. |
+| Deployment Repository | Persistence | Lưu deployment theo phiên bản Application Definition và phiên bản catalog, job triển khai (kèm override) và Deployment Record; cung cấp history, detail, progress cùng actual image version. |
 
 ## Phạm vi từng file
 

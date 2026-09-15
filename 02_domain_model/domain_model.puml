@@ -34,6 +34,11 @@ class "Resource Requirement" as ResourceRequirement <<entity>> {
   resourceType: String
 }
 
+class "Platform Requirement" as PlatformRequirement <<entity>> {
+  platformRequirementId: String
+  requirementType: String
+}
+
 class "Environment Variable Definition" as EnvironmentVariableDefinition <<entity>> {
   variableDefinitionId: String
   name: String
@@ -101,6 +106,12 @@ class "Workload Output Reference" as WorkloadOutputReference <<value object>> {
   outputName: String
 }
 
+class "Catalog Version" as CatalogVersion <<entity>> {
+  catalogVersionId: String
+  versionNumber: Integer
+  createdAt: DateTime
+}
+
 class "Resource Definition" as ResourceDefinition <<entity>> {
   resourceDefinitionId: String
   name: String
@@ -114,12 +125,14 @@ class "Resource Definition" as ResourceDefinition <<entity>> {
   managementMode: MANAGED | EXISTING
   applicabilityConditions: Map [0..1]
   existingResourceReference: String [0..1]
+  requires: List<String>
 }
 
 class "Deployment" as Deployment <<aggregate root>> {
   deploymentId: String
   applicationId: String
   applicationDefinitionVersionId: String
+  catalogVersionId: String
   environment: STAGING | PRODUCTION
   deploymentTarget: String
   planFingerprint: String
@@ -156,6 +169,7 @@ class "Deployment Graph" as DeploymentGraph <<transient>> {
   deploymentId: String
   workloadIds: List<String>
   resourceRequirementIds: List<String>
+  platformRequirementIds: List<String>
   dependencyIds: List<String>
   configurationReferenceIds: List<String>
   scopeComponentIds: List<String>
@@ -164,7 +178,7 @@ class "Deployment Graph" as DeploymentGraph <<transient>> {
 }
 
 class "Resource Resolution" as ResourceResolution <<transient>> {
-  resourceRequirementId: String
+  requirementId: String
   resourceDefinitionId: String
   resolutionStatus: String
   reason: String [0..1]
@@ -174,13 +188,14 @@ class "Resource Instance" as ResourceInstance <<aggregate root>> {
   resourceInstanceId: String
   applicationId: String
   environment: STAGING | PRODUCTION
-  resourceRequirementId: String
+  requirementId: String
   resourceDefinitionId: String
   deploymentTarget: String
   infrastructureReference: String
   providerStateReference: String [0..1]
   status: PLANNED | PROVISIONING | READY | FAILED | DESTROYED | UNLINKED
   outputFingerprint: String [0..1]
+  appliedInputFingerprint: String [0..1]
   createdAt: DateTime
   updatedAt: DateTime
 }
@@ -279,6 +294,36 @@ note right of ApplicationDefinitionVersion
   across versions (renaming keeps the ID).
 end note
 
+ApplicationDefinition "1" *-- "0..*" PlatformRequirement : platform requirements (not versioned)
+
+note right of PlatformRequirement
+  Not declared by the Developer. IDP adds k8s-cluster for
+  every application (every workload runs on it) and the
+  types that resolved Resource Definitions require (network).
+  One per application + type; the stable ID is derived from
+  application + type and the row is created when the
+  Deployment Worker first needs it.
+end note
+
+' Platform Resource Definition catalog
+CatalogVersion "1" *-- "1..*" ResourceDefinition : immutable definitions
+
+note right of CatalogVersion
+  Managed by the platform. Changing the catalog creates a
+  new version; existing versions never change. Definitions
+  with the same name across versions are the same definition.
+  A Deployment uses exactly one catalog version.
+end note
+
+note right of ResourceDefinition
+  requires lists the resource types this definition needs
+  (e.g. network), as decided by the platform team. IDP adds
+  them to the graph as platform requirements; their outputs
+  are provisioning inputs.
+  A cloud target resolves k8s-cluster to a MANAGED definition;
+  an internal cluster resolves it to an EXISTING definition.
+end note
+
 ' Environment Configuration aggregate
 EnvironmentConfiguration "0..*" --> "1" ApplicationDefinition : configures
 EnvironmentConfiguration "1" *-- "0..*" EnvironmentVariable : variables
@@ -314,6 +359,7 @@ end note
 
 ' Deployment aggregate and execution-time objects
 Deployment "0..*" --> "1" ApplicationDefinitionVersion : deploys
+Deployment "0..*" --> "1" CatalogVersion : resolves with
 Deployment "0..*" --> "1" EnvironmentConfiguration : uses
 Deployment "1" *-- "1..*" WorkloadDeployment : workload images
 Deployment "1" *-- "1" DeploymentContext : context
@@ -328,16 +374,27 @@ Deployment "1" ..> "0..1" DeploymentGraph : builds
 DeploymentGraph "1" --> "1" DeploymentContext : includes
 DeploymentGraph "1" --> "1..*" Workload : includes
 DeploymentGraph "1" --> "0..*" ResourceRequirement : includes
+DeploymentGraph "1" --> "1..*" PlatformRequirement : includes (k8s-cluster, required network)
 DeploymentGraph "1" --> "0..*" Dependency : includes
 DeploymentGraph "1" --> "0..*" ConfigurationValue : includes references
 
 Deployment "1" ..> "0..*" ResourceResolution : resolves resources
-ResourceResolution "0..*" --> "1" ResourceRequirement : resolves
+ResourceResolution "0..*" --> "0..1" ResourceRequirement : resolves
+ResourceResolution "0..*" --> "0..1" PlatformRequirement : resolves
 ResourceResolution "0..*" --> "1" ResourceDefinition : selects
-ResourceResolution "0..*" --> "0..1" ResourceInstance : create, update, or reuse
-ResourceInstance "0..*" --> "1" ResourceDefinition : instantiated from
+ResourceResolution "0..*" --> "0..1" ResourceInstance : create, update, reuse or link
+ResourceInstance "0..*" --> "1" ResourceDefinition : last applied or linked with
 ResourceInstance "0..*" --> "1" ApplicationDefinition : owner application
-ResourceInstance "0..*" --> "1" ResourceRequirement : owner requirement (stable ID)
+ResourceInstance "0..*" --> "0..1" ResourceRequirement : owner requirement (stable ID)
+ResourceInstance "0..*" --> "0..1" PlatformRequirement : owner platform requirement (stable ID)
+
+note right of DeploymentGraph
+  Edges: Dependency declared in UC-01; every workload
+  to k8s-cluster; a resource to the platform requirements
+  its Resource Definition requires. Scope = selected
+  workloads + resources they depend on directly + the
+  platform requirements those resources require.
+end note
 ResourceInstance ..> ResourceOutput : exposes at runtime
 
 WorkloadInstance "0..*" --> "1" Workload : instance of (stable ID)
@@ -347,18 +404,27 @@ WorkloadInstance ..> WorkloadOutput : exposes at runtime
 note right of Deployment
   Infrastructure Plan remains TRANSIENT (typed structure deferred, D3).
   Only planFingerprint and planFingerprintAlgo
-  are persistent on the Deployment.
+  are persistent on the Deployment; the fingerprint covers
+  the catalog version. A partial deployment uses the
+  Application Definition version and catalog version running
+  on the environment + target.
   status is decided by IDP, never copied from CD (D5).
   CONFIRMED always comes with exactly one Deployment Execution Job,
   created in the same transaction.
 end note
 
 note right of ResourceInstance
-  One active instance per owner:
-  application + environment + resource requirement + target.
-  EXISTING (shared) instances only link to real infrastructure
-  and never create, update or destroy it.
+  One active instance per owner: application + environment
+  + requirement (Resource Requirement or Platform Requirement)
+  + target, so each application + environment + cloud target
+  has its own cluster and network.
+  EXISTING instances (shared resource, internal cluster) only
+  link to real infrastructure and never create, update or destroy it.
   Only an output fingerprint is stored, never output values.
+  appliedInputFingerprint identifies the input of the last apply
+  (definition of the catalog version, resolved parameters, output
+  fingerprints of required platform requirements); a different
+  current input makes the plan UPDATE the instance.
 end note
 
 note right of WorkloadInstance

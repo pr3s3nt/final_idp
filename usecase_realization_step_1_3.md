@@ -406,23 +406,28 @@ Thay đổi Environment Configuration không tự động làm thay đổi deplo
 
 ## 1. Mục tiêu
 
-Cho phép Developer triển khai một phiên bản Application Definition cụ thể, cho toàn bộ hoặc một phần application, lên một environment (staging hoặc production) và Kubernetes deployment target. Thử một phiên bản ở staging xong thì deploy cùng phiên bản đó lên production.
+Cho phép Developer triển khai một phiên bản Application Definition cụ thể, cho toàn bộ hoặc một phần application, lên một environment (staging hoặc production) và một nơi triển khai (deployment target). Thử một phiên bản ở staging xong thì deploy cùng phiên bản đó lên production.
+
+Có hai loại nơi triển khai:
+
+- **Cloud**, ví dụ AWS region ap-southeast-1: IDP dựng VPC và cụm Kubernetes (ví dụ EKS) riêng cho mỗi application + environment.
+- **Cụm Kubernetes nội bộ**: cụm đã có sẵn và được platform khai báo trong catalog; IDP chỉ kết nối vào để deploy, không tạo và không xóa cụm.
 
 Image tag/version được xác định tại thời điểm deployment, không phải khi định nghĩa application trong UC-01.
 
 **IDP** chịu trách nhiệm:
 
 - Kiểm tra Environment Configuration của environment khớp với phiên bản Application Definition được deploy.
-- Xác định phạm vi deployment: các workload được chọn và các resource mà chúng depends on trực tiếp.
+- Xác định phạm vi deployment: các workload được chọn, các resource mà chúng depends on trực tiếp, và cụm Kubernetes/network mà các resource đó cần.
 - Xác định dependency và chia các thành phần trong phạm vi thành các tầng triển khai theo thứ tự phụ thuộc.
-- Resolve Resource Definition phù hợp theo deployment context.
+- Resolve Resource Definition phù hợp trong phiên bản catalog được chọn, theo deployment context.
 - Tìm resource để dùng lại theo đúng chủ sở hữu (application + environment + resource requirement + deployment target); resource dùng chung chỉ được dùng khi Resource Definition khai báo trỏ tới resource có sẵn.
-- Reconcile infrastructure.
+- Reconcile infrastructure, gồm cả VPC và cụm Kubernetes khi deploy lên cloud; khi deploy lên cụm nội bộ thì chỉ kết nối vào cụm có sẵn.
 - Gỡ workload, hủy resource hoặc gỡ liên kết resource dùng chung không còn trong phiên bản được deploy.
 - Nhận yêu cầu deploy và trả lời Developer ngay; việc triển khai chạy nền.
 - Triển khai lần lượt từng tầng: resolve Environment Configuration từ output của các tầng trước, sinh Kubernetes manifest, chuyển desired deployment state cho hệ thống Continuous Delivery và chờ workload healthy.
 - Thu thập Resource Output và Workload Output sau khi thành phần tương ứng sẵn sàng.
-- Tự động triển khai lại các thành phần phụ thuộc khi output mà chúng dùng bị thay đổi.
+- Tự động làm lại các resource và workload phụ thuộc khi output mà chúng dùng bị thay đổi.
 
 ## 2. Actor
 
@@ -433,16 +438,16 @@ Image tag/version được xác định tại thời điểm deployment, không 
 - Phiên bản Application Definition được chọn tồn tại, hợp lệ và các quan hệ depends on không tạo thành vòng.
 - Workload cần deploy có Image Repository.
 - Environment Configuration cần thiết của environment đã được cấu hình và khớp với phiên bản được chọn.
-- Platform đã có Resource Definition và provisioner phù hợp.
-- Deployment target được hỗ trợ.
-- Nếu chỉ deploy một phần application, phiên bản được chọn phải trùng phiên bản đang chạy trên environment và deployment target đó.
+- Phiên bản catalog được chọn tồn tại và có Resource Definition, provisioner phù hợp cho các resource, cụm Kubernetes và network (nếu cần) của nơi triển khai.
+- Nơi triển khai được hỗ trợ: phiên bản catalog được chọn có công thức `k8s-cluster` phù hợp. Với cụm nội bộ, cụm đã có sẵn.
+- Nếu chỉ deploy một phần application, phiên bản Application Definition và phiên bản catalog được chọn phải trùng bản đang chạy trên environment và deployment target đó.
 - Mọi workload mà các workload được chọn depends on nhưng không nằm trong phạm vi deployment đang chạy healthy trên cùng environment và deployment target.
 
 ## 4. Hậu điều kiện
 
-- Deployment ghi nhận phiên bản Application Definition đã được deploy.
+- Deployment ghi nhận phiên bản Application Definition và phiên bản catalog đã được deploy.
 - Deployment ghi nhận chính xác image version của từng workload được triển khai, gồm cả workload được triển khai lại tự động.
-- Infrastructure trong phạm vi deployment đã được reconcile và sẵn sàng.
+- Infrastructure trong phạm vi deployment, gồm cả cụm Kubernetes và network, đã được reconcile (hoặc liên kết tới cụm nội bộ có sẵn) và sẵn sàng.
 - Khi deploy một phiên bản mới, workload và resource không còn trong phiên bản đó đã được gỡ, hủy hoặc gỡ liên kết trên environment và deployment target đó.
 - Environment Configuration và các dependency reference được resolve.
 - Kubernetes manifest được sinh với đúng image và configuration.
@@ -457,15 +462,18 @@ Image tag/version được xác định tại thời điểm deployment, không 
 ## Developer chọn:
 
     * Environment: staging hoặc production.
-    * Deployment target.
+    * Nơi triển khai: cloud (ví dụ AWS) hoặc một cụm Kubernetes nội bộ mà platform đã khai báo.
     * Phiên bản Application Definition cần deploy.
+    * Phiên bản catalog.
 
-## IDP hiển thị phiên bản đang chạy trên environment/target đã chọn, các workload của phiên bản được chọn, Image Repository tương ứng và image version đang chạy nếu có.
+   IDP chọn sẵn phiên bản catalog đang chạy trên environment/nơi triển khai đã chọn và báo nếu có phiên bản mới hơn; nếu chưa có gì chạy thì chọn sẵn phiên bản mới nhất. Khi promote lên production, Developer dùng cả phiên bản Application Definition lẫn phiên bản catalog đang chạy ở staging.
+
+## IDP hiển thị phiên bản Application Definition và phiên bản catalog đang chạy trên environment/target đã chọn, các workload của phiên bản được chọn, Image Repository tương ứng và image version đang chạy nếu có.
 
    Ví dụ:
 
     ```text
-    Environment: production    Đang chạy: phiên bản 4    Chọn deploy: phiên bản 5
+    Environment: production    Đang chạy: phiên bản 4, catalog v2    Chọn deploy: phiên bản 5, catalog v2
 
     backend
     registry.company.local/shop-backend       (đang chạy: v1.4.2)
@@ -476,7 +484,7 @@ Image tag/version được xác định tại thời điểm deployment, không 
 
 ## Developer chọn các workload cần deploy và chọn hoặc xác nhận image tag/version cho từng workload được chọn.
 
-   Nếu phiên bản được chọn trùng phiên bản đang chạy, Developer có thể chọn toàn bộ hoặc chỉ một phần workload của application. Nếu chọn phiên bản khác phiên bản đang chạy, Developer phải deploy toàn bộ application.
+   Nếu phiên bản Application Definition và phiên bản catalog được chọn đều trùng bản đang chạy, Developer có thể chọn toàn bộ hoặc chỉ một phần workload của application. Nếu một trong hai khác bản đang chạy, Developer phải deploy toàn bộ application.
 
    Ví dụ deploy toàn bộ:
 
@@ -497,7 +505,7 @@ Image tag/version được xác định tại thời điểm deployment, không 
 
    Image version cũng có thể đã được cung cấp từ CI/External Delivery Integration.
 
-## Developer chọn các deployment context còn lại nếu cần.
+## Developer chọn các deployment context còn lại nếu cần. Deploy lên cụm nội bộ thì không cần chọn thêm.
 
    Ví dụ khi deploy lên Cloud:
 
@@ -519,36 +527,56 @@ Image tag/version được xác định tại thời điểm deployment, không 
     * Resource Output Reference.
     * Workload Output Reference.
     * Deployment context.
+    * Phiên bản catalog.
+
+   Ngoài các thành phần Developer khai báo ở UC-01, IDP tự thêm hạ tầng của nơi triển khai vào graph:
+
+    * Cụm Kubernetes (`k8s-cluster`): mọi workload chạy trên cụm này.
+    * Những gì Resource Definition khai báo là cần thêm (`requires`), ví dụ trên AWS cụm EKS và Aurora cần `network` (VPC).
+
+## IDP resolve Resource Definition phù hợp trong phiên bản catalog được chọn cho từng resource, cụm Kubernetes và network trong graph.
+
+   Resource Definition có hai loại: loại do IDP quản lý hạ tầng (tạo, sửa, hủy) và loại trỏ tới thứ có sẵn do platform khai báo (IDP chỉ dùng, không đụng tới hạ tầng thật), ví dụ database dùng chung hoặc cụm nội bộ.
+
+   Ví dụ:
+
+    ```text
+    Cloud (AWS):   k8s-cluster → eks-cluster        (IDP quản lý, cần network)
+                   network     → aws-network        (IDP quản lý)
+                   postgresql  → aurora-postgresql  (IDP quản lý, cần network)
+
+    Cụm nội bộ:    k8s-cluster → cụm nội bộ có sẵn  (trỏ tới cụm có sẵn)
+                   postgresql  → postgres-k8s       (IDP quản lý, chạy trong cụm)
+    ```
 
 ## IDP xác định phạm vi deployment và chia tầng triển khai.
 
-   Phạm vi gồm các workload được chọn và các resource mà chúng depends on trực tiếp. Workload mà chúng depends on nhưng không được chọn thì không được triển khai lại; output của các workload đó được lấy từ bản đang chạy.
+   Phạm vi gồm các workload được chọn, các resource mà chúng depends on trực tiếp, và cụm Kubernetes/network mà các resource đó cần. Workload mà chúng depends on nhưng không được chọn thì không được triển khai lại; output của các workload đó được lấy từ bản đang chạy.
 
    Tầng 0 gồm các thành phần trong phạm vi không phụ thuộc thành phần nào khác trong phạm vi; mỗi tầng sau gồm các thành phần chỉ phụ thuộc vào thành phần ở các tầng trước.
 
-   Ví dụ deploy toàn bộ `shop-app`:
+   Ví dụ deploy toàn bộ `shop-app` lên AWS:
 
     ```text
-    Tầng 0: postgresql
-    Tầng 1: backend      (depends on postgresql)
-    Tầng 2: frontend     (depends on backend)
+    Tầng 0: network      (VPC)
+    Tầng 1: k8s-cluster  (EKS, cần network)
+            postgresql   (Aurora, cần network)
+    Tầng 2: backend      (depends on postgresql, chạy trên k8s-cluster)
+    Tầng 3: frontend     (depends on backend)
     ```
 
-   Ví dụ chỉ deploy frontend: phạm vi chỉ gồm frontend ở tầng 0; `backend.endpoint` được lấy từ backend đang chạy.
+   Ví dụ chỉ deploy frontend: phạm vi gồm frontend, cụm Kubernetes và network mà cụm cần; `backend.endpoint` được lấy từ backend đang chạy. Cụm và network không có gì thay đổi thì chỉ được dùng lại.
 
-## IDP xác định các thành phần ngoài phạm vi có thể bị triển khai lại tự động nếu output mà chúng dùng thay đổi.
-
-## IDP resolve Resource Definition phù hợp cho các resource trong phạm vi.
-
-   Resource Definition có hai loại: loại do IDP quản lý hạ tầng (tạo, sửa, hủy) và loại trỏ tới resource có sẵn do platform khai báo để dùng chung (IDP chỉ đọc output, không đụng tới hạ tầng thật).
-
-## IDP tìm Resource Instance hiện có của từng resource theo đúng chủ sở hữu: application + environment + resource requirement + deployment target.
+## IDP tìm Resource Instance hiện có của từng resource, cụm Kubernetes và network theo đúng chủ sở hữu: application + environment + resource requirement + deployment target.
 
 ## IDP xác định các infrastructure resource cần:
 
     * Tạo mới.
     * Cập nhật.
-    * Hoặc tái sử dụng.
+    * Tái sử dụng.
+    * Hoặc liên kết tới thứ có sẵn (resource dùng chung, cụm nội bộ).
+
+   Resource cần cập nhật khi đầu vào hiện tại khác đầu vào lần apply gần nhất: công thức trong phiên bản catalog, tham số, hoặc output của những gì resource đó cần.
 
    Khi deploy một phiên bản mới, IDP đồng thời xác định các thành phần đang chạy trên environment/target nhưng không còn trong phiên bản:
 
@@ -556,7 +584,13 @@ Image tag/version được xác định tại thời điểm deployment, không 
     * Resource do IDP quản lý cần hủy.
     * Resource dùng chung cần gỡ liên kết (không hủy hạ tầng thật).
 
-## IDP hiển thị các tầng triển khai, infrastructure plan (kể cả các thành phần sẽ bị gỡ, hủy hoặc gỡ liên kết, kèm cảnh báo mất dữ liệu khi hủy resource), danh sách thành phần có thể bị triển khai lại và các infrastructure parameter mà Developer được phép override.
+## IDP xác định các thành phần có thể bị làm lại tự động nếu output mà chúng dùng thay đổi.
+
+   Chỉ tính từ các thành phần sẽ được tạo, cập nhật hoặc deploy; thành phần được tái sử dụng không đổi output.
+
+   Ví dụ: `network` sẽ được cập nhật thì `k8s-cluster`, `postgresql` và các workload chạy trên cụm có thể bị làm lại.
+
+## IDP hiển thị các tầng triển khai, infrastructure plan (kể cả các thành phần sẽ bị gỡ, hủy hoặc gỡ liên kết, kèm cảnh báo mất dữ liệu khi hủy resource), danh sách thành phần có thể bị làm lại và các infrastructure parameter mà Developer được phép override.
 
 ## Developer xác nhận và chọn **Deploy**.
 
@@ -566,10 +600,10 @@ Image tag/version được xác định tại thời điểm deployment, không 
 
 ## Deployment Worker của IDP nhận job và triển khai lần lượt từng tầng ở chế độ chạy nền. Với mỗi tầng:
 
-   Với mỗi resource trong tầng:
+   Với mỗi resource trong tầng (kể cả VPC và cụm Kubernetes):
 
-    * Nếu Resource Definition thuộc loại do IDP quản lý: IDP reconcile infrastructure.
-    * Nếu Resource Definition thuộc loại trỏ tới resource có sẵn: IDP không tạo hay sửa hạ tầng, chỉ liên kết Resource Instance của application tới resource đó.
+    * Nếu Resource Definition thuộc loại do IDP quản lý: IDP reconcile infrastructure; input gồm output của những gì resource đó cần, ví dụ cụm EKS nhận subnet của network.
+    * Nếu Resource Definition thuộc loại trỏ tới thứ có sẵn (resource dùng chung hoặc cụm nội bộ): IDP không tạo hay sửa hạ tầng, chỉ liên kết Resource Instance của application tới thứ đó.
     * Khi resource sẵn sàng, IDP thu thập Resource Output tương ứng.
 
    Với mỗi workload trong tầng:
@@ -580,30 +614,40 @@ Image tag/version được xác định tại thời điểm deployment, không 
     * IDP áp dụng target-specific manifest adaptation/patch nếu deployment target yêu cầu cấu hình riêng.
     * Environment Variable được chuyển thành ConfigMap hoặc Kubernetes configuration tương ứng.
     * Secret được chuyển thành Kubernetes Secret hoặc secret reference phù hợp.
-    * IDP publish desired deployment state tới CD Integration; CD Integration chuyển desired state tới concrete CD implementation để triển khai xuống Kubernetes cluster.
+    * IDP publish desired deployment state tới CD Integration; CD Integration chuyển desired state tới concrete CD implementation để triển khai xuống cụm Kubernetes của nơi triển khai. Thông tin kết nối cụm lấy từ output của `k8s-cluster`.
     * IDP chờ tới khi pod của workload healthy.
     * IDP thu thập Workload Output tương ứng.
 
-   Ví dụ:
+   Ví dụ deploy toàn bộ `shop-app` lên AWS:
 
 ```text
-Tầng 0: reconcile postgresql
+Tầng 0: reconcile network
+        → network.subnet_ids
+
+Tầng 1: reconcile k8s-cluster (dùng network.subnet_ids)
+        → thông tin kết nối cụm
+        reconcile postgresql (dùng network.subnet_ids)
         → postgresql.host, postgresql.password
 
-Tầng 1: backend.DB_HOST     → postgresql.host
+Tầng 2: backend.DB_HOST     → postgresql.host
         backend.DB_PASSWORD → postgresql.password
-        deploy backend, chờ healthy
+        deploy backend lên cụm, chờ healthy
         → backend.endpoint
 
-Tầng 2: frontend.BACKEND_URL → backend.endpoint
+Tầng 3: frontend.BACKEND_URL → backend.endpoint
         deploy frontend, chờ healthy
 ```
 
 ## Sau mỗi tầng, IDP so sánh dấu vân tay output mới với lần triển khai trước của từng thành phần.
 
-   Nếu output thay đổi, các thành phần depends on thành phần đó nhưng chưa nằm trong phạm vi được tự động thêm vào các tầng sau của chính deployment này, dùng image version đang chạy của chúng. Việc lan truyền tiếp tục cho tới khi không còn output thay đổi.
+   Nếu output thay đổi, mọi thành phần dựa trên thành phần đó được làm lại trong chính deployment này, kể cả khi chưa nằm trong phạm vi:
 
-   Ví dụ chỉ deploy backend làm `backend.endpoint` thay đổi: frontend được thêm vào tầng kế tiếp với image đang chạy.
+    * Resource cần thành phần đó (qua `requires`) được reconcile lại với output mới.
+    * Workload depends on thành phần đó, hoặc chạy trên cụm đó, được thêm vào các tầng sau với image version đang chạy.
+
+   Việc lan truyền tiếp tục cho tới khi không còn output thay đổi.
+
+   Ví dụ chỉ deploy backend làm `backend.endpoint` thay đổi: frontend được thêm vào tầng kế tiếp với image đang chạy. Ví dụ network đổi subnet: cụm EKS và Aurora được reconcile lại ở tầng kế tiếp, rồi các workload dựa trên chúng được triển khai lại.
 
 ## Khi deploy một phiên bản mới, sau khi triển khai xong các tầng, IDP xử lý các thành phần không còn trong phiên bản.
 
@@ -617,6 +661,7 @@ Tầng 2: frontend.BACKEND_URL → backend.endpoint
 - Environment.
 - Deployment target.
 - Phiên bản Application Definition đã deploy.
+- Phiên bản catalog đã dùng.
 - Image version thực tế của từng workload và workload nào được triển khai lại tự động.
 - Các thành phần đã được gỡ, hủy hoặc gỡ liên kết.
 - Infrastructure reference.
@@ -632,17 +677,18 @@ Deployment dừng nếu:
 - Image version không hợp lệ.
 - Configuration bắt buộc chưa được cấu hình.
 - Environment Configuration không khớp với phiên bản được deploy, ví dụ biến còn tham chiếu output của thành phần không có trong phiên bản.
-- Chọn deploy một phần application nhưng phiên bản được chọn khác phiên bản đang chạy.
-- Dependency không thể resolve hoặc các quan hệ depends on tạo thành vòng.
+- Phiên bản catalog được chọn không tồn tại.
+- Chọn deploy một phần application nhưng phiên bản Application Definition hoặc phiên bản catalog được chọn khác bản đang chạy.
+- Dependency không thể resolve hoặc các quan hệ tạo thành vòng (kể cả vòng do `requires` trong catalog).
 - Workload phụ thuộc không nằm trong phạm vi deployment và chưa chạy healthy trên environment/target đã chọn.
-- Resource Definition phù hợp không tồn tại.
+- Phiên bản catalog được chọn không có Resource Definition phù hợp, kể cả công thức cụm Kubernetes cho nơi triển khai đã chọn.
 - Resource Output hoặc Workload Output được tham chiếu không hợp lệ.
 
 **IDP** hiển thị lỗi để Developer chỉnh sửa.
 
 ### A2 – Provisioning, delivery hoặc workload thất bại
 
-Nếu infrastructure provisioning, manifest generation, CD delivery thất bại, workload không healthy tại một tầng, hoặc việc gỡ workload / hủy resource / gỡ liên kết resource thất bại:
+Nếu infrastructure provisioning (kể cả VPC, cụm Kubernetes), manifest generation, CD delivery thất bại, workload không healthy tại một tầng, hoặc việc gỡ workload / hủy resource / gỡ liên kết resource thất bại:
 
 - **IDP** ghi nhận deployment thất bại và không triển khai các tầng sau.
 - **IDP** lưu tầng, thành phần liên quan, failed step và error summary.
@@ -652,18 +698,20 @@ Nếu infrastructure provisioning, manifest generation, CD delivery thất bại
 
 | Nhóm                   | Dữ liệu                                                 |
 | ---------------------- | ------------------------------------------------------- |
-| Deployment             | Application, phiên bản Application Definition, environment, deployment target |
+| Deployment             | Application, phiên bản Application Definition, phiên bản catalog, environment, deployment target |
 | Deployment Execution Job | Deployment, giá trị override đã chọn, trạng thái job  |
 | Workload Deployment    | Workload, image repository, image version, được chọn hay triển khai lại tự động |
 | Deployment Context     | Cloud provider, region, target-specific input           |
-| Deployment Graph       | Workload, resource, dependency, configuration reference, phạm vi, tầng triển khai |
-| Resource Resolution    | Resource, Resource Definition                           |
-| Resource Instance      | Application, environment, resource requirement, deployment target, trạng thái, dấu vân tay output |
+| Catalog Version        | Số phiên bản, các Resource Definition của phiên bản     |
+| Platform Requirement   | Application, loại (ví dụ `k8s-cluster`, `network`)      |
+| Deployment Graph       | Workload, resource, cụm Kubernetes/network do IDP thêm, dependency, configuration reference, phạm vi, tầng triển khai |
+| Resource Resolution    | Resource, cụm Kubernetes hoặc network; Resource Definition trong phiên bản catalog |
+| Resource Instance      | Application, environment, resource requirement hoặc platform requirement, deployment target, trạng thái, dấu vân tay output, dấu vân tay đầu vào lần apply gần nhất |
 | Resource Output        | Resource + output                                       |
 | Workload Output        | Workload + output                                       |
 | Resolved Configuration | Workload, variable/secret, resolved source              |
 | Workload Instance      | Workload, environment, deployment target, image đang chạy, trạng thái, dấu vân tay output |
-| Deployment Record      | Image version, target, status, infrastructure reference, tiến trình theo tầng/thành phần |
+| Deployment Record      | Image version, target, phiên bản catalog, status, infrastructure reference, tiến trình theo tầng/thành phần |
 
 ## 8. Quy tắc nghiệp vụ
 
@@ -671,10 +719,15 @@ Nếu infrastructure provisioning, manifest generation, CD delivery thất bại
 - Image tag/version thuộc Deployment.
 - Mỗi deployment phải lưu chính xác image được sử dụng cho từng workload.
 - Image version có thể do Developer chọn hoặc được CI cung cấp.
-- Mỗi deployment deploy đúng một phiên bản Application Definition vào đúng một environment (staging hoặc production) và một deployment target; environment khác không bị ảnh hưởng.
-- Đổi sang phiên bản khác phiên bản đang chạy thì phải deploy toàn bộ application; deploy một phần chỉ dùng phiên bản đang chạy.
+- Mỗi deployment deploy đúng một phiên bản Application Definition, với đúng một phiên bản catalog, vào đúng một environment (staging hoặc production) và một nơi triển khai; environment khác không bị ảnh hưởng.
+- Có hai loại nơi triển khai: cloud, nơi IDP dựng VPC và cụm Kubernetes riêng cho mỗi application + environment; và cụm Kubernetes nội bộ có sẵn, nơi IDP chỉ kết nối vào, không tạo và không xóa cụm. Platform có thể khai báo nhiều cụm nội bộ; catalog quyết định application và environment nào dùng cụm nào.
+- Developer không khai báo cụm Kubernetes hay network. IDP tự thêm cụm (`k8s-cluster`) mà mọi workload chạy trên đó, và những gì Resource Definition khai báo là cần thêm (`requires`). Công thức cần gì là do platform team quyết định trong catalog.
+- Database và các resource khác vẫn do IDP tạo cho mỗi application + environment, kể cả trên cụm nội bộ; muốn dùng thứ có sẵn thì platform khai báo Resource Definition trỏ tới resource có sẵn.
+- Catalog có phiên bản; sửa catalog là tạo phiên bản mới, phiên bản cũ giữ nguyên. Application đang chạy không bị ảnh hưởng cho tới khi Developer deploy với phiên bản catalog mới. Developer được chọn phiên bản catalog cũ hơn phiên bản đang chạy.
+- Đổi sang phiên bản Application Definition hoặc phiên bản catalog khác bản đang chạy thì phải deploy toàn bộ application; deploy một phần chỉ dùng bản đang chạy.
+- Promote staging → production dùng cả phiên bản Application Definition lẫn phiên bản catalog đang chạy ở staging.
 - Developer có thể deploy toàn bộ hoặc một phần workload của application.
-- Phạm vi deployment gồm workload được chọn và resource mà chúng depends on trực tiếp; resource ngoài phạm vi không bị reconcile.
+- Phạm vi deployment gồm workload được chọn, resource mà chúng depends on trực tiếp, và cụm Kubernetes/network mà các resource đó cần; resource khác ngoài phạm vi không bị reconcile. Thành phần trong phạm vi không có gì thay đổi thì được dùng lại.
 - Environment Configuration được kiểm tra khớp với phiên bản được deploy trước khi lập plan.
 - Resource Instance thuộc về đúng một chủ: application + environment + resource requirement + deployment target. Resource chỉ được dùng lại khi khớp đủ bộ này.
 - Resource dùng chung giữa các application hoặc environment chỉ được khai báo ở Resource Definition do platform quản lý; với loại này, IDP chỉ đọc output, không tạo, sửa hay hủy hạ tầng thật.
@@ -682,12 +735,12 @@ Nếu infrastructure provisioning, manifest generation, CD delivery thất bại
 - Sau khi Developer xác nhận, IDP trả lời ngay; việc triển khai do Deployment Worker chạy nền dựa trên job đã lưu.
 - Dependency/resource graph được xây dựng tại thời điểm deployment dựa trên phiên bản Application Definition được chọn, Environment Configuration và deployment context.
 - Các thành phần được triển khai theo thứ tự phụ thuộc: một thành phần chỉ được triển khai sau khi mọi thành phần nó depends on trong phạm vi đã sẵn sàng. Các thành phần không có quan hệ depends on với nhau là độc lập.
-- Resource Definition được resolve theo resource requirement và deployment context.
+- Resource Definition được resolve theo resource requirement (hoặc cụm Kubernetes, network), phiên bản catalog được chọn và deployment context.
 - Infrastructure được reconcile thay vì luôn tạo mới.
 - Resource Output chỉ được sử dụng sau khi resource tương ứng đã được resolve và sẵn sàng.
 - Workload Output chỉ được sử dụng sau khi workload tương ứng healthy; với workload ngoài phạm vi, output được lấy từ bản đang chạy.
 - Environment Configuration có thể phụ thuộc vào Resource Output hoặc Workload Output của thành phần mà workload depends on.
-- Khi output của một thành phần thay đổi, các thành phần depends on nó được tự động triển khai lại trong cùng deployment với image version đang chạy. **IDP** chỉ lưu dấu vân tay output để so sánh, không lưu giá trị output.
+- Khi output của một thành phần thay đổi, mọi thành phần dựa trên nó được tự động làm lại trong cùng deployment: resource cần nó được reconcile lại, workload depends on nó được triển khai lại với image version đang chạy. **IDP** chỉ lưu dấu vân tay output để so sánh, không lưu giá trị output.
 - Developer không trực tiếp thao tác với Terraform module, Kubernetes ConfigMap, Kubernetes Secret hoặc Kubernetes manifest.
 - `score-k8s` được sử dụng để sinh base Kubernetes manifest từ resolved application specification.
 - Target-specific manifest adaptation/patch được áp dụng sau bước sinh base manifest khi cần.
@@ -729,6 +782,8 @@ Deployment target.
 
 Phiên bản Application Definition đã deploy.
 
+Phiên bản catalog đã dùng.
+
 Image repository và version của từng workload, và workload nào được triển khai lại tự động.
 
 Các thành phần đã được gỡ, hủy hoặc gỡ liên kết trong deployment, nếu có.
@@ -747,7 +802,7 @@ Endpoint nếu có.
 
 Ví dụ:
 
-Deployment #42 Production — Phiên bản 5 — Succeeded
+Deployment #42 Production — Phiên bản 5 — Catalog v2 — Succeeded
 
 Tầng 0 postgresql ✓ Infrastructure Ready
 
@@ -800,10 +855,10 @@ Chịu trách nhiệm khai báo giá trị cấu hình theo từng environment, 
 
 ## UC 03 Deploy Application
 
-Chịu trách nhiệm biến một phiên bản Application Definition + Environment Configuration của một environment (staging hoặc production) + deployment context + image version của các workload được chọn thành một deployment thực tế. Trách nhiệm chia làm hai phần:
+Chịu trách nhiệm biến một phiên bản Application Definition + phiên bản catalog + Environment Configuration của một environment (staging hoặc production) + nơi triển khai (cloud hoặc cụm Kubernetes nội bộ) và deployment context + image version của các workload được chọn thành một deployment thực tế. Trách nhiệm chia làm hai phần:
 
-- **Nhận yêu cầu deploy:** kiểm tra configuration khớp phiên bản, dựng dependency/resource graph, xác định phạm vi và chia tầng theo thứ tự phụ thuộc, tìm resource để dùng lại theo đúng chủ sở hữu, lập plan (gồm cả thành phần sẽ bị gỡ, hủy hoặc gỡ liên kết) cho Developer xem; khi Developer xác nhận thì lưu job triển khai và trả lời ngay.
-- **Thực thi chạy nền (Deployment Worker):** với từng tầng reconcile infrastructure (hoặc chỉ liên kết resource dùng chung), resolve configuration, sinh manifest, gửi desired state sang CD system, chờ workload healthy và thu output; tự động triển khai lại thành phần phụ thuộc khi output thay đổi; gỡ workload, hủy resource hoặc gỡ liên kết resource dùng chung không còn trong phiên bản.
+- **Nhận yêu cầu deploy:** kiểm tra configuration khớp phiên bản, dựng dependency/resource graph (kể cả cụm Kubernetes và network của nơi triển khai), xác định phạm vi và chia tầng theo thứ tự phụ thuộc, tìm resource để dùng lại theo đúng chủ sở hữu, lập plan (gồm cả thành phần sẽ bị gỡ, hủy hoặc gỡ liên kết) cho Developer xem; khi Developer xác nhận thì lưu job triển khai và trả lời ngay.
+- **Thực thi chạy nền (Deployment Worker):** với từng tầng reconcile infrastructure, kể cả VPC và cụm trên cloud (hoặc chỉ liên kết cụm nội bộ và resource dùng chung), resolve configuration, sinh manifest, gửi desired state sang CD system, chờ workload healthy và thu output; tự động làm lại resource và workload phụ thuộc khi output thay đổi; gỡ workload, hủy resource hoặc gỡ liên kết resource dùng chung không còn trong phiên bản.
 
 ## UC 04 View Deployment Result
 
@@ -855,25 +910,25 @@ UC-02 chỉ lưu value hoặc reference, chưa resolve giá trị thật của R
 
 ## UC 03 Deploy Application
 
-- **createDeployment()** - Tạo deployment mới từ application, phiên bản Application Definition được chọn, environment (staging hoặc production), deployment target và image version của các workload được chọn.
+- **createDeployment()** - Tạo deployment mới từ application, phiên bản Application Definition và phiên bản catalog được chọn, environment (staging hoặc production), nơi triển khai và image version của các workload được chọn.
 
-- **validateDeploymentInput()** - Kiểm tra image version, deployment context, Environment Configuration khớp với phiên bản được chọn, và luật deploy một phần chỉ dùng phiên bản đang chạy.
+- **validateDeploymentInput()** - Kiểm tra image version, deployment context, Environment Configuration khớp với phiên bản được chọn, và luật deploy một phần chỉ dùng phiên bản Application Definition và phiên bản catalog đang chạy.
 
-- **buildDeploymentGraph()** - Dựng dependency/resource graph từ workload, resource, dependency, configuration reference và deployment context; phát hiện các quan hệ depends on tạo thành vòng.
+- **buildDeploymentGraph()** - Dựng dependency/resource graph từ workload, resource, dependency, configuration reference, phiên bản catalog và deployment context; tự thêm cụm Kubernetes và những gì Resource Definition khai báo là cần thêm (`requires`), ví dụ network; phát hiện các quan hệ tạo thành vòng.
 
-- **planDeploymentWaves()** - Xác định phạm vi deployment (workload được chọn và resource mà chúng depends on trực tiếp), chia các thành phần trong phạm vi thành các tầng theo thứ tự phụ thuộc, kiểm tra workload phụ thuộc ngoài phạm vi đang chạy healthy và liệt kê thành phần có thể bị triển khai lại.
+- **planDeploymentWaves()** - Xác định phạm vi deployment (workload được chọn, resource mà chúng depends on trực tiếp, cụm Kubernetes/network mà các resource đó cần), chia các thành phần trong phạm vi thành các tầng theo thứ tự phụ thuộc, kiểm tra workload phụ thuộc ngoài phạm vi đang chạy healthy; sau khi có infrastructure plan, liệt kê thành phần có thể bị làm lại (chỉ tính từ thành phần sẽ được tạo, cập nhật hoặc deploy).
 
-- **resolveResourceDefinitions()** - Chọn Resource Definition phù hợp cho từng resource trong phạm vi deployment, gồm cả việc resource đó thuộc loại do IDP quản lý hạ tầng hay loại trỏ tới resource dùng chung có sẵn.
+- **resolveResourceDefinitions()** - Chọn Resource Definition phù hợp trong phiên bản catalog được chọn cho từng resource, cụm Kubernetes và network trong graph (được gọi trong lúc dựng graph), gồm cả việc thuộc loại do IDP quản lý hạ tầng hay loại trỏ tới thứ có sẵn (resource dùng chung, cụm nội bộ).
 
-- **planInfrastructureChanges()** - Tìm Resource Instance hiện có theo đúng chủ sở hữu (application + environment + resource requirement + deployment target) và xác định resource nào cần tạo mới, cập nhật, tái sử dụng hoặc liên kết tới resource dùng chung; khi deploy phiên bản mới, xác định thêm workload cần gỡ, resource cần hủy và resource dùng chung cần gỡ liên kết.
+- **planInfrastructureChanges()** - Tìm Resource Instance hiện có theo đúng chủ sở hữu (application + environment + resource requirement hoặc cụm Kubernetes/network + deployment target) và xác định resource nào cần tạo mới, cập nhật, tái sử dụng hoặc liên kết tới thứ có sẵn; resource cần cập nhật khi đầu vào hiện tại (công thức trong phiên bản catalog, tham số, output của những gì nó cần) khác đầu vào lần apply gần nhất; khi deploy phiên bản mới, xác định thêm workload cần gỡ, resource cần hủy và resource dùng chung cần gỡ liên kết.
 
 - **loadInfrastructureOverrides()** - Lấy các infrastructure parameter mà Developer được phép override.
 
 - **applyInfrastructureOverrides()** - Ghi nhận các giá trị override mà Developer lựa chọn.
 
-- **confirmDeployment()** - Xác nhận deployment sau khi Developer kiểm tra các tầng triển khai, infrastructure plan, danh sách thành phần có thể bị triển khai lại và các override. Operation chỉ đổi trạng thái deployment sang đã xác nhận và tạo job triển khai (kèm các giá trị override đã chọn) trong cùng một lần lưu, rồi trả lời ngay; không tự thực thi việc triển khai.
+- **confirmDeployment()** - Xác nhận deployment sau khi Developer kiểm tra các tầng triển khai, infrastructure plan, danh sách thành phần có thể bị làm lại và các override. Operation chỉ đổi trạng thái deployment sang đã xác nhận và tạo job triển khai (kèm các giá trị override đã chọn) trong cùng một lần lưu, rồi trả lời ngay; không tự thực thi việc triển khai.
 
-- **reconcileInfrastructure()** - Do Deployment Worker gọi. Thực thi việc tạo/cập nhật infrastructure của các resource do IDP quản lý trong một tầng thông qua provisioner phù hợp, hoặc liên kết Resource Instance tới resource dùng chung có sẵn mà không đụng hạ tầng thật; với thành phần không còn trong phiên bản, thực thi việc hủy resource hoặc gỡ liên kết resource dùng chung.
+- **reconcileInfrastructure()** - Do Deployment Worker gọi. Thực thi việc tạo/cập nhật infrastructure của các resource do IDP quản lý trong một tầng (kể cả VPC, cụm Kubernetes trên cloud) thông qua provisioner phù hợp, với input gồm output của những gì resource cần; hoặc liên kết Resource Instance tới thứ có sẵn (resource dùng chung, cụm nội bộ) mà không đụng hạ tầng thật; với thành phần không còn trong phiên bản, thực thi việc hủy resource hoặc gỡ liên kết resource dùng chung.
 
 - **collectResourceOutputs()** - Thu thập Resource Output sau khi infrastructure resource sẵn sàng.
 
@@ -895,14 +950,14 @@ UC-02 chỉ lưu value hoặc reference, chưa resolve giá trị thật của R
 
 - **collectWorkloadOutputs()** - Thu thập Workload Output từ workload vừa healthy, hoặc từ workload đang chạy ngoài phạm vi deployment.
 
-- **propagateOutputChanges()** - So sánh dấu vân tay output mới với lần triển khai trước; nếu thay đổi, thêm các thành phần depends on vào các tầng sau với image version đang chạy.
+- **propagateOutputChanges()** - So sánh dấu vân tay output mới với lần triển khai trước; nếu thay đổi, reconcile lại các resource cần thành phần đó và thêm các workload dựa trên nó vào các tầng sau với image version đang chạy.
 
 - **saveDeploymentRecord()** - Lưu Deployment Record, image version, infrastructure reference, tiến trình theo tầng/thành phần và trạng thái thực thi.
 
 Chuỗi chính gồm hai phần:
 
-- **Trong request của Developer:** tạo deployment (chọn phiên bản) → kiểm tra input và configuration khớp phiên bản → dựng graph → chia tầng → resolve resource → plan/override infra (gồm gỡ/hủy/gỡ liên kết) → xác nhận: lưu job và trả lời ngay.
-- **Deployment Worker chạy nền:** với mỗi tầng: reconcile infra hoặc liên kết resource dùng chung → thu Resource Output → resolve config → sinh resolved spec → sinh base manifest → adapt theo target → materialize config/secret → publish sang CD → chờ healthy → thu Workload Output → lan truyền thay đổi output; sau các tầng: gỡ workload, hủy resource hoặc gỡ liên kết resource dùng chung không còn trong phiên bản → lưu deployment record.
+- **Trong request của Developer:** tạo deployment (chọn phiên bản Application Definition và phiên bản catalog) → kiểm tra input và configuration khớp phiên bản → dựng graph (resolve Resource Definition, thêm cụm/network) → chia tầng → plan/override infra (gồm gỡ/hủy/gỡ liên kết) → liệt kê thành phần có thể bị làm lại → xác nhận: lưu job và trả lời ngay.
+- **Deployment Worker chạy nền:** với mỗi tầng: reconcile infra (kể cả VPC, cụm) hoặc liên kết thứ có sẵn → thu Resource Output → resolve config → sinh resolved spec → sinh base manifest → adapt theo target → materialize config/secret → publish sang CD → chờ healthy → thu Workload Output → lan truyền thay đổi output (reconcile lại resource, triển khai lại workload); sau các tầng: gỡ workload, hủy resource hoặc gỡ liên kết resource dùng chung không còn trong phiên bản → lưu deployment record.
 
 ## UC 04 View Deployment Result
 
@@ -998,27 +1053,27 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 ### Boundary/UI
 
-- **Web UI** - Cho Developer chọn environment, deployment target, workload cần deploy và image version, xem các tầng triển khai, infrastructure plan, danh sách thành phần có thể bị triển khai lại, nhập override và xác nhận deploy.
+- **Web UI** - Cho Developer chọn environment, nơi triển khai (cloud hoặc cụm nội bộ), phiên bản Application Definition, phiên bản catalog, workload cần deploy và image version, xem các tầng triển khai, infrastructure plan, danh sách thành phần có thể bị làm lại, nhập override và xác nhận deploy.
 
 - **Deployment API / Controller** - Nhận request từ UI, validate ở mức request và chuyển sang Deployment Orchestrator.
 
 ### Application services
 
-- **Deployment Orchestrator** - Điều phối phần xử lý trong request của Developer: tạo deployment theo phiên bản được chọn, kiểm tra input, dựng graph, chia tầng, lập plan; khi Developer xác nhận thì đổi trạng thái deployment và lưu job triển khai trong cùng một lần lưu rồi trả lời ngay. Không tự thực thi việc triển khai.
+- **Deployment Orchestrator** - Điều phối phần xử lý trong request của Developer: tạo deployment theo phiên bản Application Definition và phiên bản catalog được chọn, kiểm tra input, dựng graph, chia tầng, lập plan; khi Developer xác nhận thì đổi trạng thái deployment và lưu job triển khai trong cùng một lần lưu rồi trả lời ngay. Không tự thực thi việc triển khai.
 
-- **Deployment Worker** - Tiến trình chạy nền nhận job triển khai đã lưu và điều phối phần thực thi: triển khai lần lượt từng tầng tới khi mọi workload trong phạm vi healthy, lan truyền khi output thay đổi, gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản, và cập nhật trạng thái deployment.
+- **Deployment Worker** - Tiến trình chạy nền nhận job triển khai đã lưu và điều phối phần thực thi: triển khai lần lượt từng tầng tới khi mọi workload trong phạm vi healthy, lan truyền khi output thay đổi (reconcile lại resource, triển khai lại workload), gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản, và cập nhật trạng thái deployment.
 
 ### Domain components
 
-- **Deployment Graph Builder** - Dựng dependency/resource graph từ Application Definition, Environment Configuration và deployment context; phát hiện các quan hệ depends on tạo thành vòng.
+- **Deployment Graph Builder** - Dựng dependency/resource graph từ Application Definition, Environment Configuration, phiên bản catalog và deployment context; tự thêm cụm Kubernetes và những gì Resource Definition `requires` (gọi Resource Definition Resolver trong lúc dựng); phát hiện các quan hệ tạo thành vòng.
 
-- **Deployment Wave Planner** - Xác định phạm vi deployment, chia các thành phần trong phạm vi thành các tầng theo thứ tự phụ thuộc, kiểm tra workload phụ thuộc ngoài phạm vi đang chạy healthy, và lan truyền khi output thay đổi bằng cách thêm thành phần phụ thuộc vào các tầng sau.
+- **Deployment Wave Planner** - Xác định phạm vi deployment, chia các thành phần trong phạm vi thành các tầng theo thứ tự phụ thuộc, kiểm tra workload phụ thuộc ngoài phạm vi đang chạy healthy, liệt kê thành phần có thể bị làm lại, và lan truyền khi output thay đổi bằng cách reconcile lại resource phụ thuộc và thêm workload phụ thuộc vào các tầng sau.
 
-- **Resource Definition Resolver** - Chọn Resource Definition phù hợp cho từng logical resource dựa trên type và deployment context; phân biệt definition do IDP quản lý hạ tầng với definition trỏ tới resource dùng chung có sẵn.
+- **Resource Definition Resolver** - Chọn Resource Definition phù hợp trong phiên bản catalog được chọn cho từng logical resource, cụm Kubernetes và network, dựa trên type và deployment context; phân biệt definition do IDP quản lý hạ tầng với definition trỏ tới thứ có sẵn (resource dùng chung, cụm nội bộ).
 
-- **Infrastructure Planner** - Tìm Resource Instance hiện có theo đúng chủ sở hữu (application + environment + resource requirement + deployment target), so sánh desired state với resource hiện tại để xác định cần create, update, reuse hay liên kết resource dùng chung; khi deploy phiên bản mới, xác định thêm workload cần gỡ, resource cần hủy và resource dùng chung cần gỡ liên kết.
+- **Infrastructure Planner** - Tìm Resource Instance hiện có theo đúng chủ sở hữu (application + environment + resource requirement hoặc cụm Kubernetes/network + deployment target), so sánh đầu vào hiện tại (công thức trong phiên bản catalog, tham số, output của những gì resource cần) với đầu vào lần apply gần nhất để xác định cần create, update, reuse hay liên kết tới thứ có sẵn; khi deploy phiên bản mới, xác định thêm workload cần gỡ, resource cần hủy và resource dùng chung cần gỡ liên kết.
 
-- **Infrastructure Reconciler** - Điều phối việc reconcile infrastructure của từng tầng theo plan đã xác định: tạo/sửa resource do IDP quản lý, chỉ liên kết (không đụng hạ tầng thật) với resource dùng chung, và thực hiện hủy resource hoặc gỡ liên kết resource không còn trong phiên bản.
+- **Infrastructure Reconciler** - Điều phối việc reconcile infrastructure của từng tầng theo plan đã xác định: tạo/sửa resource do IDP quản lý (kể cả VPC, cụm Kubernetes trên cloud) với input từ output của những gì resource cần, chỉ liên kết (không đụng hạ tầng thật) với thứ có sẵn (resource dùng chung, cụm nội bộ), và thực hiện hủy resource hoặc gỡ liên kết resource không còn trong phiên bản.
 
 - **Resource Output Resolver / Collector** - Thu thập output từ infrastructure đã provision, ví dụ host, port, username, password.
 
@@ -1056,24 +1111,26 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 - **CD System** - Hệ thống CD bên ngoài, ví dụ Argo CD hoặc Flux, nhận desired deployment state và đồng bộ xuống Kubernetes.
 
-- **Kubernetes Cluster** - Deployment target cuối nơi workload thực sự chạy; cung cấp trạng thái health và dữ liệu runtime của workload.
+- **Kubernetes Cluster** - Nơi workload thực sự chạy. Trên cloud, cụm do IDP dựng qua Provisioner; với cụm nội bộ, cụm có sẵn và được platform khai báo trong catalog. Thông tin kết nối cụm lấy từ output của `k8s-cluster`. Cung cấp trạng thái health và dữ liệu runtime của workload.
 
 ### Persistence
 
-- **Application Repository** - Đọc phiên bản Application Definition được chọn (đã lưu từ UC-01).
+- **Application Repository** - Đọc phiên bản Application Definition được chọn (đã lưu từ UC-01); tạo Platform Requirement (cụm Kubernetes, network) của application khi cần lần đầu.
 
 - **Environment Configuration Repository** - Đọc configuration/reference đã lưu từ UC-02.
 
-- **Resource Instance Repository** - Lưu/đọc Resource Instance theo đúng chủ sở hữu (application + environment + resource requirement + deployment target): trạng thái, reference, liên kết tới resource dùng chung và dấu vân tay output, phục vụ reconcile/reuse, gỡ/hủy và lan truyền thay đổi output.
+- **Resource Definition Catalog** - Đọc các phiên bản catalog và Resource Definition của phiên bản được chọn. Catalog do platform quản lý; IDP chỉ đọc.
+
+- **Resource Instance Repository** - Lưu/đọc Resource Instance theo đúng chủ sở hữu (application + environment + resource requirement hoặc cụm Kubernetes/network + deployment target): trạng thái, reference, liên kết tới thứ có sẵn, dấu vân tay output và dấu vân tay đầu vào lần apply gần nhất, phục vụ reconcile/reuse, gỡ/hủy và lan truyền thay đổi output.
 
 - **Workload Instance Repository** - Lưu/đọc trạng thái hiện hành của từng workload theo environment và deployment target: image đang chạy, trạng thái health và dấu vân tay output.
 
-- **Deployment Repository** - Lưu deployment (kèm phiên bản Application Definition), job triển khai cùng giá trị override đã chọn, Deployment Record, image version, target, infrastructure reference, tiến trình theo tầng/thành phần, status và lỗi nếu có.
+- **Deployment Repository** - Lưu deployment (kèm phiên bản Application Definition và phiên bản catalog), job triển khai cùng giá trị override đã chọn, Deployment Record, image version, target, infrastructure reference, tiến trình theo tầng/thành phần, status và lỗi nếu có.
 
 Luồng responsibility:
 
-- **Trong request:** Web UI → Deployment API → Deployment Orchestrator → Graph Builder → Wave Planner → Resource Definition Resolver → Infrastructure Planner → Deployment Repository (lưu deployment; khi xác nhận thì lưu job) → Web UI.
-- **Chạy nền:** Deployment Worker → (với mỗi tầng) Infrastructure Reconciler → Provisioner → Terraform/OpenTofu Runner → Resource Output Collector → Configuration Resolver → Resolved Spec Generator → Score Renderer → score-k8s → Target Adapter → Config/Secret Materializer → CD Integration → Concrete CD Provider → CD System → Kubernetes → Workload Status Provider → Workload Output Collector → Wave Planner (lan truyền) → (sau các tầng) gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản → Resource/Workload Instance Repository → Deployment Repository.
+- **Trong request:** Web UI → Deployment API → Deployment Orchestrator → Graph Builder (→ Resource Definition Resolver → Resource Definition Catalog) → Wave Planner → Infrastructure Planner → Wave Planner (thành phần có thể bị làm lại) → Deployment Repository (lưu deployment; khi xác nhận thì lưu job) → Web UI.
+- **Chạy nền:** Deployment Worker → (với mỗi tầng) Infrastructure Reconciler → Provisioner → Terraform/OpenTofu Runner → Resource Output Collector → Configuration Resolver → Resolved Spec Generator → Score Renderer → score-k8s → Target Adapter → Config/Secret Materializer → CD Integration → Concrete CD Provider → CD System → Kubernetes → Workload Status Provider → Workload Output Collector → Wave Planner (lan truyền sang resource và workload) → (sau các tầng) gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản → Resource/Workload Instance Repository → Deployment Repository.
 
 Deployment Orchestrator và Deployment Worker chỉ điều phối. Các việc dựng graph, chia tầng và lan truyền thay đổi output, resolve Resource Definition, reconcile infrastructure, resolve configuration, sinh manifest, giao tiếp với CD và thu output nằm ở các component riêng.
 

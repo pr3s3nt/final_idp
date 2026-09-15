@@ -11,6 +11,7 @@ control "Deployment Orchestrator" as Orchestrator
 control "Deployment Worker" as Worker
 entity "Application Repository" as AppRepo
 entity "Environment Configuration Repository" as ConfigRepo
+entity "Resource Definition Catalog" as CatalogRepo
 control "Deployment Graph Builder" as GraphBuilder
 control "Deployment Wave Planner" as WavePlanner
 control "Resource Definition Resolver" as ResourceResolver
@@ -37,20 +38,29 @@ control "Workload Output Collector" as WorkloadOutputCollector
 entity "Deployment Repository" as DeploymentRepo
 
 Developer -> UI: Select Deploy Application
-Developer -> UI: Select environment (staging or production)\nand deployment target
+Developer -> UI: Select environment (staging or production)\nand deployment target (cloud or internal Kubernetes cluster)
 UI -> API: loadDeploymentForm(applicationId, environment, target)
 API -> Orchestrator: loadDeploymentContext(applicationId, environment, target)
 Orchestrator -> AppRepo: listVersions(applicationId)
 AppRepo --> Orchestrator: Application Definition versions
+Orchestrator -> CatalogRepo: listCatalogVersions()
+CatalogRepo --> Orchestrator: Catalog versions
 Orchestrator -> WorkloadInstanceRepo: findWorkloadInstances(applicationId,\nenvironment, target)
-WorkloadInstanceRepo --> Orchestrator: Running version, workloads and images
-Orchestrator --> API: Versions, running version, workloads,\nimage repositories and running images
+WorkloadInstanceRepo --> Orchestrator: Running version, running catalog version,\nworkloads and images
+Orchestrator --> API: Versions, catalog versions, running versions, workloads,\nimage repositories and running images
+note right of Orchestrator
+  The form preselects the catalog version running on this
+  environment and target and flags a newer one; when nothing
+  runs yet it preselects the newest. Promoting to production
+  uses the Application Definition version and catalog version
+  running on staging.
+end note
 API --> UI: Display deployment form
 
-Developer -> UI: Select Application Definition version,\nworkloads to deploy and image version for each
-Developer -> UI: Enter remaining deployment context
-UI -> API: createDeployment(applicationId, version, environment,\ntarget, images, context)
-API -> Orchestrator: createDeployment(applicationId, version, environment,\ntarget, images, context)
+Developer -> UI: Select Application Definition version, catalog version,\nworkloads to deploy and image version for each
+Developer -> UI: Enter remaining deployment context\n(none for an internal cluster)
+UI -> API: createDeployment(applicationId, version, catalogVersion,\nenvironment, target, images, context)
+API -> Orchestrator: createDeployment(applicationId, version, catalogVersion,\nenvironment, target, images, context)
 Orchestrator -> AppRepo: findVersion(applicationId, version)
 AppRepo --> Orchestrator: Selected Application Definition version
 Orchestrator -> ConfigRepo: findByApplicationAndEnvironment(applicationId, environment)
@@ -60,50 +70,69 @@ note right of Orchestrator
   Configuration must match the selected version: required values are set
   and no reference points to a component missing from the version or not
   depended on in it. Partial deployment is allowed only when the selected
-  version equals the version running on this environment and target.
+  version and catalog version equal those running on this environment
+  and target.
 end note
 
-Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinitionVersion,\nconfiguration, images, context)
-GraphBuilder --> Orchestrator: Deployment graph (no depends-on cycle)
+Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinitionVersion,\nconfiguration, images, catalogVersion, context)
+loop Until no new platform requirement is added
+  GraphBuilder -> ResourceResolver: resolveResourceDefinitions(requirements,\ncatalogVersion, context)
+  ResourceResolver -> CatalogRepo: findResourceDefinitions(catalogVersion)
+  CatalogRepo --> ResourceResolver: Resource Definitions of the catalog version
+  ResourceResolver --> GraphBuilder: Resolved Resource Definitions\n(MANAGED or EXISTING) and their requires
+end
+GraphBuilder --> Orchestrator: Deployment graph with k8s-cluster and required\nplatform requirements (no cycle)
+note right of GraphBuilder
+  Every workload runs on the implicit k8s-cluster.
+  A Resource Definition's requires (set by the platform team)
+  adds that platform requirement to the graph, e.g. on AWS
+  eks-cluster and aurora-postgresql require network.
+  On an internal cluster, k8s-cluster resolves to an
+  EXISTING definition pointing to the existing cluster.
+end note
 Orchestrator -> WavePlanner: planDeploymentWaves(graph, selectedWorkloads,\nrunningWorkloadInstances)
-WavePlanner --> Orchestrator: Scope, ordered waves and components\nthat may be redeployed
-Orchestrator -> ResourceResolver: resolveResourceDefinitions(graph, context)
-ResourceResolver --> Orchestrator: Resolved Resource Definitions\n(MANAGED or EXISTING)
-Orchestrator -> ResourceRepo: findResourceInstances(applicationId, environment,\nresourceRequirementIds, target)
-ResourceRepo --> Orchestrator: Resource instances of this owner,\nincluding those no longer in the version
+WavePlanner --> Orchestrator: Scope (including required cluster/network)\nand ordered waves
+Orchestrator -> ResourceRepo: findResourceInstances(applicationId, environment,\nrequirementIds, target)
+ResourceRepo --> Orchestrator: Resource instances of this owner (including cluster\nand network), including those no longer in the version
 Orchestrator -> InfraPlanner: planInfrastructureChanges(graph, waves,\nresolvedDefinitions, currentInstances, runningWorkloadInstances)
 InfraPlanner --> Orchestrator: Infrastructure plan
 note right of InfraPlanner
   Conceptual plan content (typed structure deferred, D3):
   per wave, resources to CREATE, UPDATE, REUSE or link to an
-  EXISTING shared resource; for a new version, workloads to REMOVE,
-  managed resources to DESTROY and shared resources to UNLINK.
+  EXISTING resource (shared resource or internal cluster);
+  for a new version, workloads to REMOVE, managed resources to
+  DESTROY and shared resources to UNLINK.
+  A resource is UPDATEd when its current input (definition in the
+  catalog version, parameters, outputs of what it requires)
+  differs from the input of its last apply.
 end note
+Orchestrator -> WavePlanner: findPotentialRedeploys(graph, waves,\nplan, runningWorkloadInstances)
+WavePlanner --> Orchestrator: Components that may be redone\n(only from components created, updated or deployed)
 Orchestrator -> InfraPlanner: loadInfrastructureOverrides(plan)
 InfraPlanner --> Orchestrator: Allowed override parameters from\nresource_definition.allowed_overrides
 Orchestrator -> Orchestrator: computePlanFingerprint(plan, allowedOverrides, "sha256-v1")
 note right of Orchestrator
   Canonicalize with stable resource/key ordering and canonical JSON;
   normalize units/numbers; exclude timestamps and non-semantic generated ids.
-  Fingerprint domain: each resource's CREATE/UPDATE/REUSE action;
-  referenced Resource Definition identity and its plan-affecting fields
-  (provisioner_reference, supported_contexts, default_parameters, and
-  allowed_overrides); resolved parameters derived from default_parameters
-  plus deployment context; allowed-override definition derived from
-  allowed_overrides; referenced Resource Instance identity; and deployment
-  target. Changes to those Resource Definition fields change the fingerprint
-  directly; no version column is used.
+  Fingerprint domain: the catalog version; each resource's
+  CREATE/UPDATE/REUSE action; referenced Resource Definition identity and
+  its plan-affecting fields (provisioner_reference, supported_contexts,
+  default_parameters, allowed_overrides, requires); resolved parameters
+  derived from default_parameters plus deployment context; allowed-override
+  definition derived from allowed_overrides; referenced Resource Instance
+  identity; and deployment target. Resource Definitions of a catalog
+  version never change.
 end note
-Orchestrator -> DeploymentRepo: persistDeployment(deployment, applicationDefinitionVersion,\nworkloadDeployments, deploymentContext, planFingerprint,\nplanFingerprintAlgo, AWAITING_CONFIRMATION)
+Orchestrator -> DeploymentRepo: persistDeployment(deployment, applicationDefinitionVersion,\ncatalogVersion, workloadDeployments, deploymentContext,\nplanFingerprint, planFingerprintAlgo, AWAITING_CONFIRMATION)
 DeploymentRepo --> Orchestrator: Deployment aggregate persisted
-Orchestrator --> API: Waves, infrastructure plan (including removals),\ncomponents that may be redeployed, allowed overrides,\nfingerprint and algorithm
-API --> UI: Display waves, plan with data-loss warnings for DESTROY,\ncomponents that may be redeployed, overrides,\nfingerprint and algorithm
+Orchestrator --> API: Waves, infrastructure plan (including removals),\ncomponents that may be redone, allowed overrides,\nfingerprint and algorithm
+API --> UI: Display waves, plan with data-loss warnings for DESTROY,\ncomponents that may be redone, overrides,\nfingerprint and algorithm
 
 Developer -> UI: Set permitted overrides and select Deploy
 UI -> API: confirmDeployment(deploymentId, overrides)
 API -> Orchestrator: confirmDeployment(deploymentId, overrides)
 Orchestrator -> DeploymentRepo: findByIdWithPersistedInputs(deploymentId)
-DeploymentRepo --> Orchestrator: Deployment, Application Definition version,\nworkload images, context, stored fingerprint and algorithm
+DeploymentRepo --> Orchestrator: Deployment, Application Definition version,\ncatalog version, workload images, context,\nstored fingerprint and algorithm
 Orchestrator -> Orchestrator: check status = AWAITING_CONFIRMATION
 
 alt [status != AWAITING_CONFIRMATION]
@@ -114,16 +143,16 @@ else [status = AWAITING_CONFIRMATION]
   AppRepo --> Orchestrator: Deployed Application Definition version
   Orchestrator -> ConfigRepo: findById(deployment.environmentConfigurationId)
   ConfigRepo --> Orchestrator: Persisted Environment Configuration
-  Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinitionVersion,\nconfiguration, workloadImages, context)
-  GraphBuilder --> Orchestrator: Rebuilt deployment graph
+  Orchestrator -> GraphBuilder: buildDeploymentGraph(applicationDefinitionVersion,\nconfiguration, workloadImages, deployment.catalogVersion, context)
+  GraphBuilder --> Orchestrator: Rebuilt deployment graph\n(resolved through Resource Definition Resolver as above)
   Orchestrator -> WavePlanner: planDeploymentWaves(graph, selectedWorkloads,\nrunningWorkloadInstances)
   WavePlanner --> Orchestrator: Rebuilt scope and waves
-  Orchestrator -> ResourceResolver: resolveResourceDefinitions(graph, context)
-  ResourceResolver --> Orchestrator: Current resolved Resource Definitions
-  Orchestrator -> ResourceRepo: findResourceInstances(deployment.applicationId,\ndeployment.environment, resourceRequirementIds,\ndeployment.deploymentTarget)
+  Orchestrator -> ResourceRepo: findResourceInstances(deployment.applicationId,\ndeployment.environment, requirementIds,\ndeployment.deploymentTarget)
   ResourceRepo --> Orchestrator: Current resource instances of this owner
   Orchestrator -> InfraPlanner: planInfrastructureChanges(graph, waves,\nresolvedDefinitions, currentInstances, runningWorkloadInstances)
   InfraPlanner --> Orchestrator: Rebuilt infrastructure plan
+  Orchestrator -> WavePlanner: findPotentialRedeploys(graph, waves,\nrebuiltPlan, runningWorkloadInstances)
+  WavePlanner --> Orchestrator: Components that may be redone
   Orchestrator -> InfraPlanner: loadInfrastructureOverrides(rebuiltPlan)
   InfraPlanner --> Orchestrator: Current allowed override parameters from\nresource_definition.allowed_overrides
   Orchestrator -> Orchestrator: computePlanFingerprint(rebuiltPlan,\nallowedOverrides, storedFingerprintAlgo)
@@ -167,23 +196,23 @@ end note
 Worker -> DeploymentRepo: updateDeploymentStatus(deploymentId, CONFIRMED, DEPLOYING)
 DeploymentRepo --> Worker: Deployment status persisted
 Worker -> DeploymentRepo: findByIdWithPersistedInputs(deploymentId)
-DeploymentRepo --> Worker: Deployment, Application Definition version,\nworkload images and context
+DeploymentRepo --> Worker: Deployment, Application Definition version,\ncatalog version, workload images and context
 Worker -> AppRepo: findVersion(deployment.applicationId,\ndeployment.applicationDefinitionVersion)
 AppRepo --> Worker: Deployed Application Definition version
 Worker -> ConfigRepo: findById(deployment.environmentConfigurationId)
 ConfigRepo --> Worker: Environment Configuration
-Worker -> GraphBuilder: buildDeploymentGraph(applicationDefinitionVersion,\nconfiguration, workloadImages, context)
-GraphBuilder --> Worker: Deployment graph
+Worker -> GraphBuilder: buildDeploymentGraph(applicationDefinitionVersion,\nconfiguration, workloadImages, deployment.catalogVersion, context)
+GraphBuilder --> Worker: Deployment graph\n(resolved through Resource Definition Resolver as above)
 Worker -> WavePlanner: planDeploymentWaves(graph, selectedWorkloads,\nrunningWorkloadInstances)
 WavePlanner --> Worker: Scope and ordered waves
-Worker -> ResourceResolver: resolveResourceDefinitions(graph, context)
-ResourceResolver --> Worker: Resolved Resource Definitions
-Worker -> ResourceRepo: findResourceInstances(deployment.applicationId,\ndeployment.environment, resourceRequirementIds,\ndeployment.deploymentTarget)
+Worker -> ResourceRepo: findResourceInstances(deployment.applicationId,\ndeployment.environment, requirementIds,\ndeployment.deploymentTarget)
 ResourceRepo --> Worker: Current resource instances of this owner
 Worker -> InfraPlanner: planInfrastructureChanges(graph, waves,\nresolvedDefinitions, currentInstances, runningWorkloadInstances)
 InfraPlanner --> Worker: Infrastructure plan
 Worker -> InfraPlanner: applyInfrastructureOverrides(plan, job.overrides)
 InfraPlanner --> Worker: Final infrastructure plan
+Worker -> AppRepo: ensurePlatformRequirements(deployment.applicationId,\nplatformRequirements)
+AppRepo --> Worker: Platform requirements (e.g. k8s-cluster, network)\nexist with stable IDs
 Worker -> WorkloadOutputCollector: collectWorkloadOutputs(deployment.deploymentTarget,\nrunningDependenciesOutsideScope)
 WorkloadOutputCollector -> WorkloadStatusProvider: readWorkloadOutputs(target, workloads)
 WorkloadStatusProvider -> Kubernetes: Read runtime data of running workloads
@@ -196,17 +225,22 @@ note right of WorkloadOutputCollector
 end note
 
 loop For each wave, in dependency order
-  opt [wave contains resources]
-    Worker -> InfraReconciler: reconcileInfrastructure(finalPlan, wave)
+  opt [wave contains resources, including cluster or network]
+    Worker -> InfraReconciler: reconcileInfrastructure(finalPlan, wave,\nrequiredResourceOutputs)
     alt [Resource Definition is MANAGED]
-      InfraReconciler -> Provisioner: reconcile(waveResourceItems)
+      InfraReconciler -> Provisioner: reconcile(waveResourceItems, requiredResourceOutputs)
       Provisioner -> IaCRunner: apply infrastructure modules
       IaCRunner --> Provisioner: Infrastructure ready and raw outputs
       Provisioner --> InfraReconciler: Resource state and outputs
-    else [Resource Definition is EXISTING (shared)]
-      InfraReconciler -> InfraReconciler: Link to the existing shared resource\n(no provisioning, real infrastructure untouched)
+    else [Resource Definition is EXISTING (shared resource or internal cluster)]
+      InfraReconciler -> InfraReconciler: Link to the existing resource\n(no provisioning, real infrastructure untouched)
     end
-    InfraReconciler -> ResourceRepo: saveResourceInstances(resourceState)\n(owner key, READY)
+    note right of InfraReconciler
+      requiredResourceOutputs are the outputs of the
+      platform requirements a resource requires, e.g.
+      eks-cluster receives the subnets of network.
+    end note
+    InfraReconciler -> ResourceRepo: saveResourceInstances(resourceState)\n(owner key, READY, applied input fingerprint)
     ResourceRepo --> InfraReconciler: Resource instances saved
     InfraReconciler --> Worker: Infrastructure references
     Worker -> OutputCollector: collectResourceOutputs(infrastructureReferences)
@@ -238,6 +272,11 @@ loop For each wave, in dependency order
     CDSystem --> CDProvider: Synchronization started
     CDProvider --> CDIntegration: Delivery reference
     CDIntegration --> Worker: Delivery reference
+    note right of CDIntegration
+      The cluster to deliver to and read from is the
+      k8s-cluster of this deployment; its connection data
+      comes from the k8s-cluster Resource Output.
+    end note
     Worker -> WorkloadInstanceRepo: saveWorkloadInstances(waveWorkloads, DEPLOYING)
     WorkloadInstanceRepo --> Worker: Workload instances saved
     Worker -> WorkloadStatusProvider: waitForWorkloadsHealthy(deployment.deploymentTarget,\nwaveWorkloads)
@@ -255,7 +294,7 @@ loop For each wave, in dependency order
   ResourceRepo --> WavePlanner: Previous output fingerprints
   WavePlanner -> WorkloadInstanceRepo: loadOutputFingerprintsAndRunningImages(\nwaveWorkloads, dependents)
   WorkloadInstanceRepo --> WavePlanner: Previous fingerprints and running images of dependents
-  WavePlanner --> Worker: Remaining waves; dependents added with their running\nimage version when an output changed
+  WavePlanner --> Worker: Remaining waves; when an output changed, managed resources\nthat require the component are reconciled again and dependent\nworkloads are added with their running image version
   Worker -> ResourceRepo: updateOutputFingerprints(waveResources)
   Worker -> WorkloadInstanceRepo: updateWorkloadInstances(waveWorkloads,\nHEALTHY, outputFingerprints)
   note right of Worker
@@ -275,7 +314,7 @@ opt [deployed version no longer contains some running components]
   Worker -> CDIntegration: publishDesiredDeploymentState(\ndesiredStateWithoutRemovedWorkloads)
   CDIntegration --> Worker: Delivery reference
   Worker -> WorkloadInstanceRepo: updateWorkloadInstances(removedWorkloads, REMOVED)
-  Worker -> InfraReconciler: reconcileInfrastructure(finalPlan, removals)
+  Worker -> InfraReconciler: reconcileInfrastructure(finalPlan, removals,\nrequiredResourceOutputs)
   alt [managed resource]
     InfraReconciler -> Provisioner: destroy(resourceItems)
     Provisioner -> IaCRunner: destroy infrastructure modules

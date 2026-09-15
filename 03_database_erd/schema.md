@@ -29,12 +29,17 @@ Mỗi lần Save ở UC-01 tạo một dòng mới. Dòng đã tạo không bị
 
 Identity table hiện thực **ID cố định qua các phiên bản** của Workload, Resource Requirement, Environment Variable Definition và Secret Definition. Đây không phải domain object mới: mỗi dòng chỉ giữ ID logic và loại thành phần; thuộc tính theo phiên bản nằm ở các bảng bên dưới. Các bảng nằm ngoài phiên bản (configuration, Resource/Workload Instance, workload deployment) tham chiếu ID logic qua bảng này nên vẫn đúng khi thành phần đổi tên hoặc không còn trong phiên bản mới.
 
+Bảng này cũng lưu **Platform Requirement** (thứ application cần nhưng Developer không khai báo, ví dụ cụm Kubernetes, network). Platform Requirement không thuộc phiên bản nên không có bảng theo phiên bản; dòng loại `PLATFORM_REQUIREMENT` chỉ giữ ID cố định (suy ra từ application + loại) và loại hạ tầng, được tạo khi Deployment Worker cần lần đầu.
+
 | Column | Type | Constraints | Mô tả |
 |---|---|---|---|
 | `component_id` | UUID | PK, NOT NULL | ID logic cố định qua các phiên bản. |
 | `application_id` | UUID | FK → `application_definition.application_id`, NOT NULL | Application sở hữu thành phần. |
-| `component_type` | ENUM (`WORKLOAD`, `RESOURCE_REQUIREMENT`, `ENVIRONMENT_VARIABLE_DEFINITION`, `SECRET_DEFINITION`) | NOT NULL, UNIQUE (`component_id`, `component_type`) | Loại thành phần; cặp (`component_id`, `component_type`) cho phép composite FK kiểm tra đúng loại. |
+| `component_type` | ENUM (`WORKLOAD`, `RESOURCE_REQUIREMENT`, `ENVIRONMENT_VARIABLE_DEFINITION`, `SECRET_DEFINITION`, `PLATFORM_REQUIREMENT`) | NOT NULL, UNIQUE (`component_id`, `component_type`) | Loại thành phần; cặp (`component_id`, `component_type`) cho phép composite FK kiểm tra đúng loại. |
+| `platform_requirement_type` | VARCHAR(100) | NULL | Loại resource khi `component_type = PLATFORM_REQUIREMENT` (ví dụ `k8s-cluster`, `network`); khớp `resource_definition.resource_type` khi resolve. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm thành phần xuất hiện lần đầu. |
+
+Constraint bổ sung: `CHECK` `platform_requirement_type` khác `NULL` khi và chỉ khi `component_type = PLATFORM_REQUIREMENT`; partial `UNIQUE (application_id, platform_requirement_type) WHERE component_type = 'PLATFORM_REQUIREMENT'` — mỗi application có tối đa một Platform Requirement mỗi loại.
 
 ### `workload`
 
@@ -182,14 +187,25 @@ Constraint bổ sung: `UNIQUE (environment_configuration_id, secret_definition_i
 
 ## Platform Resource Definition Catalog
 
-`Resource Definition` là persistent reference data theo Step 2 nhưng được platform quản lý, nằm ngoài năm application-lifecycle repository. Table vẫn phải có trong ERD để không làm mất persistent domain object.
+`Catalog Version` và `Resource Definition` là persistent reference data theo Step 2 nhưng được platform quản lý, nằm ngoài năm application-lifecycle repository. Table vẫn phải có trong ERD để không làm mất persistent domain object. UC-03 chỉ đọc hai bảng này qua Resource Definition Catalog.
+
+### `catalog_version`
+
+Mỗi lần platform sửa catalog tạo một dòng mới cùng toàn bộ `resource_definition` của phiên bản đó. Dòng đã tạo không bị `UPDATE` hay `DELETE`; FK trỏ tới bảng này dùng `ON DELETE RESTRICT`.
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `catalog_version_id` | UUID | PK, NOT NULL | Identity của phiên bản catalog. |
+| `version_number` | INT | NOT NULL, UNIQUE | Số thứ tự phiên bản catalog, tăng dần. |
+| `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo phiên bản. |
 
 ### `resource_definition`
 
 | Column | Type | Constraints | Mô tả |
 |---|---|---|---|
-| `resource_definition_id` | UUID | PK, NOT NULL | Identity của Resource Definition. |
-| `name` | VARCHAR(255) | NOT NULL, UNIQUE | Tên catalog definition. |
+| `resource_definition_id` | UUID | PK, NOT NULL | Identity của Resource Definition trong một phiên bản catalog. |
+| `catalog_version_id` | UUID | FK → `catalog_version.catalog_version_id` (`ON DELETE RESTRICT`), NOT NULL | Phiên bản catalog chứa definition. |
+| `name` | VARCHAR(255) | NOT NULL, UNIQUE (`catalog_version_id`, `name`) | Tên catalog definition; cùng `name` qua các phiên bản là cùng một definition. |
 | `resource_type` | VARCHAR(100) | NOT NULL | Loại logical resource được definition hỗ trợ. |
 | `provisioner_reference` | VARCHAR(2048) | NOT NULL | Reference tới provisioner/module; không phải execution result. |
 | `supported_contexts` | JSONB | NOT NULL | Các deployment context được hỗ trợ. |
@@ -199,9 +215,10 @@ Constraint bổ sung: `UNIQUE (environment_configuration_id, secret_definition_i
 | `sensitive_outputs` | JSONB | NOT NULL | Danh sách sensitive outputs hợp lệ. |
 | `management_mode` | ENUM (`MANAGED`, `EXISTING`) | NOT NULL | `MANAGED`: IDP tạo/sửa/hủy hạ tầng qua provisioner. `EXISTING`: definition trỏ tới resource dùng chung có sẵn; IDP chỉ đọc output, không đụng hạ tầng thật. |
 | `applicability_conditions` | JSONB | NULL | Điều kiện application/environment được áp dụng definition, dùng để khai báo tường minh việc dùng chung (ví dụ mọi application ở `STAGING`). |
-| `existing_resource_reference` | VARCHAR(2048) | NULL | Reference tới resource có sẵn khi `management_mode = EXISTING`. |
+| `existing_resource_reference` | VARCHAR(2048) | NULL | Reference tới thứ có sẵn khi `management_mode = EXISTING`, ví dụ database dùng chung hoặc thông tin kết nối cụm Kubernetes nội bộ. |
+| `requires` | JSONB | NOT NULL | Danh sách loại resource mà definition cần, do platform team quyết định (ví dụ `network`); mảng rỗng nếu không cần. Output của chúng là input provisioning. |
 
-Constraint bổ sung: `CHECK` khi `management_mode = EXISTING` thì `existing_resource_reference` khác `NULL`.
+Constraint bổ sung: `CHECK` khi `management_mode = EXISTING` thì `existing_resource_reference` khác `NULL`. Các `requires` trong một phiên bản không tạo thành vòng; điều kiện này được kiểm tra khi platform nạp phiên bản catalog. Dòng của phiên bản đã tạo không bị `UPDATE` hay `DELETE`.
 
 ## Resource Instance Repository
 
@@ -212,13 +229,14 @@ Constraint bổ sung: `CHECK` khi `management_mode = EXISTING` thì `existing_re
 | `resource_instance_id` | UUID | PK, NOT NULL | Identity bền vững của Resource Instance. |
 | `application_id` | UUID | FK → `application_definition.application_id`, NOT NULL | Application chủ sở hữu. |
 | `environment` | ENUM (`STAGING`, `PRODUCTION`) | NOT NULL | Environment chủ sở hữu. |
-| `resource_requirement_id` | UUID | FK → `application_component.component_id` (loại `RESOURCE_REQUIREMENT`), NOT NULL | ID cố định của Resource Requirement chủ sở hữu. |
-| `resource_definition_id` | UUID | FK → `resource_definition.resource_definition_id`, NOT NULL | Catalog definition đã dùng để provision hoặc liên kết. |
+| `resource_requirement_id` | UUID | FK → `application_component.component_id` (loại `RESOURCE_REQUIREMENT` hoặc `PLATFORM_REQUIREMENT`), NOT NULL | ID cố định của Resource Requirement hoặc Platform Requirement (cụm Kubernetes, network) chủ sở hữu. |
+| `resource_definition_id` | UUID | FK → `resource_definition.resource_definition_id`, NOT NULL | Catalog definition (thuộc một phiên bản catalog) của lần provision hoặc liên kết gần nhất. |
 | `deployment_target` | VARCHAR(255) | NOT NULL | Target nơi resource được quản lý. |
 | `infrastructure_reference` | VARCHAR(2048) | NOT NULL | Durable provider/infrastructure identity. Không `UNIQUE`: nhiều instance loại `EXISTING` của các chủ sở hữu khác nhau có thể trỏ cùng một resource dùng chung. |
 | `provider_state_reference` | VARCHAR(2048) | NULL | Reference tới provider state nếu có. |
 | `status` | ENUM (`PLANNED`, `PROVISIONING`, `READY`, `FAILED`, `DESTROYED`, `UNLINKED`) | NOT NULL | Lifecycle status của Resource Instance. `DESTROYED`/`UNLINKED` là trạng thái kết thúc; dòng được giữ lại cho lịch sử. |
 | `output_fingerprint` | CHAR(64) | NULL | SHA-256 hex của output lần gần nhất, dùng để phát hiện output thay đổi; không lưu giá trị output. |
+| `applied_input_fingerprint` | CHAR(64) | NULL | SHA-256 hex của đầu vào lần apply gần nhất: definition của phiên bản catalog, tham số đã resolve và dấu vân tay output của các Platform Requirement được `requires`. Đầu vào hiện tại khác giá trị này thì plan cập nhật instance. `NULL` với instance `EXISTING`. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
 
@@ -256,6 +274,7 @@ Không có table `workload_output`: `Workload Output` là runtime view `TRANSIEN
 | `deployment_id` | UUID | PK, NOT NULL | Identity của một lần deployment. |
 | `application_id` | UUID | FK → `application_definition.application_id`, NOT NULL | Application được deploy. |
 | `application_definition_version_id` | UUID | FK → `application_definition_version.application_definition_version_id` (`ON DELETE RESTRICT`), NOT NULL | Phiên bản Application Definition được deploy. |
+| `catalog_version_id` | UUID | FK → `catalog_version.catalog_version_id` (`ON DELETE RESTRICT`), NOT NULL | Phiên bản catalog dùng để resolve Resource Definition trong deployment. |
 | `environment_configuration_id` | UUID | FK → `environment_configuration.environment_configuration_id`, NOT NULL | Environment Configuration được dùng làm source references. |
 | `environment` | ENUM (`STAGING`, `PRODUCTION`) | NOT NULL | Environment snapshot của deployment. |
 | `deployment_target` | VARCHAR(255) | NOT NULL | Kubernetes/deployment target đã chọn. |
@@ -375,6 +394,12 @@ Constraint bổ sung: `UNIQUE (deployment_record_id, resource_instance_id)`.
 - `deployment.application_definition_version_id` ghi đúng phiên bản đã deploy. Thành phần không còn trong phiên bản chỉ bị gỡ ở hạ tầng/cluster; dòng `resource_instance`/`workload_instance` được giữ với status kết thúc.
 - Chỉ lưu dấu vân tay output (`output_fingerprint`) trên `resource_instance` và `workload_instance`; không có cột lưu giá trị output.
 
+### Phiên bản catalog bất biến
+
+- Mỗi lần platform sửa catalog insert một dòng `catalog_version` cùng toàn bộ `resource_definition` của phiên bản đó; không `UPDATE`/`DELETE` dòng của phiên bản đã tạo. FK tới phiên bản dùng `ON DELETE RESTRICT`.
+- `deployment.catalog_version_id` ghi đúng phiên bản catalog đã dùng; phiên bản catalog đang chạy trên environment + target được suy ra qua `workload_instance.current_workload_deployment_id` → `deployment.catalog_version_id`, giống phiên bản Application Definition.
+- `resource_instance.resource_definition_id` trỏ tới definition của phiên bản catalog lần apply/liên kết gần nhất; `applied_input_fingerprint` cho biết đầu vào lần apply đó để plan quyết định reuse hay update.
+
 ## Danh mục ENUM
 
 Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, operation contracts và state machine dùng đúng các giá trị dưới đây. Quy ước tên `UPPER_SNAKE_CASE`.
@@ -383,7 +408,7 @@ Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, opera
 
 | Cột | Giá trị |
 |---|---|
-| `application_component.component_type` | `WORKLOAD`, `RESOURCE_REQUIREMENT`, `ENVIRONMENT_VARIABLE_DEFINITION`, `SECRET_DEFINITION` |
+| `application_component.component_type` | `WORKLOAD`, `RESOURCE_REQUIREMENT`, `ENVIRONMENT_VARIABLE_DEFINITION`, `SECRET_DEFINITION`, `PLATFORM_REQUIREMENT` |
 | `dependency.target_type` | `WORKLOAD`, `RESOURCE` |
 | `configuration_value.value_source` | `DIRECT`, `RESOURCE_OUTPUT`, `WORKLOAD_OUTPUT` |
 | `secret.value_source` | `SECRET_REF`, `RESOURCE_OUTPUT` |
@@ -428,7 +453,9 @@ Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, opera
 | Direct Configuration Value | Embedded subtype payload `configuration_value.direct_value` when `value_source = DIRECT` |
 | Resource Output Reference | Embedded reference fields in `configuration_value`, or in `secret` for sensitive output binding |
 | Workload Output Reference | Embedded fields `configuration_value.workload_id` + `workload_output_name` |
-| Resource Definition | `resource_definition` (platform-managed catalog) |
+| Platform Requirement | `application_component` với `component_type = PLATFORM_REQUIREMENT` + `platform_requirement_type` |
+| Catalog Version | `catalog_version` (platform-managed catalog) |
+| Resource Definition | `resource_definition` (platform-managed catalog, theo phiên bản) |
 | Deployment | `deployment` |
 | Workload Deployment | `workload_deployment` |
 | Deployment Execution Job | `deployment_execution_job` |
@@ -438,7 +465,7 @@ Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, opera
 | Deployment Record | `deployment_record` |
 | Deployment Step | `deployment_step` |
 
-`deployment_record_resource_instance` chỉ hiện thực quan hệ many-to-many đã có trong domain model; không giới thiệu domain entity mới. `application_component` là identity table hiện thực ID cố định qua phiên bản của Workload, Resource Requirement, Environment Variable Definition và Secret Definition; cũng không phải domain entity mới.
+`deployment_record_resource_instance` chỉ hiện thực quan hệ many-to-many đã có trong domain model; không giới thiệu domain entity mới. `application_component` là identity table hiện thực ID cố định qua phiên bản của Workload, Resource Requirement, Environment Variable Definition và Secret Definition; cũng không phải domain entity mới. Với Platform Requirement (không thuộc phiên bản), dòng `application_component` loại `PLATFORM_REQUIREMENT` là toàn bộ persistence của object.
 
 ### TRANSIENT objects intentionally excluded
 

@@ -11,6 +11,7 @@ package "Boundary/UI" {
     -currentApplicationId: String
     -selectedEnvironment: String
     -selectedTarget: String
+    -selectedCatalogVersion: String
     -selectedImages: Map
     -selectedDeploymentId: String
     +showApplicationEditor()
@@ -47,7 +48,7 @@ package "Boundary/UI" {
   class "Deployment API / Controller" as DeploymentAPI <<control>> {
     -orchestrator: DeploymentOrchestrator
     +loadDeploymentForm(applicationId, environment, target)
-    +createDeployment(applicationId, version, environment, target, images, context)
+    +createDeployment(applicationId, version, catalogVersion, environment, target, images, context)
     +confirmDeployment(deploymentId, overrides)
   }
   class "Deployment Query API / Controller" as DeploymentQueryAPI <<control>> {
@@ -85,7 +86,7 @@ package "Application services" {
     -deploymentId: String
     -deploymentContext: Object
     +loadDeploymentContext(applicationId, environment, target)
-    +createDeployment(applicationId, version, environment, target, images, context)
+    +createDeployment(applicationId, version, catalogVersion, environment, target, images, context)
     +validateDeploymentInput()
     +computePlanFingerprint(plan, allowedOverrides, algo)
     +confirmDeployment(deploymentId, overrides)
@@ -128,16 +129,17 @@ package "Domain components" {
   }
   class "Deployment Graph Builder" as DeploymentGraphBuilder <<control>> {
     -graph: Object
-    +buildDeploymentGraph(applicationDefinitionVersion, configuration, images, context)
+    +buildDeploymentGraph(applicationDefinitionVersion, configuration, images, catalogVersion, context)
   }
   class "Deployment Wave Planner" as DeploymentWavePlanner <<control>> {
     -waves: List
     +planDeploymentWaves(graph, selectedWorkloads, runningWorkloadInstances)
+    +findPotentialRedeploys(graph, waves, plan, runningWorkloadInstances)
     +propagateOutputChanges(waves, waveComponents, collectedOutputs)
   }
   class "Resource Definition Resolver" as ResourceDefinitionResolver <<control>> {
     -resolvedDefinitions: List
-    +resolveResourceDefinitions(graph, context)
+    +resolveResourceDefinitions(requirements, catalogVersion, context)
   }
   class "Infrastructure Planner" as InfrastructurePlanner <<control>> {
     -plan: Object
@@ -148,7 +150,7 @@ package "Domain components" {
   }
   class "Infrastructure Reconciler" as InfrastructureReconciler <<control>> {
     -infrastructureReferences: List
-    +reconcileInfrastructure(finalPlan, planItems)
+    +reconcileInfrastructure(finalPlan, planItems, requiredResourceOutputs)
   }
   class "Resource Output Resolver / Collector" as ResourceOutputCollector <<control>> {
     -resourceOutputs: Map
@@ -195,7 +197,7 @@ package "Integration abstractions" {
   }
   interface "Provisioner Adapter / Provisioner Interface" as ProvisionerAdapter <<interface>> {
     -provisioningContext: Object
-    +reconcile(planItems)
+    +reconcile(planItems, requiredResourceOutputs)
     +destroy(planItems)
   }
   interface "CD Integration / CD Provider Interface" as CDIntegration <<interface>> {
@@ -259,6 +261,7 @@ package "Persistence" {
     +saveNewVersion(applicationDefinition)
     +listVersions(applicationId)
     +findVersion(applicationId, version)
+    +ensurePlatformRequirements(applicationId, platformRequirements)
   }
   class "Specification Repository / Config Repo Service" as SpecificationRepository <<entity>> {
     -applicationSpecifications: Collection
@@ -274,9 +277,14 @@ package "Persistence" {
     +findByApplicationAndEnvironment(applicationId, environment)
     +findById(environmentConfigurationId)
   }
+  class "Resource Definition Catalog" as ResourceDefinitionCatalog <<entity>> {
+    -catalogVersions: Collection
+    +listCatalogVersions()
+    +findResourceDefinitions(catalogVersion)
+  }
   class "Resource Instance Repository" as ResourceInstanceRepository <<entity>> {
     -resourceInstances: Collection
-    +findResourceInstances(applicationId, environment, resourceRequirementIds, target)
+    +findResourceInstances(applicationId, environment, requirementIds, target)
     +saveResourceInstances(resourceState)
     +loadResourceOutputs(infrastructureReferences)
     +loadOutputFingerprints(resources)
@@ -293,7 +301,7 @@ package "Persistence" {
   class "Deployment Repository" as DeploymentRepository <<entity>> {
     -deploymentRecords: Collection
     -executionJobs: Collection
-    +persistDeployment(deployment, applicationDefinitionVersion, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
+    +persistDeployment(deployment, applicationDefinitionVersion, catalogVersion, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
     +findByIdWithPersistedInputs(deploymentId)
     +compareAndSetPlanFingerprint(deploymentId, expectedStatus, expectedFingerprint, newFingerprint)
     +confirmDeploymentAndCreateJob(deploymentId, expectedStatus, overrides)
@@ -330,9 +338,9 @@ EnvironmentConfigurationService "1" --> "1" EnvironmentConfigurationRepository
 DeploymentAPI "1" --> "1" DeploymentOrchestrator
 DeploymentOrchestrator "1" --> "1" ApplicationRepository
 DeploymentOrchestrator "1" --> "1" EnvironmentConfigurationRepository
+DeploymentOrchestrator "1" --> "1" ResourceDefinitionCatalog
 DeploymentOrchestrator ..> DeploymentGraphBuilder
 DeploymentOrchestrator ..> DeploymentWavePlanner
-DeploymentOrchestrator ..> ResourceDefinitionResolver
 DeploymentOrchestrator ..> InfrastructurePlanner
 DeploymentOrchestrator "1" --> "1" ResourceInstanceRepository
 DeploymentOrchestrator "1" --> "1" WorkloadInstanceRepository
@@ -343,7 +351,6 @@ DeploymentWorker "1" --> "1" ApplicationRepository
 DeploymentWorker "1" --> "1" EnvironmentConfigurationRepository
 DeploymentWorker ..> DeploymentGraphBuilder
 DeploymentWorker ..> DeploymentWavePlanner
-DeploymentWorker ..> ResourceDefinitionResolver
 DeploymentWorker ..> InfrastructurePlanner
 DeploymentWorker ..> InfrastructureReconciler
 DeploymentWorker ..> ResourceOutputCollector
@@ -359,6 +366,8 @@ DeploymentWorker ..> WorkloadStatusProvider
 DeploymentWorker "1" --> "1" ResourceInstanceRepository
 DeploymentWorker "1" --> "1" WorkloadInstanceRepository
 
+DeploymentGraphBuilder ..> ResourceDefinitionResolver
+ResourceDefinitionResolver "1" --> "1" ResourceDefinitionCatalog
 DeploymentWavePlanner "1" --> "1" ResourceInstanceRepository
 DeploymentWavePlanner "1" --> "1" WorkloadInstanceRepository
 InfrastructureReconciler ..> ProvisionerAdapter
@@ -401,6 +410,18 @@ end note
 note right of ApplicationRepository
   Application Definition versions are immutable;
   components keep stable IDs across versions.
+end note
+
+note right of KubernetesCluster
+  On a cloud target the cluster is provisioned by IDP
+  (k8s-cluster resolves to a MANAGED definition); an
+  internal cluster already exists (EXISTING definition).
+  Connection data comes from the k8s-cluster Resource Output.
+end note
+
+note right of ResourceDefinitionCatalog
+  Catalog versions are immutable and managed by the
+  platform; IDP only reads them.
 end note
 
 @enduml

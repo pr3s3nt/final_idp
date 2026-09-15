@@ -17,6 +17,9 @@ Nguồn đối chiếu: commit `88585ccdd1a7896c615ad43fbb0d0f6b62d231ef` (nhán
 | D7 | Secret bị bỏ rơi (orphan) trong Secret Store khi cấu hình không được lưu hoặc secret bị thay | DEFERRED | 14/09/2026 |
 | D8 | Cơ chế cụ thể để đọc Workload Output từ workload đã healthy hoặc đang chạy | DEFERRED | 14/09/2026 |
 | D9 | Output của resource dùng chung thay đổi không lan sang application khác; chưa có resource riêng theo từng workload | DEFERRED | 14/09/2026 |
+| D10 | Platform khóa hoặc ngừng hỗ trợ phiên bản catalog cũ | DEFERRED | 15/09/2026 |
+| D11 | Phiên bản catalog mới đổi hẳn công thức của một resource đang chạy | DEFERRED | 15/09/2026 |
+| D12 | UC-02 lấy danh sách output từ phiên bản catalog nào | DEFERRED | 15/09/2026 |
 
 ## D1 — Bản nháp UC-01/UC-02 được giữ ở đâu giữa các request
 
@@ -516,3 +519,69 @@ Domain model/ERD mô tả đủ thông tin để đọc từng loại output; se
 ### Điều kiện đóng
 
 Contract 11 và use case UC-03 mô tả rõ phạm vi lan truyền với resource dùng chung; domain model/ERD thể hiện quyết định về resource riêng theo workload.
+
+## D10 — Khóa hoặc ngừng hỗ trợ phiên bản catalog cũ
+
+**Tương ứng:** mục "Hoãn" của vấn đề 12 trong `design_decisions.md`.
+
+**Quyết định:** chưa giải quyết lúc này; mọi phiên bản catalog đều được chọn khi deploy.
+
+### Vấn đề
+
+Theo vấn đề 12, catalog có phiên bản bất biến và Developer chọn phiên bản khi deploy, kể cả phiên bản cũ hơn phiên bản đang chạy. Platform chưa có cách:
+
+- Cấm dùng một phiên bản có lỗi hoặc lỗ hổng (vd module Terraform tạo cụm với cấu hình không an toàn).
+- Buộc application chuyển khỏi phiên bản cũ trước một thời hạn.
+- Biết application/environment nào còn chạy trên phiên bản nào để thông báo.
+
+### Câu hỏi cần chốt khi giải quyết
+
+1. Phiên bản catalog có trạng thái (vd `ACTIVE`, `DEPRECATED`, `BLOCKED`) không, và ai đổi trạng thái (platform administration nằm ngoài bốn Developer use case)?
+2. Deployment đang chạy trên phiên bản bị khóa thì deploy một phần có bị chặn không, hay chỉ chặn chọn phiên bản đó cho deployment mới?
+3. Có cần màn hình cho platform xem application nào đang dùng phiên bản nào không?
+
+### Điều kiện đóng
+
+ERD và domain model thể hiện trạng thái phiên bản catalog (nếu có); UC-03 A1 và contract 4 mô tả hành vi khi chọn hoặc đang chạy phiên bản bị khóa.
+
+## D11 — Phiên bản catalog mới đổi hẳn công thức của một resource đang chạy
+
+**Tương ứng:** mục "Hoãn" của vấn đề 12 trong `design_decisions.md`.
+
+**Quyết định:** chưa giải quyết lúc này.
+
+### Vấn đề
+
+Ví dụ: shop-app staging chạy trên cụm nội bộ với catalog v1, PostgreSQL dựng bằng công thức `postgres-k8s` (pod Postgres trong cụm, dữ liệu nằm trong đó). Platform ra catalog v2, trong đó PostgreSQL trên cụm nội bộ đổi sang công thức khác, vd `postgres-shared` (database dùng chung có sẵn). Developer chọn catalog v2 và deploy.
+
+Nếu v2 chỉ đổi tham số trong cùng công thức (vd dung lượng 10GB → 20GB) thì IDP cập nhật resource bình thường; mục này chỉ nói trường hợp đổi sang công thức khác.
+
+### Câu hỏi cần chốt khi giải quyết
+
+1. IDP báo lỗi và không cho deploy (Developer/platform tự chuyển dữ liệu hoặc gỡ app trước), hay tự hủy resource cũ rồi dựng lại theo công thức mới sau khi Developer xác nhận cảnh báo mất dữ liệu?
+2. Nếu tự dựng lại: thứ tự hủy/tạo thế nào để workload đang dùng resource không bị gián đoạn lâu?
+
+### Điều kiện đóng
+
+Đặc tả UC-03 (A1 hoặc plan), contract 4 và contract 6 mô tả rõ hành vi khi công thức của một resource đang chạy thay đổi giữa hai phiên bản catalog.
+
+## D12 — UC-02 lấy danh sách output từ phiên bản catalog nào
+
+**Tương ứng:** mục "Hoãn" của vấn đề 12 trong `design_decisions.md`.
+
+**Quyết định:** chưa giải quyết lúc này; UC-02 và contract 3 giữ nguyên.
+
+### Vấn đề
+
+Ở UC-02, Developer gán biến vào output của resource (vd `DB_HOST ← postgresql.host`) và IDP chỉ cho chọn output mà Resource Definition có. Catalog nay có nhiều phiên bản nhưng cấu hình không gắn với phiên bản catalog nào.
+
+Ví dụ: catalog v1 có output `host`, `port`, `username`, `password`; catalog v2 thêm `reader_host`. Developer gán `READ_DB_HOST ← postgresql.reader_host` rồi deploy với catalog v1.
+
+### Câu hỏi cần chốt khi giải quyết
+
+1. UC-02 hiển thị output theo phiên bản catalog mới nhất và UC-03 kiểm tra lại theo phiên bản được chọn (A1 nếu output không có), hay cho Developer chọn phiên bản catalog ngay ở UC-02?
+2. Resource cùng loại có thể dùng công thức khác nhau tùy nơi triển khai (vd Aurora trên AWS, Postgres trong cụm nội bộ), với danh sách output khác nhau; UC-02 chưa biết nơi triển khai thì hiển thị output nào?
+
+### Điều kiện đóng
+
+Đặc tả UC-02, contract 3 và UC-03 A1 thống nhất nguồn danh sách output và thời điểm kiểm tra.

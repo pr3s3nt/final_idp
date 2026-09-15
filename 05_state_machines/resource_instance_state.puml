@@ -11,13 +11,14 @@ state "Destroyed\n(DESTROYED)" as DESTROYED
 state "Unlinked\n(UNLINKED)" as UNLINKED
 
 [*] --> PLANNED : planInfrastructureChanges [MANAGED create] /\nresolve Resource Definition, owner key and target
-[*] --> READY : reconcileInfrastructure [EXISTING link] /\nlink owner instance to the shared resource;\nno provisioning, real infrastructure untouched
+[*] --> READY : reconcileInfrastructure [EXISTING link] /\nlink owner instance to the existing resource\n(shared resource or internal cluster);\nno provisioning, real infrastructure untouched
 
 PLANNED --> PROVISIONING : reconcileInfrastructure [MANAGED create or update] /\ninvoke provisioner apply
 PROVISIONING --> READY : provisioner apply success /\npersist infrastructure and provider-state references
 PROVISIONING --> FAILED : provisioner apply failure /\npersist actual provider state and failure status
 
-READY --> PLANNED : planInfrastructureChanges [MANAGED update] /\nretain Resource Instance identity
+READY --> PLANNED : planInfrastructureChanges [MANAGED update: current input differs\nfrom applied_input_fingerprint] / retain Resource Instance identity
+READY --> PLANNED : propagateOutputChanges [MANAGED; output of a required\nplatform requirement changed] / reconcile again in a later wave
 READY --> READY : reconcileInfrastructure [reuse] /\nconfirm or refresh provider state
 READY --> READY : collectResourceOutputs; propagateOutputChanges /\nexpose transient Resource Output values; update output_fingerprint
 
@@ -34,7 +35,9 @@ note right of PLANNED
   infrastructure reference exist; PLANNED still names the
   lifecycle phase/status defined by the infrastructure plan.
   Lookup always uses the owner key: application + environment
-  + resource requirement (stable ID) + deployment target.
+  + requirement (Resource Requirement or Platform Requirement,
+  stable ID) + deployment target. Cluster and network of a cloud
+  target follow the same lifecycle as any MANAGED resource.
 end note
 
 note right of READY

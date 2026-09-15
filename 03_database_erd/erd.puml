@@ -27,7 +27,8 @@ package "Application Repository" {
     * component_id : UUID <<PK>>
     --
     * application_id : UUID <<FK, NOT NULL>>
-    * component_type : ENUM(WORKLOAD, RESOURCE_REQUIREMENT, ENVIRONMENT_VARIABLE_DEFINITION, SECRET_DEFINITION) <<NOT NULL>>
+    * component_type : ENUM(WORKLOAD, RESOURCE_REQUIREMENT, ENVIRONMENT_VARIABLE_DEFINITION, SECRET_DEFINITION, PLATFORM_REQUIREMENT) <<NOT NULL>>
+    platform_requirement_type : VARCHAR(100)
     * created_at : TIMESTAMP <<NOT NULL>>
   }
 
@@ -139,10 +140,18 @@ package "Environment Configuration Repository" {
 }
 
 package "Platform Resource Definition Catalog" {
+  entity "catalog_version" as catalog_version {
+    * catalog_version_id : UUID <<PK>>
+    --
+    * version_number : INT <<NOT NULL, UNIQUE>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+  }
+
   entity "resource_definition" as resource_definition {
     * resource_definition_id : UUID <<PK>>
     --
-    * name : VARCHAR(255) <<NOT NULL, UNIQUE>>
+    * catalog_version_id : UUID <<FK, NOT NULL>>
+    * name : VARCHAR(255) <<NOT NULL>>
     * resource_type : VARCHAR(100) <<NOT NULL>>
     * provisioner_reference : VARCHAR(2048) <<NOT NULL>>
     * supported_contexts : JSONB <<NOT NULL>>
@@ -153,6 +162,7 @@ package "Platform Resource Definition Catalog" {
     * management_mode : ENUM(MANAGED, EXISTING) <<NOT NULL>>
     applicability_conditions : JSONB
     existing_resource_reference : VARCHAR(2048)
+    * requires : JSONB <<NOT NULL>>
   }
 }
 
@@ -169,6 +179,7 @@ package "Resource Instance Repository" {
     provider_state_reference : VARCHAR(2048)
     * status : ENUM(PLANNED, PROVISIONING, READY, FAILED, DESTROYED, UNLINKED) <<NOT NULL>>
     output_fingerprint : CHAR(64)
+    applied_input_fingerprint : CHAR(64)
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
   }
@@ -196,6 +207,7 @@ package "Deployment Repository" {
     --
     * application_id : UUID <<FK, NOT NULL>>
     * application_definition_version_id : UUID <<FK, NOT NULL>>
+    * catalog_version_id : UUID <<FK, NOT NULL>>
     * environment_configuration_id : UUID <<FK, NOT NULL>>
     * environment : ENUM(STAGING, PRODUCTION) <<NOT NULL>>
     * deployment_target : VARCHAR(255) <<NOT NULL>>
@@ -299,9 +311,10 @@ environment_variable ||--|| configuration_value : has
 application_component |o--o{ configuration_value : referenced resource or workload output
 application_component |o--o{ secret : referenced sensitive output
 
-resource_definition ||--o{ resource_instance : instantiated as
+catalog_version ||--|{ resource_definition : immutable definitions
+resource_definition ||--o{ resource_instance : last applied or linked with
 application_definition ||--o{ resource_instance : owner application
-application_component ||--o{ resource_instance : owner requirement
+application_component ||--o{ resource_instance : owner requirement or platform requirement
 
 application_definition ||--o{ workload_instance : owner application
 application_component ||--o{ workload_instance : instance of workload
@@ -309,6 +322,7 @@ workload_deployment ||--o{ workload_instance : currently running
 
 application_definition ||--o{ deployment : deploys
 application_definition_version ||--o{ deployment : deployed version
+catalog_version ||--o{ deployment : catalog version used
 environment_configuration ||--o{ deployment : used by
 deployment ||--|{ workload_deployment : snapshots images
 application_component ||--o{ workload_deployment : deployed as
@@ -335,6 +349,16 @@ end note
 note right of application_component
   Stable component IDs across versions. Tables outside a version
   (configuration, instances, workload_deployment) reference these IDs.
+  PLATFORM_REQUIREMENT rows (e.g. k8s-cluster, network) are not versioned:
+  platform_requirement_type is set only for them; at most one per
+  application + type.
+end note
+
+note right of catalog_version
+  Immutable: a catalog change inserts a new version with all its
+  resource_definition rows; UNIQUE (catalog_version_id, name).
+  requires must not form cycles (checked when the platform
+  loads the version).
 end note
 
 note right of configuration_value
@@ -360,6 +384,9 @@ note bottom of resource_instance
   infrastructure_reference is not UNIQUE: EXISTING (shared) instances of
   several owners may point to the same real resource.
   Only output_fingerprint is stored, never output values.
+  applied_input_fingerprint: input of the last apply (definition of
+  the catalog version, parameters, outputs of required platform
+  requirements); a different current input means UPDATE.
 end note
 
 note bottom of workload_instance

@@ -11,6 +11,7 @@ package "Boundary/UI" {
     -selectedEnvironment: String
     -selectedTarget: String
     -selectedVersion: String
+    -selectedCatalogVersion: String
     -selectedImages: Map
     +showDeploymentForm()
     +showInfrastructurePlan()
@@ -19,7 +20,7 @@ package "Boundary/UI" {
   class "Deployment API / Controller" as API <<control>> {
     -orchestrator: Orchestrator
     +loadDeploymentForm(applicationId, environment, target)
-    +createDeployment(applicationId, version, environment, target, images, context)
+    +createDeployment(applicationId, version, catalogVersion, environment, target, images, context)
     +confirmDeployment(deploymentId, overrides)
   }
 }
@@ -29,7 +30,7 @@ package "Application services" {
     -deploymentId: String
     -deploymentContext: Object
     +loadDeploymentContext(applicationId, environment, target)
-    +createDeployment(applicationId, version, environment, target, images, context)
+    +createDeployment(applicationId, version, catalogVersion, environment, target, images, context)
     +validateDeploymentInput()
     +computePlanFingerprint(plan, allowedOverrides, algo)
     +confirmDeployment(deploymentId, overrides)
@@ -43,16 +44,17 @@ package "Application services" {
 package "Domain components" {
   class "Deployment Graph Builder" as GraphBuilder <<control>> {
     -graph: Object
-    +buildDeploymentGraph(applicationDefinitionVersion, configuration, images, context)
+    +buildDeploymentGraph(applicationDefinitionVersion, configuration, images, catalogVersion, context)
   }
   class "Deployment Wave Planner" as WavePlanner <<control>> {
     -waves: List
     +planDeploymentWaves(graph, selectedWorkloads, runningWorkloadInstances)
+    +findPotentialRedeploys(graph, waves, plan, runningWorkloadInstances)
     +propagateOutputChanges(waves, waveComponents, collectedOutputs)
   }
   class "Resource Definition Resolver" as ResourceResolver <<control>> {
     -resolvedDefinitions: List
-    +resolveResourceDefinitions(graph, context)
+    +resolveResourceDefinitions(requirements, catalogVersion, context)
   }
   class "Infrastructure Planner" as InfraPlanner <<control>> {
     -plan: Object
@@ -63,7 +65,7 @@ package "Domain components" {
   }
   class "Infrastructure Reconciler" as InfraReconciler <<control>> {
     -infrastructureReferences: List
-    +reconcileInfrastructure(finalPlan, planItems)
+    +reconcileInfrastructure(finalPlan, planItems, requiredResourceOutputs)
   }
   class "Resource Output Resolver / Collector" as OutputCollector <<control>> {
     -resourceOutputs: Map
@@ -102,7 +104,7 @@ package "Domain components" {
 package "Integration abstractions" {
   interface "Provisioner Adapter / Provisioner Interface" as Provisioner <<interface>> {
     -provisioningContext: Object
-    +reconcile(planItems)
+    +reconcile(planItems, requiredResourceOutputs)
     +destroy(planItems)
   }
   interface "CD Integration / CD Provider Interface" as CDIntegration <<interface>> {
@@ -154,15 +156,21 @@ package "Persistence" {
     -applicationDefinitionVersions: Collection
     +listVersions(applicationId)
     +findVersion(applicationId, version)
+    +ensurePlatformRequirements(applicationId, platformRequirements)
   }
   class "Environment Configuration Repository" as ConfigRepo <<entity>> {
     -environmentConfigurations: Collection
     +findByApplicationAndEnvironment(applicationId, environment)
     +findById(environmentConfigurationId)
   }
+  class "Resource Definition Catalog" as CatalogRepo <<entity>> {
+    -catalogVersions: Collection
+    +listCatalogVersions()
+    +findResourceDefinitions(catalogVersion)
+  }
   class "Resource Instance Repository" as ResourceRepo <<entity>> {
     -resourceInstances: Collection
-    +findResourceInstances(applicationId, environment, resourceRequirementIds, target)
+    +findResourceInstances(applicationId, environment, requirementIds, target)
     +saveResourceInstances(resourceState)
     +loadResourceOutputs(infrastructureReferences)
     +loadOutputFingerprints(resources)
@@ -178,7 +186,7 @@ package "Persistence" {
   class "Deployment Repository" as DeploymentRepo <<entity>> {
     -deploymentRecords: Collection
     -executionJobs: Collection
-    +persistDeployment(deployment, applicationDefinitionVersion, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
+    +persistDeployment(deployment, applicationDefinitionVersion, catalogVersion, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)
     +findByIdWithPersistedInputs(deploymentId)
     +compareAndSetPlanFingerprint(deploymentId, expectedStatus, expectedFingerprint, newFingerprint)
     +confirmDeploymentAndCreateJob(deploymentId, expectedStatus, overrides)
@@ -192,9 +200,9 @@ WebUI "1" --> "1" API
 API "1" --> "1" Orchestrator
 Orchestrator "1" --> "1" AppRepo
 Orchestrator "1" --> "1" ConfigRepo
+Orchestrator "1" --> "1" CatalogRepo
 Orchestrator ..> GraphBuilder
 Orchestrator ..> WavePlanner
-Orchestrator ..> ResourceResolver
 Orchestrator ..> InfraPlanner
 Orchestrator "1" --> "1" ResourceRepo
 Orchestrator "1" --> "1" WorkloadInstanceRepo
@@ -205,7 +213,6 @@ Worker "1" --> "1" AppRepo
 Worker "1" --> "1" ConfigRepo
 Worker ..> GraphBuilder
 Worker ..> WavePlanner
-Worker ..> ResourceResolver
 Worker ..> InfraPlanner
 Worker ..> InfraReconciler
 Worker ..> OutputCollector
@@ -221,6 +228,8 @@ Worker ..> WorkloadStatusProvider
 Worker "1" --> "1" ResourceRepo
 Worker "1" --> "1" WorkloadInstanceRepo
 
+GraphBuilder ..> ResourceResolver
+ResourceResolver "1" --> "1" CatalogRepo
 WavePlanner "1" --> "1" ResourceRepo
 WavePlanner "1" --> "1" WorkloadInstanceRepo
 InfraReconciler ..> Provisioner
@@ -239,6 +248,18 @@ note right of Worker
   from Deployment Repository and receives no inbound
   message, so it owns no operation. Recovery when a
   worker dies mid-job is deferred (D6).
+end note
+
+note right of Kubernetes
+  On a cloud target the cluster is provisioned by IDP
+  (k8s-cluster resolves to a MANAGED definition); an
+  internal cluster already exists (EXISTING definition).
+  Connection data comes from the k8s-cluster Resource Output.
+end note
+
+note right of CatalogRepo
+  Catalog versions are immutable and managed by the
+  platform; IDP only reads them.
 end note
 
 @enduml

@@ -58,8 +58,10 @@ note right of CONFIRMED
 end note
 
 note right of DEPLOYING
-  Waves run in dependency order. Workloads added by
-  propagateOutputChanges (CASCADED) join later waves.
+  Waves run in dependency order (cluster and network
+  of a cloud target come first). When an output changes,
+  propagateOutputChanges adds managed resources that require
+  the component and dependent workloads (CASCADED) to later waves.
   For a new version, components no longer in it are removed
   after all waves are healthy.
   Progress per wave and component is kept in deployment_step

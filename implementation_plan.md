@@ -346,8 +346,40 @@ Mã nguồn ở `uc03/` (nhánh `uc03-impl`, chưa commit). Lệnh chạy: xem `
 - Chưa test riêng: A1-3, A1-8, `RESOURCE_DEFINITION_CHANGED`, `PLAN_CHANGED` lúc confirm, A2-2, A2-5; adapter Terraform/K8s/Argo CD chỉ được kiểm chứng qua e2e, không có unit test.
 - UI chưa thao tác bằng trình duyệt; nút teardown và nhập override qua form chưa bấm.
 - Không phục hồi worker chết giữa chừng (D6); một worker; không cascade sang application khác (D9).
-- Tài liệu thiết kế chưa cập nhật theo các deviation (chờ người dùng duyệt). Mã nguồn chưa commit.
+- Tài liệu thiết kế chưa cập nhật theo các deviation (chờ người dùng duyệt). Mã nguồn đã commit `50e4fc1` trên `uc03-impl`.
 
 Lỗi thật phát hiện khi chạy e2e và đã sửa: (1) module Aurora dò engine version sai → ghim `engine_version` trong catalog; (2) xóa hết workload làm mất đường dẫn app trong GitOps → marker `idp-app.yaml`; (3) danh sách "có thể redeploy" coi node platform là nguồn cascade; (4) error summary rollout/Terraform không nêu nguyên nhân thật.
 
 A1 đã chạy thật qua API (15/09): MISSING_REQUIRED_CONFIGURATION (v3), PARTIAL_DEPLOYMENT_VERSION_MISMATCH, UNSUPPORTED_TARGET_OR_CONTEXT, INVALID_IMAGE_VERSION (tag không có trong registry), IMMUTABLE_PARAMETER_CHANGED (giữ AWAITING, 0 job), DEPLOYMENT_ALREADY_CONFIRMED, DEPLOYMENT_IN_PROGRESS (1 job duy nhất).
+
+## 12. Đối chiếu code ↔ thiết kế theo chủ đề (bắt đầu 15/09/2026)
+
+Cách làm: thảo luận từng chủ đề với người dùng → chốt → sửa code + tài liệu thiết kế cùng lúc → kiểm chứng → dừng cho người dùng xem.
+
+Thứ tự chủ đề: (1) hạ tầng target trong đồ thị — mục 1, 11, 12; (2) TEARDOWN và thứ tự gỡ — mục 2, 7, marker GitOps; (3) override baseline, tham số bất biến, đổi definition — mục 3, 18; (4) confirm/worker — mục 4, 5, 6, 9, 20; (5) schema — mục 8, 10, 15; (6) secret và registry — mục 13, 14; (7) chi tiết triển khai — mục 16, 17, 19.
+
+### 12.1 Chủ đề 1 — Hạ tầng target trong đồ thị (ĐANG THẢO LUẬN, chưa sửa code/tài liệu)
+
+Lỗ hổng phát hiện khi đối chiếu (chưa sửa):
+- **G1** `InputFingerprint` không gồm output của node được `requires`; `PropagateOutputChanges` chỉ thêm workload. Network đổi output thì EKS/Aurora vẫn REUSE với input cũ; resource ngoài scope phụ thuộc network không được apply lại.
+- **G2** Node platform không cascade (mục 12): cụm bị tạo lại thì workload ngoài scope không được deploy lại lên cụm mới. Hiện chỉ tránh được nhờ catalog để tham số gây thay thế là immutable.
+- ~~**G3**~~ Không còn là lỗ hổng: người dùng quyết định `requires` do platform team viết, không giới hạn loại.
+
+Đã chốt:
+- **Q3** Scope = workload được chọn + resource dùng trực tiếp + bao đóng `requires` (network, cụm). Node trong bao đóng được plan như mọi resource (CREATE/UPDATE/REUSE); không đổi thì REUSE, không chạy Terraform.
+- **Phiên bản catalog** (quyết định người dùng, thay thiết kế "không cần version trên resource_definition"): catalog có phiên bản bất biến; sửa catalog = tạo phiên bản mới; Developer chọn phiên bản catalog khi deploy; app đang chạy không bị ảnh hưởng khi platform ra phiên bản mới.
+  - **C1** Deploy một phần phải dùng đúng phiên bản catalog đang chạy; đổi phiên bản catalog ⇒ deploy toàn bộ.
+  - **C2** Được chọn phiên bản catalog cũ hơn; plan vẫn kiểm immutable/increaseOnly ⇒ A1 nếu vi phạm.
+  - **C3** Form chọn sẵn phiên bản catalog đang chạy và báo có bản mới hơn; lần deploy đầu chọn sẵn bản mới nhất.
+  - **C4** Promote staging → production mang theo cả phiên bản app lẫn phiên bản catalog.
+  - **C5** Khóa/ngừng phiên bản catalog cũ: hoãn (ghi vào deferred khi sửa tài liệu); lượt này mọi phiên bản dùng được.
+  - Đổi hẳn Resource Definition của một owner (vd postgres-k8s → Aurora): hoãn (D11). UC-02 lấy output theo phiên bản catalog nào: hoãn (D12).
+- **Hai loại nơi triển khai** (người dùng bổ sung): cloud — IDP dựng VPC + cụm riêng cho mỗi app + env (`k8s-cluster` MANAGED); cụm Kubernetes nội bộ — cụm có sẵn, IDP chỉ kết nối (`k8s-cluster` EXISTING), không tạo/xóa. Platform khai báo được nhiều cụm nội bộ, catalog quyết định app/env nào dùng cụm nào. Database vẫn do IDP tạo cho mỗi app + env kể cả trên cụm nội bộ.
+  - **Ảnh hưởng code:** hiện code tự tạo cụm kind cho mỗi app + env (`kind-cluster` MANAGED). Phải đổi: cụm kind dựng trước một lần, catalog khai báo `k8s-cluster` EXISTING trỏ tới nó.
+
+- **Q1** (người dùng đồng ý) Cụm/VPC là node ngầm do IDP thêm theo catalog; Developer không khai báo ở UC-01.
+- **Q4** (người dùng đồng ý) Quy tắc chung: output của thành phần ở dưới đổi ⇒ mọi resource MANAGED và workload phụ thuộc ở trên được làm lại trong cùng deployment (bỏ ngoại lệ mục 12); plan hiện trước danh sách có thể bị làm lại. Sửa G1, G2.
+- **Q2** (người dùng quyết định) `requires` do platform team quyết định, không giới hạn loại. Ban đầu tôi tự xếp là quyết định kỹ thuật và giới hạn `k8s-cluster`/`network` — sai, đã bỏ.
+- **Q5** (quyết định kỹ thuật) Giữ platform requirement là `application_component` loại `PLATFORM_REQUIREMENT`, ID suy ra từ app + loại.
+
+Trạng thái (15/09/2026): tài liệu thiết kế đã sửa xong theo vấn đề 12 (`06_traceability/design_decisions.md`), người dùng duyệt từng bước; **code chưa sửa**. Việc code còn lại: phiên bản catalog (bảng, form, A1 deploy một phần, promote), lan truyền sang resource + `applied_input_fingerprint` gồm output của node được yêu cầu (G1, G2), `findPotentialRedeploys` chỉ tính từ CREATE/UPDATE/DEPLOY, cụm kind chuyển sang EXISTING; kiểm chứng lại trên kind.
