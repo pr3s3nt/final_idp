@@ -72,7 +72,6 @@ func PlanDeploymentWaves(g *domain.DeploymentGraph, selected []string, running [
 	}
 
 	wp.Waves = Layer(g, wp.Scope)
-	wp.PotentialRedeploy = potentialRedeploy(g, wp.Scope, runningByWorkload)
 	return wp, nil
 }
 
@@ -121,33 +120,6 @@ func Layer(g *domain.DeploymentGraph, set map[string]bool) [][]string {
 		}
 	}
 	return waves
-}
-
-// potentialRedeploy lists running workloads outside the scope that depend,
-// directly or transitively, on something in the scope.
-func potentialRedeploy(g *domain.DeploymentGraph, scope map[string]bool, running map[string]domain.WorkloadInstance) []string {
-	affected := map[string]bool{}
-	var mark func(id string)
-	mark = func(id string) {
-		for _, dependent := range g.Dependents(id) {
-			if scope[dependent] || affected[dependent] || g.Nodes[dependent].Kind != domain.NodeWorkload {
-				continue
-			}
-			if wi, ok := running[dependent]; !ok || wi.Status != domain.WIHealthy {
-				continue
-			}
-			affected[dependent] = true
-			mark(dependent)
-		}
-	}
-	for id := range scope {
-		// Platform infrastructure outputs are not referenced by configuration
-		// and never cascade, so they are not an origin of redeployments.
-		if !g.Nodes[id].Platform {
-			mark(id)
-		}
-	}
-	return sortedKeys(affected)
 }
 
 // Candidate is a workload that output-change propagation adds to the deployment.

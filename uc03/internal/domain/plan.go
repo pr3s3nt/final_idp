@@ -80,7 +80,6 @@ type WavePlan struct {
 	SelectedWorkloads []string
 	Scope             map[string]bool
 	Waves             [][]string
-	PotentialRedeploy []string
 	// OutOfScopeDependencies are workloads the scope depends on but does not
 	// redeploy; their outputs come from the running instances.
 	OutOfScopeDependencies []string
@@ -109,6 +108,8 @@ type Plan struct {
 	ApplicationName     string            `json:"applicationName"`
 	VersionID           string            `json:"versionId"`
 	VersionNumber       int               `json:"versionNumber"`
+	CatalogVersionID    string            `json:"catalogVersionId"`
+	CatalogVersion      int               `json:"catalogVersion"`
 	Environment         Environment       `json:"environment"`
 	Target              string            `json:"target"`
 	Context             DeploymentContext `json:"context"`

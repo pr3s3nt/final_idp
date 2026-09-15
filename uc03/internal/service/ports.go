@@ -16,6 +16,7 @@ type WorkloadStatusProvider interface {
 	ReadWorkloadOutputs(ctx context.Context, a *kubernetes.ClusterAccess, namespace, workloadID string, outputs []string) (domain.Outputs, error)
 	DeleteSecretsByLabel(ctx context.Context, a *kubernetes.ClusterAccess, namespace, selector string) error
 	GetWorkloadStatus(ctx context.Context, a *kubernetes.ClusterAccess, namespace, workloadID string) (*kubernetes.WorkloadStatus, error)
+	DeleteNamespace(ctx context.Context, a *kubernetes.ClusterAccess, namespace string) error
 }
 
 var _ WorkloadStatusProvider = (*kubernetes.Adapter)(nil)

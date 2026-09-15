@@ -11,6 +11,11 @@ variable "region" { type = string }
 variable "vpc_cidr" { type = string }
 variable "az_count" { type = number }
 variable "tags" { type = map(string) }
+variable "network_label" {
+  description = "Free-form label exposed as an output (catalog version 2)"
+  type        = string
+  default     = ""
+}
 
 provider "aws" {
   region = var.region
@@ -121,3 +126,4 @@ output "private_subnet_ids" { value = jsonencode(aws_subnet.private[*].id) }
 output "data_security_group_id" { value = aws_security_group.data.id }
 output "db_subnet_group" { value = aws_db_subnet_group.this.name }
 output "cache_subnet_group" { value = aws_elasticache_subnet_group.this.name }
+output "network_label" { value = var.network_label }

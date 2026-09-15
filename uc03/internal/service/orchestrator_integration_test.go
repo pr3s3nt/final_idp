@@ -53,6 +53,10 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The platform-owned internal cluster the kind-local catalog definition points to.
+	if _, err := secrets.Put(ctx, "platform/kind-internal-cluster", []byte(clusterRecord("fake"))); err != nil {
+		t.Fatal(err)
+	}
 	repo := service.Repositories{
 		Apps: &persistence.ApplicationRepository{DB: db}, Configs: &persistence.EnvironmentConfigurationRepository{DB: db},
 		Catalog: &persistence.ResourceDefinitionCatalog{DB: db}, Resources: &persistence.ResourceInstanceRepository{DB: db},
@@ -65,6 +69,10 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	return &env{db: db, repo: repo, orch: &service.Orchestrator{Repositories: repo, Images: allImagesExist{}, Secrets: secrets}}
+}
+
+func clusterRecord(kubeconfig string) string {
+	return `{"cluster_name":"idp-internal","cluster_kind":"kind","image_registry_mirror":"localhost:5055","kubeconfig":"` + kubeconfig + `"}`
 }
 
 func (e *env) count(t *testing.T, table string) int {
@@ -93,8 +101,11 @@ func TestCreateAndConfirmFullDeployment(t *testing.T) {
 	if view.Deployment.Status != domain.AwaitingConfirmation || len(view.Plan.Waves) != 4 {
 		t.Fatalf("unexpected plan: status %s, %d waves", view.Deployment.Status, len(view.Plan.Waves))
 	}
-	if got := view.Plan.Waves[0].Items[0]; got.Name != "k8s-cluster" || got.Action != domain.ActionCreate || got.DefinitionName != "kind-cluster" {
-		t.Fatalf("wave 0 should create the kind cluster, got %+v", got)
+	if got := view.Plan.Waves[0].Items[0]; got.Name != "k8s-cluster" || got.Action != domain.ActionLink || got.DefinitionName != "kind-internal-cluster" {
+		t.Fatalf("wave 0 should link the internal cluster, got %+v", got)
+	}
+	if view.Plan.CatalogVersion != 2 || view.Deployment.CatalogVersionNumber != 2 {
+		t.Fatalf("a first deployment without a catalog version uses the newest one, got %d", view.Plan.CatalogVersion)
 	}
 	if e.count(t, "deployment") != 1 || e.count(t, "workload_deployment") != 3 || e.count(t, "deployment_context") != 1 || e.count(t, "deployment_execution_job") != 0 {
 		t.Fatal("create must persist deployment, 3 workload deployments and context, and no job")
@@ -160,6 +171,11 @@ func TestRejectedDeploymentsLeaveNoRows(t *testing.T) {
 			r.Workloads = []string{"frontend"}
 			return r
 		}(), domain.CodePartialVersionMismatch},
+		"unknown catalog version": {func() service.CreateRequest {
+			r := fullShop("1")
+			r.CatalogVersion = "9"
+			return r
+		}(), domain.CodeNotFound},
 		"unsupported target": {func() service.CreateRequest {
 			r := fullShop("1")
 			r.Target = "gcp"

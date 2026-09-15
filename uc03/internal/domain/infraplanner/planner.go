@@ -17,6 +17,7 @@ import (
 
 type Input struct {
 	Kind          domain.DeploymentKind
+	Catalog       domain.CatalogVersion
 	Graph         *domain.DeploymentGraph
 	Waves         *domain.WavePlan // nil for TEARDOWN
 	Environment   domain.Environment
@@ -34,8 +35,8 @@ func PlanInfrastructureChanges(in Input) (*domain.Plan, error) {
 	v := g.Version
 	p := &domain.Plan{
 		Kind: in.Kind, ApplicationID: v.ApplicationID, ApplicationName: v.ApplicationName,
-		VersionID: v.VersionID, VersionNumber: v.VersionNumber, Environment: in.Environment,
-		Target: g.Context.Target, Context: g.Context, Waves: []domain.PlanWave{}, Removals: []domain.PlanWave{},
+		VersionID: v.VersionID, VersionNumber: v.VersionNumber, CatalogVersionID: in.Catalog.ID, CatalogVersion: in.Catalog.Number,
+		Environment: in.Environment, Target: g.Context.Target, Context: g.Context, Waves: []domain.PlanWave{}, Removals: []domain.PlanWave{},
 		PotentialRedeploy: []domain.PlanComponent{},
 	}
 	problems := &domain.ValidationError{}
@@ -55,15 +56,20 @@ func PlanInfrastructureChanges(in Input) (*domain.Plan, error) {
 				if n.Kind == domain.NodeWorkload {
 					w := v.Workload(id)
 					item.Action, item.ImageRepository, item.ImageVersion, item.InclusionReason = domain.ActionDeploy, w.ImageRepository, in.Images[id], domain.Selected
-				} else if err := planResource(&item, n, g.Resolutions[id], instanceByOwner[id]); err != nil {
-					problems.Problems = append(problems.Problems, *err)
+				} else {
+					required := RequiredOutputFingerprints(g, id, func(dep string) string {
+						if ri := instanceByOwner[dep]; ri != nil {
+							return ri.OutputFingerprint
+						}
+						return ""
+					})
+					if err := planResource(&item, n, g.Resolutions[id], instanceByOwner[id], in.Resolver, required); err != nil {
+						problems.Problems = append(problems.Problems, *err)
+					}
 				}
 				wave.Items = append(wave.Items, item)
 			}
 			p.Waves = append(p.Waves, wave)
-		}
-		for _, id := range in.Waves.PotentialRedeploy {
-			p.PotentialRedeploy = append(p.PotentialRedeploy, domain.PlanComponent{ID: id, Name: g.Nodes[id].Name, Kind: domain.NodeWorkload})
 		}
 		p.ConfigurationDigest = configurationDigest(in.Configuration, in.Waves.Scope)
 	}
@@ -83,7 +89,8 @@ func PlanInfrastructureChanges(in Input) (*domain.Plan, error) {
 	return p, nil
 }
 
-func planResource(item *domain.PlanItem, n *domain.GraphNode, res *domain.ResourceResolution, current *domain.ResourceInstance) *domain.Problem {
+func planResource(item *domain.PlanItem, n *domain.GraphNode, res *domain.ResourceResolution, current *domain.ResourceInstance,
+	resolver *resourceresolver.Resolver, required map[string]string) *domain.Problem {
 	d := res.Definition
 	item.ResourceType, item.Platform = n.ResourceType, n.Platform
 	item.DefinitionID, item.DefinitionName, item.ManagementMode = d.ID, d.Name, d.ManagementMode
@@ -95,10 +102,17 @@ func planResource(item *domain.PlanItem, n *domain.GraphNode, res *domain.Resour
 	if current != nil {
 		item.ResourceInstanceID = current.ID
 		baseline = current.AppliedOverrides
-		if def := current.DefinitionID; def != d.ID {
+		// Definitions with the same name across catalog versions are the same
+		// definition. Switching an owner to a different definition is deferred
+		// (D11); until decided, it is rejected rather than replaced.
+		if cur := resolver.DefinitionByID(current.DefinitionID); cur == nil || cur.Name != d.Name {
+			curName := current.DefinitionID
+			if cur != nil {
+				curName = cur.Name
+			}
 			return &domain.Problem{Code: domain.CodeDefinitionChanged, Message: fmt.Sprintf(
 				"%s is running on resource definition %s but now resolves to %s; remove the application from this environment and target first",
-				n.Name, def, d.Name)}
+				n.Name, curName, d.Name)}
 		}
 	}
 	item.Parameters = Merge(d.DefaultParameters, baseline)
@@ -116,7 +130,7 @@ func planResource(item *domain.PlanItem, n *domain.GraphNode, res *domain.Resour
 			item.Action = domain.ActionCreate
 		case current.Status != domain.RIReady:
 			item.Action = domain.ActionUpdate // retry a failed or interrupted apply
-		case current.AppliedInputFingerprint != InputFingerprint(d, item.Parameters):
+		case current.AppliedInputFingerprint != InputFingerprint(d, item.Parameters, required):
 			item.Action = domain.ActionUpdate
 		default:
 			item.Action = domain.ActionReuse
@@ -253,9 +267,45 @@ func DefinitionDigest(d *domain.ResourceDefinition) string {
 	})
 }
 
-// InputFingerprint identifies what was last applied to a managed instance.
-func InputFingerprint(d *domain.ResourceDefinition, parameters map[string]any) string {
-	return domain.HashCanonical(map[string]any{"definitionId": d.ID, "provisionerReference": d.ProvisionerReference, "parameters": parameters})
+// InputFingerprint identifies the input of the last apply of a managed
+// instance: the definition (by name, stable across catalog versions), its
+// resolved parameters and the output fingerprints of what it requires. A
+// different current input means the instance must be updated.
+func InputFingerprint(d *domain.ResourceDefinition, parameters map[string]any, requiredOutputs map[string]string) string {
+	if requiredOutputs == nil {
+		requiredOutputs = map[string]string{}
+	}
+	return domain.HashCanonical(map[string]any{"definition": d.Name, "provisionerReference": d.ProvisionerReference,
+		"parameters": parameters, "requiredOutputs": requiredOutputs})
+}
+
+// RequiredOutputFingerprints maps each resource a node requires (by resource
+// type) to that resource's output fingerprint as returned by fingerprintOf.
+func RequiredOutputFingerprints(g *domain.DeploymentGraph, id string, fingerprintOf func(componentID string) string) map[string]string {
+	out := map[string]string{}
+	for _, dep := range g.Nodes[id].DependsOn {
+		if n := g.Nodes[dep]; n != nil && n.Kind == domain.NodeResource {
+			out[n.ResourceType] = fingerprintOf(dep)
+		}
+	}
+	return out
+}
+
+// ReapplyItem builds an UPDATE item for a managed resource outside the plan
+// that must be applied again because an output it requires changed.
+func ReapplyItem(g *domain.DeploymentGraph, id string, current *domain.ResourceInstance, resolver *resourceresolver.Resolver) (*domain.PlanItem, error) {
+	n, res := g.Nodes[id], g.Resolutions[id]
+	if n == nil || res == nil || current == nil {
+		return nil, fmt.Errorf("resource %s cannot be applied again: no resolution or instance", id)
+	}
+	item := &domain.PlanItem{ComponentID: id, Name: n.Name, Kind: domain.NodeResource, DependsOn: nonNil(n.DependsOn)}
+	if p := planResource(item, n, res, current, resolver, nil); p != nil {
+		return nil, fmt.Errorf("%s: %s", p.Code, p.Message)
+	}
+	item.Action = domain.ActionUpdate
+	item.FinalParameters = Merge(item.Parameters)
+	item.NewBaseline = baselineOf(item)
+	return item, nil
 }
 
 func configurationDigest(c *domain.EnvironmentConfiguration, scope map[string]bool) string {

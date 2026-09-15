@@ -26,7 +26,9 @@ type Importer struct {
 	Log     func(format string, args ...any)
 }
 
+// catalogFile is one immutable catalog version (fixtures/catalog/v<N>.yaml).
 type catalogFile struct {
+	Version     int `yaml:"version"`
 	Definitions []struct {
 		Name                      string                         `yaml:"name"`
 		ResourceType              string                         `yaml:"resourceType"`
@@ -80,12 +82,16 @@ type configurationFile struct {
 	} `yaml:"configurations"`
 }
 
-// ImportDirectory imports resource_definitions.yaml, applications/*.yaml and
-// configurations/*.yaml from dir. Application versions are appended only when
-// the file has more versions than the database, so re-running is safe.
+// ImportDirectory imports catalog/*.yaml, applications/*.yaml and
+// configurations/*.yaml from dir. Catalog versions and application versions
+// are only added, never changed, so re-running is safe.
 func (im *Importer) ImportDirectory(ctx context.Context, dir string) error {
-	if err := im.importCatalog(ctx, filepath.Join(dir, "resource_definitions.yaml")); err != nil {
-		return err
+	catalogs, _ := filepath.Glob(filepath.Join(dir, "catalog", "*.yaml"))
+	sort.Strings(catalogs)
+	for _, f := range catalogs {
+		if err := im.importCatalog(ctx, f); err != nil {
+			return fmt.Errorf("%s: %w", f, err)
+		}
 	}
 	apps, _ := filepath.Glob(filepath.Join(dir, "applications", "*.yaml"))
 	sort.Strings(apps)
@@ -117,18 +123,27 @@ func (im *Importer) importCatalog(ctx context.Context, path string) error {
 	if err := readYAML(path, &f); err != nil {
 		return err
 	}
+	if f.Version < 1 {
+		return fmt.Errorf("catalog file needs version >= 1")
+	}
+	var defs []domain.ResourceDefinition
 	for _, d := range f.Definitions {
-		def := &domain.ResourceDefinition{
+		defs = append(defs, domain.ResourceDefinition{
 			Name: d.Name, ResourceType: d.ResourceType, ManagementMode: domain.ManagementMode(d.ManagementMode),
 			ProvisionerReference: d.ProvisionerReference, ExistingResourceReference: d.ExistingResourceReference,
 			SupportedContexts: d.SupportedContexts, ApplicabilityConditions: d.ApplicabilityConditions,
 			DefaultParameters: d.DefaultParameters, AllowedOverrides: d.AllowedOverrides,
 			ExposedOutputs: d.ExposedOutputs, SensitiveOutputs: d.SensitiveOutputs, Requires: d.Requires,
-		}
-		if err := im.Catalog.Upsert(ctx, def); err != nil {
-			return fmt.Errorf("definition %s: %w", d.Name, err)
-		}
-		im.Log("catalog: %s (%s, %s)", d.Name, d.ResourceType, d.ManagementMode)
+		})
+	}
+	created, err := im.Catalog.CreateVersion(ctx, f.Version, defs)
+	if err != nil {
+		return err
+	}
+	if created {
+		im.Log("catalog: version %d created (%d definitions)", f.Version, len(defs))
+	} else {
+		im.Log("catalog: version %d already exists; catalog versions are immutable, file ignored", f.Version)
 	}
 	return nil
 }

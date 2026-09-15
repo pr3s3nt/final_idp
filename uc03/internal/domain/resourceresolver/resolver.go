@@ -11,8 +11,12 @@ import (
 	"github.com/pr3s3nt/final_idp/uc03/internal/domain"
 )
 
+// Resolver resolves against the definitions of one catalog version. All holds
+// the definitions of every catalog version, so instances created with another
+// version can still be looked up by definition ID.
 type Resolver struct {
 	Definitions []domain.ResourceDefinition
+	All         []domain.ResourceDefinition
 }
 
 // Scope identifies who the resource is resolved for.
@@ -127,7 +131,8 @@ func contextString(c domain.DeploymentContext) string {
 	return strings.Join(parts, " ")
 }
 
-// TargetOption is a deployment target the catalog can build a cluster for.
+// TargetOption is a deployment target the catalog has a k8s-cluster definition
+// for: a cloud target where the IDP builds the cluster, or an internal cluster.
 type TargetOption struct {
 	Target        string `json:"target"`
 	CloudProvider string `json:"cloudProvider"`
@@ -156,11 +161,13 @@ func (r *Resolver) SupportedTargets() []TargetOption {
 	return out
 }
 
-// DefinitionByID finds a catalog definition by ID.
+// DefinitionByID finds a definition by ID in any catalog version.
 func (r *Resolver) DefinitionByID(id string) *domain.ResourceDefinition {
-	for i := range r.Definitions {
-		if r.Definitions[i].ID == id {
-			return &r.Definitions[i]
+	for _, list := range [][]domain.ResourceDefinition{r.Definitions, r.All} {
+		for i := range list {
+			if list[i].ID == id {
+				return &list[i]
+			}
 		}
 	}
 	return nil

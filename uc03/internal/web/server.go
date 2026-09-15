@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -123,7 +122,7 @@ func (s *Server) apiApplications(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) apiForm(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f, err := s.Orch.LoadDeploymentContext(r.Context(), r.PathValue("app"), q.Get("environment"), q.Get("target"), q.Get("version"))
+	f, err := s.Orch.LoadDeploymentContext(r.Context(), r.PathValue("app"), q.Get("environment"), q.Get("target"), q.Get("version"), q.Get("catalogVersion"))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -233,21 +232,11 @@ type formRow struct {
 }
 
 func (s *Server) formData(r *http.Request, app string, values url.Values, problems []domain.Problem) (map[string]any, error) {
-	f, err := s.Orch.LoadDeploymentContext(r.Context(), app, values.Get("environment"), values.Get("target"), values.Get("version"))
+	f, err := s.Orch.LoadDeploymentContext(r.Context(), app, values.Get("environment"), values.Get("target"), values.Get("version"), values.Get("catalogVersion"))
 	if err != nil {
 		return nil, err
 	}
-	mirror := ""
-	resolver, _ := s.Orch.Catalog.List(r.Context())
-	for _, d := range resolver {
-		if d.ResourceType == domain.ResourceTypeCluster {
-			for _, c := range d.SupportedContexts {
-				if c["target"] == f.Target {
-					mirror = fmt.Sprint(d.DefaultParameters["image_registry_mirror"])
-				}
-			}
-		}
-	}
+	mirror := f.RegistryMirror
 	var rows []formRow
 	if f.Version != nil {
 		for _, wl := range f.Version.Workloads {
@@ -290,7 +279,7 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request) {
 	if t, reg, ok := strings.Cut(target, "|"); ok {
 		target, region = t, reg
 	}
-	req := service.CreateRequest{Application: r.PathValue("app"), Version: r.PostForm.Get("version"),
+	req := service.CreateRequest{Application: r.PathValue("app"), Version: r.PostForm.Get("version"), CatalogVersion: r.PostForm.Get("catalogVersion"),
 		Environment: r.PostForm.Get("environment"), Target: target, Region: region,
 		Workloads: r.PostForm["workloads"], Images: map[string]string{}}
 	for key, v := range r.PostForm {

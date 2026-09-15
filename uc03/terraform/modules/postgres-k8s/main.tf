@@ -15,6 +15,11 @@ variable "k8s_cluster" {
   type        = any
   sensitive   = true
 }
+variable "tier" {
+  description = "Label of the resource namespace (catalog version 2 sets v2)"
+  type        = string
+  default     = "standard"
+}
 variable "tags" {
   type    = map(string)
   default = {}
@@ -45,7 +50,10 @@ resource "random_password" "app" {
 }
 
 resource "kubernetes_namespace_v1" "this" {
-  metadata { name = local.namespace }
+  metadata {
+    name   = local.namespace
+    labels = { "idp.dev/tier" = var.tier }
+  }
 }
 
 resource "kubernetes_secret_v1" "credentials" {

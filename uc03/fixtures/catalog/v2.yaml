@@ -1,22 +1,22 @@
-# Platform Resource Definition catalog. This is the only place the platform
-# decides what infrastructure a deployment builds. `requires` pulls extra
-# graph nodes (resource -> resource edges); `${ENV_VAR}` is expanded at import.
+# Platform Resource Definition catalog, version 2 (copy of version 1 with two
+# changes). Applications keep running on version 1 until a Developer deploys
+# with version 2.
+#   - postgres-k8s: new default parameter tier=v2 (in-place update, same outputs)
+#   - aws-network: new output network_label, so the network's outputs change and
+#     everything that requires the network is applied again
+version: 2
 definitions:
-  # --- target kind-local -----------------------------------------------------
-  - name: kind-cluster
+  # --- target kind-local: an internal Kubernetes cluster that already exists ---
+  - name: kind-internal-cluster
     resourceType: k8s-cluster
-    managementMode: MANAGED
-    provisionerReference: terraform://modules/kind-cluster
+    managementMode: EXISTING
+    provisionerReference: none://existing
+    existingResourceReference: idpsecret://platform/kind-internal-cluster
     supportedContexts:
       - {target: kind-local, cloudProvider: local}
     defaultParameters:
-      node_count: 1
-      node_image: kindest/node:v1.36.1
-      argocd_chart_version: "10.9.1"
       image_registry_mirror: localhost:5055
-      registry_container: idp-uc03-registry
-    allowedOverrides:
-      node_count: {type: integer, min: 1, max: 3, immutable: true}
+    allowedOverrides: {}
     exposedOutputs: [cluster_name, image_registry_mirror, cluster_kind]
     sensitiveOutputs: [kubeconfig]
     requires: []
@@ -30,6 +30,7 @@ definitions:
     defaultParameters:
       storage_gb: 1
       password_revision: 0
+      tier: v2
     allowedOverrides:
       storage_gb: {type: integer, min: 1, max: 5, increaseOnly: true}
       password_revision: {type: integer, min: 0, max: 1000, increaseOnly: true}
@@ -65,7 +66,7 @@ definitions:
     sensitiveOutputs: [password]
     requires: []
 
-  # --- target aws ------------------------------------------------------------
+  # --- target aws: the IDP builds network and cluster per application + env ---
   - name: aws-network
     resourceType: network
     managementMode: MANAGED
@@ -75,10 +76,11 @@ definitions:
     defaultParameters:
       vpc_cidr: 10.60.0.0/16
       az_count: 2
+      network_label: v2
     allowedOverrides:
       vpc_cidr: {type: cidr, cidrPrefixLength: 16, cidrWithin: 10.0.0.0/8, immutable: true}
       az_count: {type: integer, min: 2, max: 3, immutable: true}
-    exposedOutputs: [vpc_id, vpc_cidr, public_subnet_ids, private_subnet_ids, data_security_group_id, db_subnet_group, cache_subnet_group]
+    exposedOutputs: [vpc_id, vpc_cidr, public_subnet_ids, private_subnet_ids, data_security_group_id, db_subnet_group, cache_subnet_group, network_label]
     sensitiveOutputs: []
     requires: []
 

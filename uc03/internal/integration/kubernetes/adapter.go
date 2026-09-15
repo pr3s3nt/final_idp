@@ -124,6 +124,37 @@ func (ad *Adapter) Clients(a *ClusterAccess) (*Clients, error) {
 	return c, nil
 }
 
+// DeleteNamespace removes an application namespace after a teardown; on a
+// shared internal cluster nothing else removes it.
+func (ad *Adapter) DeleteNamespace(ctx context.Context, a *ClusterAccess, name string) error {
+	c, err := ad.Clients(a)
+	if err != nil {
+		return err
+	}
+	err = c.Core.CoreV1().Namespaces().Delete(ctx, name, metav1.DeleteOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	deadline := time.Now().Add(3 * time.Minute)
+	for {
+		_, err := c.Core.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("namespace %s was not deleted within 3m", name)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
 func (ad *Adapter) EnsureNamespace(ctx context.Context, a *ClusterAccess, name string, labels map[string]string) error {
 	c, err := ad.Clients(a)
 	if err != nil {

@@ -30,10 +30,10 @@ func (r *DeploymentRepository) PersistDeployment(ctx context.Context, d *domain.
 		now := time.Now().UTC()
 		d.ID, d.CreatedAt, d.UpdatedAt = uuid.NewString(), now, now
 		d.Status = domain.AwaitingConfirmation
-		if _, err := tx.Exec(ctx, `INSERT INTO deployment (deployment_id, application_id, application_definition_version_id,
+		if _, err := tx.Exec(ctx, `INSERT INTO deployment (deployment_id, application_id, application_definition_version_id, catalog_version_id,
 			environment_configuration_id, environment, deployment_target, kind, plan_fingerprint, plan_fingerprint_algo, status, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)`,
-			d.ID, d.ApplicationID, d.VersionID, d.EnvironmentConfigurationID, string(d.Environment), d.Target, string(d.Kind),
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)`,
+			d.ID, d.ApplicationID, d.VersionID, d.CatalogVersionID, d.EnvironmentConfigurationID, string(d.Environment), d.Target, string(d.Kind),
 			d.PlanFingerprint, d.PlanFingerprintAlgo, string(d.Status), now); err != nil {
 			return err
 		}
@@ -94,11 +94,12 @@ func (r *DeploymentRepository) FindByIDWithPersistedInputs(ctx context.Context, 
 	var cloud, region *string
 	var input []byte
 	err := r.DB.Pool.QueryRow(ctx, `
-		SELECT d.deployment_id, d.application_id, d.application_definition_version_id, d.environment_configuration_id,
-		       d.environment::text, d.deployment_target, d.kind::text, d.plan_fingerprint, d.plan_fingerprint_algo, d.status::text,
-		       d.created_at, d.updated_at, c.cloud_provider, c.region, c.target_specific_input
-		FROM deployment d JOIN deployment_context c USING (deployment_id) WHERE d.deployment_id = $1`, id).
-		Scan(&d.ID, &d.ApplicationID, &d.VersionID, &d.EnvironmentConfigurationID, &env, &d.Target, &kind,
+		SELECT d.deployment_id, d.application_id, d.application_definition_version_id, d.catalog_version_id, cv.version_number,
+		       d.environment_configuration_id, d.environment::text, d.deployment_target, d.kind::text, d.plan_fingerprint,
+		       d.plan_fingerprint_algo, d.status::text, d.created_at, d.updated_at, c.cloud_provider, c.region, c.target_specific_input
+		FROM deployment d JOIN deployment_context c USING (deployment_id) JOIN catalog_version cv USING (catalog_version_id)
+		WHERE d.deployment_id = $1`, id).
+		Scan(&d.ID, &d.ApplicationID, &d.VersionID, &d.CatalogVersionID, &d.CatalogVersionNumber, &d.EnvironmentConfigurationID, &env, &d.Target, &kind,
 			&d.PlanFingerprint, &d.PlanFingerprintAlgo, &status, &d.CreatedAt, &d.UpdatedAt, &cloud, &region, &input)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.Reject(domain.CodeNotFound, "deployment %s not found", id)
@@ -329,27 +330,29 @@ func (r *DeploymentRepository) FailOrphanedJob(ctx context.Context, deploymentID
 // Queries for result tracking (UC-04 subset)
 
 type DeploymentSummary struct {
-	ID            string
-	Kind          string
-	Environment   string
-	Target        string
-	VersionNumber int
-	Status        string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID             string
+	Kind           string
+	Environment    string
+	Target         string
+	VersionNumber  int
+	CatalogVersion int
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 func (r *DeploymentRepository) FindByApplication(ctx context.Context, applicationID string) ([]DeploymentSummary, error) {
 	rows, err := r.DB.Pool.Query(ctx, `SELECT d.deployment_id, d.kind::text, d.environment::text, d.deployment_target, v.version_number,
-		d.status::text, d.created_at, d.updated_at
+		cv.version_number, d.status::text, d.created_at, d.updated_at
 		FROM deployment d JOIN application_definition_version v USING (application_definition_version_id)
+		JOIN catalog_version cv USING (catalog_version_id)
 		WHERE d.application_id = $1 ORDER BY d.created_at DESC`, applicationID)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (DeploymentSummary, error) {
 		var s DeploymentSummary
-		err := row.Scan(&s.ID, &s.Kind, &s.Environment, &s.Target, &s.VersionNumber, &s.Status, &s.CreatedAt, &s.UpdatedAt)
+		err := row.Scan(&s.ID, &s.Kind, &s.Environment, &s.Target, &s.VersionNumber, &s.CatalogVersion, &s.Status, &s.CreatedAt, &s.UpdatedAt)
 		return s, err
 	})
 }

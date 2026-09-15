@@ -15,8 +15,8 @@ Go implementation of UC-03 as designed in `../01_…` to `../06_traceability`, w
 | Deployment Worker | `internal/service/worker.go` |
 | Deployment Query Service + Result Aggregator (UC-04 subset) | `internal/service/query.go` |
 | Deployment Graph Builder | `internal/domain/graphbuilder` |
-| Deployment Wave Planner (`planDeploymentWaves`, `propagateOutputChanges`) | `internal/domain/waveplanner` |
-| Resource Definition Resolver | `internal/domain/resourceresolver` |
+| Deployment Wave Planner (`planDeploymentWaves`, `findPotentialRedeploys`, `propagateOutputChanges` for workloads and resources) | `internal/domain/waveplanner` |
+| Resource Definition Resolver (definitions of one catalog version) | `internal/domain/resourceresolver` |
 | Infrastructure Planner (plan, overrides) | `internal/domain/infraplanner` |
 | Plan / fingerprint (`sha256-v1`) | `internal/domain/plan.go`, `internal/domain/canonical.go` |
 | Infrastructure Reconciler | `execution.reconcileResource` / `runRemovals` in `internal/service/worker.go` |
@@ -28,16 +28,16 @@ Go implementation of UC-03 as designed in `../01_…` to `../06_traceability`, w
 | CD Integration → Concrete CD Provider (Argo CD + GitOps) | `internal/integration/cd` |
 | Workload Status Provider / Kubernetes Adapter | `internal/integration/kubernetes` |
 | Secret Store | `internal/integration/secretstore` |
-| Application, Environment Configuration, Resource/Workload Instance, Deployment repositories; catalog | `internal/persistence` |
-| Schema (ERD + deviations) | `migrations/0001_schema.sql` |
-| UC-01/UC-02 input (seed/import) | `fixtures/`, `internal/fixtures` |
+| Application, Environment Configuration, Resource/Workload Instance, Deployment repositories; Resource Definition Catalog (versions) | `internal/persistence` |
+| Schema (ERD + deviations) | `migrations/0001_schema.sql`, `migrations/0002_catalog_versions.sql` |
+| UC-01/UC-02 input (seed/import), platform catalog versions | `fixtures/` (`catalog/v<N>.yaml`), `internal/fixtures` |
 
 ## Layout
 
 ```
 cmd/idp/                 migrate | import-fixtures | secret-put | serve | worker | fail-orphaned-job
-terraform/modules/       kind-cluster, postgres-k8s, redis-k8s, aws-network, eks-cluster, aurora-postgresql, redis-elasticache
-prerequisites/           image build/push (CI stand-in), shared PostgreSQL for EXISTING, ECR repositories
+terraform/modules/       postgres-k8s, redis-k8s, aws-network, eks-cluster, aurora-postgresql, redis-elasticache
+prerequisites/           internal kind cluster (EXISTING k8s-cluster), image build/push (CI stand-in), shared PostgreSQL for EXISTING, ECR repositories
 demo-apps/               shop-backend, shop-frontend, shop-worker
 scripts/idpctl.sh        API client used by the demo
 ```

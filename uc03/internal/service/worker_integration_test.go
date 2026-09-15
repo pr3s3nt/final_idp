@@ -33,7 +33,9 @@ type fakeProvisioner struct {
 	destroyed []string
 }
 
-func (f *fakeProvisioner) module(ref string) string { return strings.TrimPrefix(ref, "terraform://modules/") }
+func (f *fakeProvisioner) module(ref string) string {
+	return strings.TrimPrefix(ref, "terraform://modules/")
+}
 
 func (f *fakeProvisioner) Reconcile(_ context.Context, r provisioner.Request) (*provisioner.Result, error) {
 	f.mu.Lock()
@@ -93,15 +95,18 @@ func (f *fakeCD) PublishDesiredDeploymentState(_ context.Context, ds cd.DesiredS
 	f.n++
 	return fmt.Sprintf("git:%040d", f.n), nil
 }
-func (f *fakeCD) WaitForDelivery(context.Context, cd.DesiredState, string, time.Duration) error { return nil }
-func (f *fakeCD) RemoveApplication(context.Context, cd.DesiredState) error                    { return nil }
+func (f *fakeCD) WaitForDelivery(context.Context, cd.DesiredState, string, time.Duration) error {
+	return nil
+}
+func (f *fakeCD) RemoveApplication(context.Context, cd.DesiredState) error { return nil }
 func (f *fakeCD) GetCDStatus(context.Context, cd.DesiredState) (*cd.Status, error) {
 	return &cd.Status{Sync: "SYNCED", Health: "HEALTHY"}, nil
 }
 
 type fakeKube struct {
-	unhealthyImage string
-	removed        []string
+	unhealthyImage    string
+	removed           []string
+	deletedNamespaces []string
 }
 
 func (f *fakeKube) WaitForWorkloadsHealthy(_ context.Context, _ *kubernetes.ClusterAccess, ws []kubernetes.WorkloadRef, _ time.Duration) error {
@@ -124,6 +129,10 @@ func (f *fakeKube) ReadWorkloadOutputs(_ context.Context, _ *kubernetes.ClusterA
 	return out, nil
 }
 func (f *fakeKube) DeleteSecretsByLabel(context.Context, *kubernetes.ClusterAccess, string, string) error {
+	return nil
+}
+func (f *fakeKube) DeleteNamespace(_ context.Context, _ *kubernetes.ClusterAccess, ns string) error {
+	f.deletedNamespaces = append(f.deletedNamespaces, ns)
 	return nil
 }
 func (f *fakeKube) GetWorkloadStatus(context.Context, *kubernetes.ClusterAccess, string, string) (*kubernetes.WorkloadStatus, error) {
@@ -204,8 +213,8 @@ func TestWorkerLifecycleOnKindLocal(t *testing.T) {
 	if d1.Deployment.Status != domain.Succeeded || d1.JobStatus != "COMPLETED" {
 		t.Fatalf("first deployment: %s / job %s\n%s", d1.Deployment.Status, d1.JobStatus, strings.Join(stepsOf(d1), "\n"))
 	}
-	if got := strings.Join(h.prov.calls, ","); got != "apply kind-cluster,apply postgres-k8s,apply redis-k8s" {
-		t.Fatalf("provisioning order: %s", got)
+	if got := strings.Join(h.prov.calls, ","); got != "apply postgres-k8s,apply redis-k8s" {
+		t.Fatalf("provisioning order (the internal cluster is only linked): %s", got)
 	}
 	// Resource waves publish nothing; wave 2 publishes backend+worker, wave 3 frontend.
 	if len(h.cd.publishes) != 2 || len(h.cd.publishes[0].Upsert) != 2 || len(h.cd.publishes[1].Upsert) != 1 {
@@ -312,7 +321,7 @@ func TestWorkerLifecycleOnKindLocal(t *testing.T) {
 		t.Fatalf("returning to v1: %s calls=%v\n%s", d8.Deployment.Status, h.prov.calls, d8.Record.ErrorSummary)
 	}
 
-	// 9. Teardown: workloads, then data resources, then the cluster.
+	// 9. Teardown: workloads, then data resources; the internal cluster is only unlinked.
 	h.prov.calls = nil
 	td, err := h.orch.CreateTeardown(ctx, "shop-app", "STAGING", "kind-local")
 	if err != nil {
@@ -323,8 +332,18 @@ func TestWorkerLifecycleOnKindLocal(t *testing.T) {
 		t.Fatalf("teardown: %s", d9.Record.ErrorSummary)
 	}
 	calls := h.prov.calls
-	if len(calls) != 3 || calls[2] != "destroy kind-cluster" {
-		t.Fatalf("teardown must destroy data resources before the cluster: %v", calls)
+	if strings.Join(calls, ",") != "destroy postgres-k8s,destroy redis-k8s" {
+		t.Fatalf("teardown must destroy the data resources and never the internal cluster: %v", calls)
+	}
+	var unlinked bool
+	for _, s := range d9.Steps {
+		unlinked = unlinked || (s.Component == "k8s-cluster" && s.Name == "UNLINKED" && s.Status == "SUCCEEDED")
+	}
+	if !unlinked {
+		t.Fatalf("teardown must unlink the internal cluster: %v", stepsOf(d9))
+	}
+	if strings.Join(h.kube.deletedNamespaces, ",") != "shop-app-staging" {
+		t.Fatalf("teardown must delete the application namespace on the shared cluster: %v", h.kube.deletedNamespaces)
 	}
 	left, _ := h.repo.Resources.FindResourceInstances(ctx, d9.Deployment.ApplicationID, domain.Staging, "kind-local")
 	runningAfter, _ := h.repo.Workloads.FindWorkloadInstances(ctx, d9.Deployment.ApplicationID, domain.Staging, "kind-local")
@@ -358,7 +377,7 @@ func TestWorkerFailuresAndPlanDrift(t *testing.T) {
 		def, _ := h.repo.Catalog.FindByID(ctx, ri.DefinitionID)
 		statuses[def.Name] = string(ri.Status)
 	}
-	if statuses["postgres-k8s"] != "FAILED" || statuses["kind-cluster"] != "READY" {
+	if statuses["postgres-k8s"] != "FAILED" || statuses["kind-internal-cluster"] != "READY" {
 		t.Fatalf("instance statuses after failure: %v", statuses)
 	}
 
@@ -368,7 +387,8 @@ func TestWorkerFailuresAndPlanDrift(t *testing.T) {
 		t.Fatalf("retry after failure: %s", d.Record.ErrorSummary)
 	}
 
-	// A2-7: catalog changes between confirmation and execution.
+	// A2-7: infrastructure state changes between confirmation and execution
+	// (catalog versions are immutable, so the drift comes from an instance).
 	view, err := h.orch.CreateDeployment(ctx, fullShop("1"))
 	if err != nil {
 		t.Fatal(err)
@@ -376,14 +396,9 @@ func TestWorkerFailuresAndPlanDrift(t *testing.T) {
 	if res, err := h.orch.ConfirmDeployment(ctx, view.Deployment.ID, nil); err != nil || !res.Accepted {
 		t.Fatal(err)
 	}
-	def, _ := h.repo.Catalog.List(ctx)
-	for i := range def {
-		if def[i].Name == "redis-k8s" {
-			def[i].DefaultParameters["maxmemory"] = "64mb"
-			if err := h.repo.Catalog.Upsert(ctx, &def[i]); err != nil {
-				t.Fatal(err)
-			}
-		}
+	if _, err := h.db.Pool.Exec(ctx, `UPDATE resource_instance ri SET applied_input_fingerprint = 'drift' FROM resource_definition d
+		WHERE d.resource_definition_id = ri.resource_definition_id AND d.name = 'redis-k8s'`); err != nil {
+		t.Fatal(err)
 	}
 	h.prov.calls = nil
 	if _, err := h.worker.RunOnce(ctx); err != nil {
@@ -393,5 +408,87 @@ func TestWorkerFailuresAndPlanDrift(t *testing.T) {
 	rec, _ := h.repo.Deployments.GetDeploymentRecord(ctx, view.Deployment.ID)
 	if after.Status != domain.Failed || !strings.Contains(rec.ErrorSummary, domain.CodePlanChangedBeforeExecute) || len(h.prov.calls) != 0 {
 		t.Fatalf("drift after confirmation must fail before side effects: %s %q calls=%v", after.Status, rec.ErrorSummary, h.prov.calls)
+	}
+}
+
+func TestCatalogVersionsAndClusterOutputPropagation(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	v1 := fullShop("1")
+	v1.CatalogVersion = "1"
+	if d := h.deploy(t, v1, nil); d.Deployment.Status != domain.Succeeded || d.Deployment.CatalogVersionNumber != 1 {
+		t.Fatalf("deploy with catalog 1: %s, catalog %d", d.Deployment.Status, d.Deployment.CatalogVersionNumber)
+	}
+
+	// A partial deployment cannot switch the catalog version (A1); without a
+	// catalog version it uses the running one.
+	partial := service.CreateRequest{Application: "shop-app", Version: "1", CatalogVersion: "2", Environment: "STAGING", Target: "kind-local",
+		Workloads: []string{"frontend"}, Images: map[string]string{"frontend": "v1"}}
+	if _, err := h.orch.CreateDeployment(ctx, partial); !domain.HasCode(err, domain.CodePartialCatalogMismatch) {
+		t.Fatalf("expected PARTIAL_DEPLOYMENT_CATALOG_VERSION_MISMATCH, got %v", err)
+	}
+	partial.CatalogVersion = ""
+	if view, err := h.orch.CreateDeployment(ctx, partial); err != nil || view.Plan.CatalogVersion != 1 {
+		t.Fatalf("the running catalog version is preselected: %v", err)
+	}
+
+	// The whole application moves to catalog 2, where only postgres-k8s changed.
+	h.prov.calls = nil
+	v2 := fullShop("1")
+	v2.CatalogVersion = "2"
+	d := h.deploy(t, v2, nil)
+	if d.Deployment.Status != domain.Succeeded || strings.Join(h.prov.calls, ",") != "apply postgres-k8s" {
+		t.Fatalf("catalog 2: %s calls=%v", d.Deployment.Status, h.prov.calls)
+	}
+	instances, _ := h.repo.Resources.FindResourceInstances(ctx, d.Deployment.ApplicationID, domain.Staging, "kind-local")
+	for _, ri := range instances {
+		def, _ := h.repo.Catalog.FindByID(ctx, ri.DefinitionID)
+		if def.CatalogVersionID != d.Deployment.CatalogVersionID {
+			t.Fatalf("%s still points at another catalog version after reuse", def.Name)
+		}
+	}
+	// Going back to an older catalog version is allowed.
+	h.prov.calls = nil
+	if d := h.deploy(t, v1, nil); d.Deployment.Status != domain.Succeeded || strings.Join(h.prov.calls, ",") != "apply postgres-k8s" {
+		t.Fatalf("back to catalog 1: %s calls=%v", d.Deployment.Status, h.prov.calls)
+	}
+
+	// The platform changes the internal cluster's connection record. During a
+	// partial frontend deployment the outputs of k8s-cluster change, so
+	// postgresql and redis (they require it) are applied again and backend and
+	// worker (they run on it) are redeployed with their running images.
+	secrets := h.orch.Secrets.(*secretstore.EncryptedFile)
+	if _, err := secrets.Put(ctx, "platform/kind-internal-cluster", []byte(clusterRecord("fake-rotated"))); err != nil {
+		t.Fatal(err)
+	}
+	h.prov.calls = nil
+	partial.CatalogVersion = "1"
+	d = h.deploy(t, partial, nil)
+	if d.Deployment.Status != domain.Succeeded {
+		t.Fatalf("cluster change: %s\n%s", d.Record.ErrorSummary, strings.Join(stepsOf(d), "\n"))
+	}
+	calls := append([]string{}, h.prov.calls...)
+	sort.Strings(calls)
+	if strings.Join(calls, ",") != "apply postgres-k8s,apply redis-k8s" {
+		t.Fatalf("resources requiring the changed cluster must be applied again: %v", h.prov.calls)
+	}
+	imgs := images(d)
+	if !strings.HasPrefix(imgs["backend"], "CASCADED") || !strings.HasPrefix(imgs["worker"], "CASCADED") || !strings.HasPrefix(imgs["frontend"], "SELECTED") {
+		t.Fatalf("workloads on the changed cluster must cascade: %v", imgs)
+	}
+	again := 0
+	for _, s := range d.Steps {
+		if s.Detail["appliedAgainBecauseOutputsChanged"] == "k8s-cluster" {
+			again++
+		}
+	}
+	if again != 2 {
+		t.Fatalf("steps must show why postgresql and redis were applied again: %v", stepsOf(d))
+	}
+	// The applied input now includes the new cluster outputs: nothing is applied next time.
+	h.prov.calls = nil
+	if d := h.deploy(t, partial, nil); d.Deployment.Status != domain.Succeeded || len(h.prov.calls) != 0 {
+		t.Fatalf("after propagation the resources are up to date: %s calls=%v", d.Deployment.Status, h.prov.calls)
 	}
 }

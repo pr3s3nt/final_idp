@@ -13,6 +13,7 @@ const (
 	CodeMissingConfiguration     = "MISSING_REQUIRED_CONFIGURATION"
 	CodeConfigurationMismatch    = "CONFIGURATION_VERSION_MISMATCH"
 	CodePartialVersionMismatch   = "PARTIAL_DEPLOYMENT_VERSION_MISMATCH"
+	CodePartialCatalogMismatch   = "PARTIAL_DEPLOYMENT_CATALOG_VERSION_MISMATCH"
 	CodeRunningVersionAmbiguous  = "RUNNING_VERSION_NOT_UNIFORM"
 	CodeDependencyCycle          = "DEPENDENCY_CYCLE"
 	CodeDependencyUnresolved     = "DEPENDENCY_UNRESOLVED"

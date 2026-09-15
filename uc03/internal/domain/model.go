@@ -145,14 +145,23 @@ const (
 	Existing ManagementMode = "EXISTING"
 )
 
-// Implicit platform requirement types.
+// Implicit platform requirement types known to the IDP. A definition may
+// require any other type too; the platform team decides.
 const (
 	ResourceTypeCluster = "k8s-cluster"
 	ResourceTypeNetwork = "network"
 )
 
+// CatalogVersion is an immutable version of the platform catalog.
+type CatalogVersion struct {
+	ID        string    `json:"id"`
+	Number    int       `json:"number"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type ResourceDefinition struct {
 	ID                        string
+	CatalogVersionID          string
 	Name                      string
 	ResourceType              string
 	ProvisionerReference      string
@@ -271,11 +280,13 @@ type WorkloadInstance struct {
 	Status                      WorkloadInstanceStatus
 	OutputFingerprint           string
 	// Joined from the current workload deployment.
-	RunningVersionID     string
-	RunningVersionNumber int
-	ImageRepository      string
-	ImageVersion         string
-	DeploymentID         string
+	RunningVersionID            string
+	RunningVersionNumber        int
+	RunningCatalogVersionID     string
+	RunningCatalogVersionNumber int
+	ImageRepository             string
+	ImageVersion                string
+	DeploymentID                string
 }
 
 // ---------------------------------------------------------------------------
@@ -307,6 +318,8 @@ type Deployment struct {
 	ID                         string
 	ApplicationID              string
 	VersionID                  string
+	CatalogVersionID           string
+	CatalogVersionNumber       int
 	EnvironmentConfigurationID string
 	Environment                Environment
 	Target                     string

@@ -18,17 +18,21 @@
 {{range $f.Targets}}<option value="{{.Target}}" {{if eq .Target $f.Target}}selected{{end}}>{{.Target}} ({{.CloudProvider}}{{if .Region}}, {{.Region}}{{end}})</option>{{end}}</select></div>
 <div><label>Application Definition version</label><select name="version" onchange="this.form.submit()">
 {{range $f.Versions}}<option value="{{.Number}}" {{if and $f.Version (eq .Number $f.Version.VersionNumber)}}selected{{end}}>v{{.Number}}{{if eq .Number $f.RunningVersion}} (running){{end}}</option>{{end}}</select></div>
+<div><label>Catalog version</label><select name="catalogVersion" onchange="this.form.submit()">
+{{range $f.CatalogVersions}}<option value="{{.Number}}" {{if and $f.CatalogVersion (eq .Number $f.CatalogVersion.Number)}}selected{{end}}>catalog v{{.Number}}{{if eq .Number $f.RunningCatalogVersion}} (running){{end}}</option>{{end}}</select></div>
 </div>
-<p class="muted">Running on {{$f.Environment}} / {{$f.Target}}: {{if $f.RunningVersion}}<strong>version {{$f.RunningVersion}}</strong>{{else}}nothing yet{{end}}</p>
+<p class="muted">Running on {{$f.Environment}} / {{$f.Target}}: {{if $f.RunningVersion}}<strong>version {{$f.RunningVersion}}, catalog v{{$f.RunningCatalogVersion}}</strong>{{else}}nothing yet{{end}}</p>
+{{if $f.PromotedFrom}}<p class="muted">Nothing runs here yet: the versions running on {{$f.PromotedFrom}} are preselected (promotion).</p>{{end}}
+{{if $f.NewerCatalogVersion}}<p class="busy">Catalog version {{$f.NewerCatalogVersion}} is available. What runs keeps its catalog version until you deploy the whole application with a newer one.</p>{{end}}
 {{if $f.Warning}}<p class="bad">{{$f.Warning}}</p>{{end}}
 </form>
 
 {{if $f.Version}}
 <form method="post" class="card">
 <input type="hidden" name="environment" value="{{$f.Environment}}"><input type="hidden" name="version" value="{{$f.Version.VersionNumber}}">
-<input type="hidden" name="target" value="{{$f.Target}}">
-<h2>Workloads of version {{$f.Version.VersionNumber}}</h2>
-<p class="muted">Deploying a version other than the running one requires every workload. A partial deployment uses the running version.</p>
+<input type="hidden" name="target" value="{{$f.Target}}">{{if $f.CatalogVersion}}<input type="hidden" name="catalogVersion" value="{{$f.CatalogVersion.Number}}">{{end}}
+<h2>Workloads of version {{$f.Version.VersionNumber}}{{if $f.CatalogVersion}} · catalog v{{$f.CatalogVersion.Number}}{{end}}</h2>
+<p class="muted">Deploying a version or catalog version other than the running one requires every workload. A partial deployment uses the running version and catalog version.</p>
 <table><tr><th>Deploy</th><th>Workload</th><th>Image repository</th><th>Running image</th><th>Image version</th></tr>
 {{range .Rows}}<tr><td><input type="checkbox" name="workloads" value="{{.Workload.Name}}" {{if .Selected}}checked{{end}}></td>
 <td><strong>{{.Workload.Name}}</strong><div class="muted">{{.Workload.Type}}</div></td>
@@ -43,12 +47,12 @@
 {{define "history.html"}}{{template "head" "Deployments"}}
 <h1>{{.App.Name}} · Deployments</h1>
 {{template "problems" .Problems}}
-<div class="card"><table><tr><th>Created</th><th>Kind</th><th>Environment</th><th>Target</th><th>Version</th><th>Status</th></tr>
-{{range .Deployments}}<tr><td><a href="/deployments/{{.ID}}">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</a></td><td>{{.Kind}}</td><td>{{.Environment}}</td><td>{{.Target}}</td><td>v{{.VersionNumber}}</td>
-<td><span class="badge {{statusClass .Status}}">{{.Status}}</span></td></tr>{{else}}<tr><td colspan="6" class="muted">No deployments yet.</td></tr>{{end}}
+<div class="card"><table><tr><th>Created</th><th>Kind</th><th>Environment</th><th>Target</th><th>Version</th><th>Catalog</th><th>Status</th></tr>
+{{range .Deployments}}<tr><td><a href="/deployments/{{.ID}}">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</a></td><td>{{.Kind}}</td><td>{{.Environment}}</td><td>{{.Target}}</td><td>v{{.VersionNumber}}</td><td>v{{.CatalogVersion}}</td>
+<td><span class="badge {{statusClass .Status}}">{{.Status}}</span></td></tr>{{else}}<tr><td colspan="7" class="muted">No deployments yet.</td></tr>{{end}}
 </table></div>
 <form method="post" action="/apps/{{.App.Name}}/teardown" class="card warn"><h2>Remove application from an environment and target</h2>
-<p class="muted">Plans removing every workload, destroying managed resources, unlinking shared ones and destroying the cluster and network built for it. Nothing happens until you confirm the plan.</p>
+<p class="muted">Plans removing every workload, destroying managed resources and unlinking shared ones. On a cloud target the cluster and network built for the application are destroyed; an internal cluster is only unlinked. Nothing happens until you confirm the plan.</p>
 <div class="row"><div><label>Environment</label><select name="environment"><option>STAGING</option><option>PRODUCTION</option></select></div>
 <div><label>Target</label><select name="target"><option>kind-local</option><option>aws</option></select></div>
 <div><button class="danger">Plan removal</button></div></div></form>
@@ -70,7 +74,7 @@
 {{define "deployment.html"}}{{template "head" "Deployment"}}
 {{$d := .D}}
 {{if and $d.Deployment (or (eq (printf "%s" $d.Deployment.Status) "CONFIRMED") (eq (printf "%s" $d.Deployment.Status) "DEPLOYING"))}}<meta http-equiv="refresh" content="4">{{end}}
-<h1>{{if eq (printf "%s" $d.Deployment.Kind) "TEARDOWN"}}Remove{{else}}Deploy{{end}} {{$d.ApplicationName}} v{{$d.VersionNumber}} → {{$d.Deployment.Environment}} / {{$d.Deployment.Target}}
+<h1>{{if eq (printf "%s" $d.Deployment.Kind) "TEARDOWN"}}Remove{{else}}Deploy{{end}} {{$d.ApplicationName}} v{{$d.VersionNumber}} · catalog v{{$d.Deployment.CatalogVersionNumber}} → {{$d.Deployment.Environment}} / {{$d.Deployment.Target}}
 <span class="badge {{statusClass (printf "%s" $d.Deployment.Status)}}">{{$d.Deployment.Status}}</span></h1>
 <p class="muted mono">deployment {{$d.Deployment.ID}} · created {{$d.Deployment.CreatedAt.Format "2006-01-02 15:04:05"}}{{if $d.JobStatus}} · job {{$d.JobStatus}}{{end}}
 {{if $d.Deployment.Context.Region}} · {{$d.Deployment.Context.CloudProvider}} {{$d.Deployment.Context.Region}}{{end}} · <a href="/apps/{{$d.ApplicationName}}/deployments">history</a></p>
@@ -82,8 +86,8 @@
 <form method="post" action="/deployments/{{$d.Deployment.ID}}/confirm">
 {{if $p.Waves}}<div class="card"><h2>Deployment waves</h2>{{template "planitems" $p.Waves}}</div>{{end}}
 {{if $p.Removals}}<div class="card warn"><h2>Removals (after all waves are healthy)</h2>{{template "planitems" $p.Removals}}</div>{{end}}
-{{if $p.PotentialRedeploy}}<div class="card"><h2>May be redeployed automatically</h2><p class="muted">If outputs they use change, these running workloads join later waves with their running image.</p>
-<ul>{{range $p.PotentialRedeploy}}<li>{{.Name}}</li>{{end}}</ul></div>{{end}}
+{{if $p.PotentialRedeploy}}<div class="card"><h2>May be redone automatically</h2><p class="muted">If outputs they depend on change during this deployment, these resources are applied again and these running workloads join later waves with their running image.</p>
+<ul>{{range $p.PotentialRedeploy}}<li>{{.Name}} <span class="muted">({{if eq (printf "%s" .Kind) "RESOURCE"}}resource{{else}}workload{{end}})</span></li>{{end}}</ul></div>{{end}}
 {{$has := false}}{{range $p.Waves}}{{range .Items}}{{if .AllowedOverrides}}{{$has = true}}{{end}}{{end}}{{end}}
 {{if $has}}<div class="card"><h2>Infrastructure overrides</h2><p class="muted">Leave empty to keep the current value. Applied overrides stay as the baseline for later deployments.</p>
 <table><tr><th>Component</th><th>Parameter</th><th>Current</th><th>Allowed</th><th>New value</th></tr>

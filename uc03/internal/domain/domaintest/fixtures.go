@@ -10,16 +10,27 @@ import (
 
 func f(v float64) *float64 { return &v }
 
-// Catalog mirrors fixtures/resource_definitions.yaml.
+// CatalogV1 is the catalog version of Catalog().
+var CatalogV1 = domain.CatalogVersion{ID: "cat-1", Number: 1}
+
+// Catalog mirrors fixtures/catalog/v1.yaml.
 func Catalog() *resourceresolver.Resolver {
+	defs := catalogDefinitions()
+	for i := range defs {
+		defs[i].CatalogVersionID = CatalogV1.ID
+	}
+	return &resourceresolver.Resolver{Definitions: defs, All: defs}
+}
+
+func catalogDefinitions() []domain.ResourceDefinition {
 	local := []map[string]string{{"target": "kind-local", "cloudProvider": "local"}}
 	aws := []map[string]string{{"target": "aws", "cloudProvider": "aws", "region": "ap-southeast-1"}}
 	prefix16 := 16
-	return &resourceresolver.Resolver{Definitions: []domain.ResourceDefinition{
-		{ID: "d-kind", Name: "kind-cluster", ResourceType: "k8s-cluster", ManagementMode: domain.Managed, ProvisionerReference: "terraform://modules/kind-cluster",
-			SupportedContexts: local, DefaultParameters: map[string]any{"node_count": 1.0, "image_registry_mirror": "localhost:5055"},
-			AllowedOverrides: map[string]domain.OverrideRule{"node_count": {Type: "integer", Min: f(1), Max: f(3), Immutable: true}},
-			ExposedOutputs:   []string{"cluster_name"}, SensitiveOutputs: []string{"kubeconfig"}},
+	return []domain.ResourceDefinition{
+		{ID: "d-kind", Name: "kind-internal-cluster", ResourceType: "k8s-cluster", ManagementMode: domain.Existing, ProvisionerReference: "none://existing",
+			ExistingResourceReference: "idpsecret://platform/kind-internal-cluster", SupportedContexts: local,
+			DefaultParameters: map[string]any{"image_registry_mirror": "localhost:5055"},
+			ExposedOutputs:    []string{"cluster_name", "image_registry_mirror", "cluster_kind"}, SensitiveOutputs: []string{"kubeconfig"}},
 		{ID: "d-pg-k8s", Name: "postgres-k8s", ResourceType: "PostgreSQL", ManagementMode: domain.Managed, ProvisionerReference: "terraform://modules/postgres-k8s",
 			SupportedContexts: local, DefaultParameters: map[string]any{"storage_gb": 1.0, "password_revision": 0.0},
 			AllowedOverrides: map[string]domain.OverrideRule{
@@ -47,7 +58,7 @@ func Catalog() *resourceresolver.Resolver {
 			ExposedOutputs: []string{"host", "port", "database", "username"}, SensitiveOutputs: []string{"password"}, Requires: []string{"network"}},
 		{ID: "d-elasticache", Name: "redis-elasticache", ResourceType: "Redis", ManagementMode: domain.Managed, ProvisionerReference: "terraform://modules/redis-elasticache",
 			SupportedContexts: aws, DefaultParameters: map[string]any{}, ExposedOutputs: []string{"host", "port"}, Requires: []string{"network"}},
-	}}
+	}
 }
 
 // IDs are stable component IDs shared by every version of shop-app.

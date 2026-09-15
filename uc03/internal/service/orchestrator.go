@@ -47,6 +47,7 @@ type Orchestrator struct {
 type CreateRequest struct {
 	Application         string            `json:"application"`
 	Version             string            `json:"version"`
+	CatalogVersion      string            `json:"catalogVersion,omitempty"` // number or ID; empty selects the form default
 	Environment         string            `json:"environment"`
 	Target              string            `json:"target"`
 	CloudProvider       string            `json:"cloudProvider,omitempty"`
@@ -81,12 +82,36 @@ type planContext struct {
 	Plan          *domain.Plan
 }
 
-func (o *Orchestrator) resolver(ctx context.Context) (*resourceresolver.Resolver, error) {
-	defs, err := o.Catalog.List(ctx)
+// resolver resolves against one catalog version and can still look up the
+// definitions of every version (instances created with an older version).
+func (o *Orchestrator) resolver(ctx context.Context, catalogVersionID string) (*resourceresolver.Resolver, error) {
+	all, err := o.Catalog.ListAll(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &resourceresolver.Resolver{Definitions: defs}, nil
+	r := &resourceresolver.Resolver{All: all}
+	for _, d := range all {
+		if d.CatalogVersionID == catalogVersionID {
+			r.Definitions = append(r.Definitions, d)
+		}
+	}
+	return r, nil
+}
+
+// selectCatalogVersion returns the requested catalog version, or the one the
+// deployment form preselects when the request names none.
+func (o *Orchestrator) selectCatalogVersion(ctx context.Context, application string, env domain.Environment, target, key string) (*domain.CatalogVersion, error) {
+	if key != "" {
+		return o.Catalog.FindVersion(ctx, key)
+	}
+	f, err := o.LoadDeploymentContext(ctx, application, string(env), target, "", "")
+	if err != nil {
+		return nil, err
+	}
+	if f.CatalogVersion == nil {
+		return nil, domain.Reject(domain.CodeNotFound, "the catalog has no version")
+	}
+	return f.CatalogVersion, nil
 }
 
 // resolveContext completes and validates the deployment context against the
@@ -123,7 +148,11 @@ func (o *Orchestrator) CreateDeployment(ctx context.Context, req CreateRequest) 
 	if !env.Valid() {
 		return nil, domain.Reject(domain.CodeInvalidInput, "environment must be STAGING or PRODUCTION")
 	}
-	resolver, err := o.resolver(ctx)
+	catalog, err := o.selectCatalogVersion(ctx, req.Application, env, req.Target, req.CatalogVersion)
+	if err != nil {
+		return nil, err
+	}
+	resolver, err := o.resolver(ctx, catalog.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -144,8 +173,8 @@ func (o *Orchestrator) CreateDeployment(ctx context.Context, req CreateRequest) 
 		return nil, err
 	}
 	d := &domain.Deployment{
-		ApplicationID: app.ID, VersionID: version.VersionID, Environment: env, Target: dctx.Target,
-		Kind: domain.KindDeploy, Context: dctx, PlanFingerprintAlgo: domain.FingerprintAlgo,
+		ApplicationID: app.ID, VersionID: version.VersionID, CatalogVersionID: catalog.ID, CatalogVersionNumber: catalog.Number,
+		Environment: env, Target: dctx.Target, Kind: domain.KindDeploy, Context: dctx, PlanFingerprintAlgo: domain.FingerprintAlgo,
 	}
 	if cfg != nil {
 		d.EnvironmentConfigurationID = cfg.ID
@@ -199,13 +228,14 @@ func (o *Orchestrator) CreateTeardown(ctx context.Context, application, environm
 	if err != nil {
 		return nil, err
 	}
-	resolver, err := o.resolver(ctx)
+	resolver, err := o.resolver(ctx, last.CatalogVersionID)
 	if err != nil {
 		return nil, err
 	}
 	d := &domain.Deployment{
-		ApplicationID: app.ID, VersionID: last.VersionID, EnvironmentConfigurationID: last.EnvironmentConfigurationID,
-		Environment: env, Target: target, Kind: domain.KindTeardown, Context: last.Context, PlanFingerprintAlgo: domain.FingerprintAlgo,
+		ApplicationID: app.ID, VersionID: last.VersionID, CatalogVersionID: last.CatalogVersionID, CatalogVersionNumber: last.CatalogVersionNumber,
+		EnvironmentConfigurationID: last.EnvironmentConfigurationID,
+		Environment:                env, Target: target, Kind: domain.KindTeardown, Context: last.Context, PlanFingerprintAlgo: domain.FingerprintAlgo,
 	}
 	pc, err := o.buildPlan(ctx, d, version, nil, resolver)
 	if err != nil {
@@ -295,7 +325,7 @@ func (o *Orchestrator) rebuildFor(ctx context.Context, d *domain.Deployment) (*p
 			return nil, err
 		}
 	}
-	resolver, err := o.resolver(ctx)
+	resolver, err := o.resolver(ctx, d.CatalogVersionID)
 	if err != nil {
 		return nil, err
 	}
@@ -316,9 +346,10 @@ func (o *Orchestrator) rebuildFor(ctx context.Context, d *domain.Deployment) (*p
 	return pc, nil
 }
 
-// buildPlan runs validateDeploymentInput -> buildDeploymentGraph ->
-// planDeploymentWaves -> resolveResourceDefinitions -> findResourceInstances ->
-// planInfrastructureChanges for create, confirm and execution alike.
+// buildPlan runs validateDeploymentInput -> buildDeploymentGraph (resolving
+// definitions of the deployment's catalog version) -> planDeploymentWaves ->
+// findResourceInstances -> planInfrastructureChanges -> findPotentialRedeploys
+// for create, confirm and execution alike.
 func (o *Orchestrator) buildPlan(ctx context.Context, d *domain.Deployment, version *domain.ApplicationVersion,
 	cfg *domain.EnvironmentConfiguration, resolver *resourceresolver.Resolver) (*planContext, error) {
 
@@ -335,12 +366,13 @@ func (o *Orchestrator) buildPlan(ctx context.Context, d *domain.Deployment, vers
 		return nil, err
 	}
 	pc := &planContext{Deployment: d, Version: version, Configuration: cfg, Resolver: resolver, Running: running, Instances: instances}
+	catalog := domain.CatalogVersion{ID: d.CatalogVersionID, Number: d.CatalogVersionNumber}
 
 	if d.Kind == domain.KindTeardown {
 		pc.Graph = graphbuilder.NodesOnly(version, d.Context)
 		pc.Graph.ComponentNames = names
 		pc.Plan, err = infraplanner.PlanInfrastructureChanges(infraplanner.Input{
-			Kind: domain.KindTeardown, Graph: pc.Graph, Environment: d.Environment,
+			Kind: domain.KindTeardown, Catalog: catalog, Graph: pc.Graph, Environment: d.Environment,
 			Instances: instances, Running: running, Resolver: resolver,
 		})
 		return pc, err
@@ -352,7 +384,7 @@ func (o *Orchestrator) buildPlan(ctx context.Context, d *domain.Deployment, vers
 		selected = append(selected, wd.WorkloadID)
 		images[wd.WorkloadID] = wd.ImageVersion
 	}
-	if err := o.validateDeploymentInput(ctx, version, cfg, selected, images, running); err != nil {
+	if err := o.validateDeploymentInput(ctx, d, version, cfg, selected, images, running); err != nil {
 		return nil, err
 	}
 	pc.Graph, err = graphbuilder.BuildDeploymentGraph(version, cfg, d.Environment, d.Context, resolver)
@@ -368,17 +400,22 @@ func (o *Orchestrator) buildPlan(ctx context.Context, d *domain.Deployment, vers
 		return nil, err
 	}
 	pc.Plan, err = infraplanner.PlanInfrastructureChanges(infraplanner.Input{
-		Kind: domain.KindDeploy, Graph: pc.Graph, Waves: pc.Waves, Environment: d.Environment, Images: images,
+		Kind: domain.KindDeploy, Catalog: catalog, Graph: pc.Graph, Waves: pc.Waves, Environment: d.Environment, Images: images,
 		Instances: instances, Running: running, Configuration: cfg, Resolver: resolver,
 	})
-	return pc, err
+	if err != nil {
+		return nil, err
+	}
+	pc.Plan.PotentialRedeploy = waveplanner.FindPotentialRedeploys(pc.Graph, pc.Plan, running)
+	return pc, nil
 }
 
 var tagPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
 
 // validateDeploymentInput checks images, configuration against the selected
-// version and the partial-deployment version rule (A1).
-func (o *Orchestrator) validateDeploymentInput(ctx context.Context, v *domain.ApplicationVersion, cfg *domain.EnvironmentConfiguration,
+// version and the partial-deployment rule: a partial deployment uses the
+// Application Definition version and catalog version running (A1).
+func (o *Orchestrator) validateDeploymentInput(ctx context.Context, d *domain.Deployment, v *domain.ApplicationVersion, cfg *domain.EnvironmentConfiguration,
 	selected []string, images map[string]string, running []domain.WorkloadInstance) error {
 
 	p := &domain.ValidationError{}
@@ -433,9 +470,19 @@ func (o *Orchestrator) validateDeploymentInput(ctx context.Context, v *domain.Ap
 	}
 
 	if len(selected) < len(v.Workloads) {
-		versions := map[string]int{}
+		versions, catalogs := map[string]int{}, map[string]int{}
 		for _, wi := range running {
 			versions[wi.RunningVersionID] = wi.RunningVersionNumber
+			catalogs[wi.RunningCatalogVersionID] = wi.RunningCatalogVersionNumber
+		}
+		if len(catalogs) > 1 {
+			p.Add(domain.CodeRunningVersionAmbiguous, "running workloads use different catalog versions; deploy the whole application to converge first")
+		}
+		for id, number := range catalogs {
+			if len(catalogs) == 1 && id != d.CatalogVersionID {
+				p.Add(domain.CodePartialCatalogMismatch, "catalog version %d is running; a partial deployment can only use the running catalog version (selected %d), deploy the whole application to change it",
+					number, d.CatalogVersionNumber)
+			}
 		}
 		switch {
 		case len(versions) == 0:
@@ -576,20 +623,29 @@ func contains(list []string, s string) bool {
 
 // DeploymentForm is the data behind the deployment form (loadDeploymentContext).
 type DeploymentForm struct {
-	Application    *persistence.ApplicationSummary
-	Versions       []persistence.VersionSummary
-	Targets        []resourceresolver.TargetOption
-	Environment    domain.Environment
-	Target         string
-	Version        *domain.ApplicationVersion
-	RunningVersion int // 0 when nothing runs
-	Running        map[string]domain.WorkloadInstance
-	Warning        string
+	Application           *persistence.ApplicationSummary
+	Versions              []persistence.VersionSummary
+	CatalogVersions       []domain.CatalogVersion
+	Targets               []resourceresolver.TargetOption
+	Environment           domain.Environment
+	Target                string
+	Version               *domain.ApplicationVersion
+	CatalogVersion        *domain.CatalogVersion
+	RunningVersion        int // 0 when nothing runs
+	RunningCatalogVersion int
+	NewerCatalogVersion   int    // newest catalog version when newer than the selected one
+	PromotedFrom          string // environment whose running versions were preselected
+	RegistryMirror        string
+	Running               map[string]domain.WorkloadInstance
+	Warning               string
 }
 
-// LoadDeploymentContext returns versions, supported targets and what currently
-// runs on the environment + target.
-func (o *Orchestrator) LoadDeploymentContext(ctx context.Context, application, environment, target, version string) (*DeploymentForm, error) {
+// LoadDeploymentContext returns versions, catalog versions, supported targets
+// and what currently runs on the environment + target. It preselects the
+// running Application Definition version and catalog version; with nothing
+// running on production it preselects what runs on staging (promotion), and
+// otherwise the newest versions.
+func (o *Orchestrator) LoadDeploymentContext(ctx context.Context, application, environment, target, version, catalogVersion string) (*DeploymentForm, error) {
 	app, err := o.Apps.FindApplication(ctx, application)
 	if err != nil {
 		return nil, err
@@ -598,11 +654,16 @@ func (o *Orchestrator) LoadDeploymentContext(ctx context.Context, application, e
 	if err != nil {
 		return nil, err
 	}
-	resolver, err := o.resolver(ctx)
+	catalogs, err := o.Catalog.ListVersions(ctx)
 	if err != nil {
 		return nil, err
 	}
-	f := &DeploymentForm{Application: app, Versions: versions, Targets: resolver.SupportedTargets(),
+	all, err := o.Catalog.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	f := &DeploymentForm{Application: app, Versions: versions, CatalogVersions: catalogs,
+		Targets:     (&resourceresolver.Resolver{Definitions: all}).SupportedTargets(),
 		Environment: domain.Environment(strings.ToUpper(environment)), Target: target, Running: map[string]domain.WorkloadInstance{}}
 	if !f.Environment.Valid() {
 		f.Environment = domain.Staging
@@ -614,21 +675,51 @@ func (o *Orchestrator) LoadDeploymentContext(ctx context.Context, application, e
 	if err != nil {
 		return nil, err
 	}
-	seen := map[int]bool{}
+	seen, seenCatalog := map[int]bool{}, map[int]bool{}
 	for _, wi := range running {
 		f.Running[wi.WorkloadID] = wi
-		seen[wi.RunningVersionNumber] = true
-		f.RunningVersion = wi.RunningVersionNumber
+		seen[wi.RunningVersionNumber], seenCatalog[wi.RunningCatalogVersionNumber] = true, true
+		f.RunningVersion, f.RunningCatalogVersion = wi.RunningVersionNumber, wi.RunningCatalogVersionNumber
 	}
-	if len(seen) > 1 {
+	if len(seen) > 1 || len(seenCatalog) > 1 {
 		f.Warning = "running workloads use different versions; only a full deployment is possible"
+	}
+
+	promoteVersion, promoteCatalog := 0, 0
+	if len(running) == 0 && f.Environment == domain.Production {
+		staging, err := o.Workloads.FindWorkloadInstances(ctx, app.ID, domain.Staging, f.Target)
+		if err != nil {
+			return nil, err
+		}
+		v, c := map[int]bool{}, map[int]bool{}
+		for _, wi := range staging {
+			v[wi.RunningVersionNumber], c[wi.RunningCatalogVersionNumber] = true, true
+			promoteVersion, promoteCatalog = wi.RunningVersionNumber, wi.RunningCatalogVersionNumber
+		}
+		if len(v) == 1 && len(c) == 1 {
+			f.PromotedFrom = string(domain.Staging)
+		} else {
+			promoteVersion, promoteCatalog = 0, 0
+		}
 	}
 	if version == "" {
 		switch {
 		case f.RunningVersion > 0:
 			version = fmt.Sprint(f.RunningVersion)
+		case promoteVersion > 0:
+			version = fmt.Sprint(promoteVersion)
 		case len(versions) > 0:
 			version = fmt.Sprint(versions[0].Number)
+		}
+	}
+	if catalogVersion == "" {
+		switch {
+		case f.RunningCatalogVersion > 0:
+			catalogVersion = fmt.Sprint(f.RunningCatalogVersion)
+		case promoteCatalog > 0:
+			catalogVersion = fmt.Sprint(promoteCatalog)
+		case len(catalogs) > 0:
+			catalogVersion = fmt.Sprint(catalogs[0].Number)
 		}
 	}
 	if version != "" {
@@ -636,5 +727,30 @@ func (o *Orchestrator) LoadDeploymentContext(ctx context.Context, application, e
 			return nil, err
 		}
 	}
+	if catalogVersion != "" {
+		if f.CatalogVersion, err = o.Catalog.FindVersion(ctx, catalogVersion); err != nil {
+			return nil, err
+		}
+		if len(catalogs) > 0 && catalogs[0].Number > f.CatalogVersion.Number {
+			f.NewerCatalogVersion = catalogs[0].Number
+		}
+		f.RegistryMirror = registryMirror(all, f.CatalogVersion.ID, f.Target)
+	}
 	return f, nil
+}
+
+// registryMirror is the registry the target cluster of a catalog version pulls
+// images from, used to suggest image tags.
+func registryMirror(all []domain.ResourceDefinition, catalogVersionID, target string) string {
+	for _, d := range all {
+		if d.CatalogVersionID != catalogVersionID || d.ResourceType != domain.ResourceTypeCluster {
+			continue
+		}
+		for _, c := range d.SupportedContexts {
+			if m, ok := d.DefaultParameters["image_registry_mirror"]; ok && c["target"] == target {
+				return fmt.Sprint(m)
+			}
+		}
+	}
+	return ""
 }

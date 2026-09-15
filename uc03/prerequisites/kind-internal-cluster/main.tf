@@ -1,5 +1,8 @@
-# k8s-cluster on target kind-local: a kind cluster for one application +
-# environment, wired to the local image registry, with Argo CD installed.
+# Platform-owned internal Kubernetes cluster for target kind-local, created once
+# by prerequisites/kind-internal-cluster.sh before any deployment: a kind
+# cluster wired to the local image registry, with Argo CD installed. The IDP
+# never creates or destroys it; the catalog definition kind-internal-cluster
+# (EXISTING) points to its connection record in the Secret Store.
 terraform {
   required_providers {
     kind = { source = "tehcyx/kind", version = "~> 0.11" }
@@ -8,12 +11,30 @@ terraform {
   }
 }
 
-variable "name" { type = string }
-variable "node_count" { type = number }
-variable "node_image" { type = string }
-variable "argocd_chart_version" { type = string }
-variable "image_registry_mirror" { type = string }
-variable "registry_container" { type = string }
+variable "name" {
+  type    = string
+  default = "idp-internal"
+}
+variable "node_count" {
+  type    = number
+  default = 1
+}
+variable "node_image" {
+  type    = string
+  default = "kindest/node:v1.36.1"
+}
+variable "argocd_chart_version" {
+  type    = string
+  default = "10.9.1"
+}
+variable "image_registry_mirror" {
+  type    = string
+  default = "localhost:5055"
+}
+variable "registry_container" {
+  type    = string
+  default = "idp-uc03-registry"
+}
 variable "tags" {
   type    = map(string)
   default = {}

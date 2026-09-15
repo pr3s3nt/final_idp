@@ -100,14 +100,22 @@ func (r *ResourceInstanceRepository) Create(ctx context.Context, ri *domain.Reso
 	})
 }
 
-// SaveState updates status, references and the applied override baseline after
+// SaveState updates status, definition, references and the applied input after
 // a provisioner call.
 func (r *ResourceInstanceRepository) SaveState(ctx context.Context, ri *domain.ResourceInstance) error {
 	overrides, _ := json.Marshal(nonNilMap(ri.AppliedOverrides))
 	_, err := r.DB.Pool.Exec(ctx, `UPDATE resource_instance SET infrastructure_reference = $2,
 		provider_state_reference = nullif($3, ''), status = $4, applied_overrides = $5,
-		applied_input_fingerprint = nullif($6, ''), updated_at = now() WHERE resource_instance_id = $1`,
-		ri.ID, ri.InfrastructureReference, ri.ProviderStateReference, string(ri.Status), overrides, ri.AppliedInputFingerprint)
+		applied_input_fingerprint = nullif($6, ''), resource_definition_id = $7, updated_at = now() WHERE resource_instance_id = $1`,
+		ri.ID, ri.InfrastructureReference, ri.ProviderStateReference, string(ri.Status), overrides, ri.AppliedInputFingerprint, ri.DefinitionID)
+	return err
+}
+
+// UpdateDefinition points a reused instance at the same-named definition of
+// the catalog version a deployment uses, without calling the provisioner.
+func (r *ResourceInstanceRepository) UpdateDefinition(ctx context.Context, id, definitionID, infrastructureReference string) error {
+	_, err := r.DB.Pool.Exec(ctx, `UPDATE resource_instance SET resource_definition_id = $2, infrastructure_reference = $3, updated_at = now()
+		WHERE resource_instance_id = $1`, id, definitionID, infrastructureReference)
 	return err
 }
 
@@ -128,17 +136,20 @@ type WorkloadInstanceRepository struct{ DB *DB }
 const workloadInstanceSelect = `
 	SELECT wi.workload_instance_id, wi.application_id, wi.workload_id, wi.environment::text, wi.deployment_target,
 	       wi.current_workload_deployment_id, wi.status::text, coalesce(wi.output_fingerprint, ''),
-	       d.application_definition_version_id, v.version_number, wd.image_repository, wd.image_version, d.deployment_id
+	       d.application_definition_version_id, v.version_number, d.catalog_version_id, cv.version_number,
+	       wd.image_repository, wd.image_version, d.deployment_id
 	FROM workload_instance wi
 	JOIN workload_deployment wd ON wd.workload_deployment_id = wi.current_workload_deployment_id
 	JOIN deployment d ON d.deployment_id = wd.deployment_id
-	JOIN application_definition_version v ON v.application_definition_version_id = d.application_definition_version_id`
+	JOIN application_definition_version v ON v.application_definition_version_id = d.application_definition_version_id
+	JOIN catalog_version cv ON cv.catalog_version_id = d.catalog_version_id`
 
 func scanWorkloadInstance(row pgx.Row) (domain.WorkloadInstance, error) {
 	var wi domain.WorkloadInstance
 	var env, status string
 	err := row.Scan(&wi.ID, &wi.ApplicationID, &wi.WorkloadID, &env, &wi.Target, &wi.CurrentWorkloadDeploymentID,
-		&status, &wi.OutputFingerprint, &wi.RunningVersionID, &wi.RunningVersionNumber, &wi.ImageRepository,
+		&status, &wi.OutputFingerprint, &wi.RunningVersionID, &wi.RunningVersionNumber, &wi.RunningCatalogVersionID,
+		&wi.RunningCatalogVersionNumber, &wi.ImageRepository,
 		&wi.ImageVersion, &wi.DeploymentID)
 	wi.Environment, wi.Status = domain.Environment(env), domain.WorkloadInstanceStatus(status)
 	return wi, err

@@ -325,17 +325,62 @@ func (a *ArgoCD) GetCDStatus(ctx context.Context, ds DesiredState) (*Status, err
 }
 
 // RemoveApplication deletes the application after its workloads were removed
-// from Git and pruned.
+// from Git and pruned, waits until Argo CD no longer has it (so no in-flight
+// sync recreates the namespace), then removes the application path from Git.
 func (a *ArgoCD) RemoveApplication(ctx context.Context, ds DesiredState) error {
 	c, err := a.Kube.Clients(ds.Cluster)
 	if err != nil {
 		return err
 	}
-	err = c.Dynamic.Resource(applicationGVR).Namespace("argocd").Delete(ctx, a.appName(ds), metav1.DeleteOptions{})
+	apps := c.Dynamic.Resource(applicationGVR).Namespace("argocd")
+	err = apps.Delete(ctx, a.appName(ds), metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
-	return nil
+	deadline := time.Now().Add(3 * time.Minute)
+	for {
+		if _, err := apps.Get(ctx, a.appName(ds), metav1.GetOptions{}); apierrors.IsNotFound(err) {
+			break
+		} else if err != nil {
+			return err
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("Argo CD application %s was not deleted within 3m", a.appName(ds))
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for attempt := 1; ; attempt++ {
+		dir, err := a.checkout(ctx)
+		if err != nil {
+			return err
+		}
+		if err := os.RemoveAll(filepath.Join(dir, filepath.FromSlash(a.appPath(ds)))); err != nil {
+			return err
+		}
+		if _, err := a.git(ctx, dir, "add", "-A"); err != nil {
+			return err
+		}
+		if status, _ := a.git(ctx, dir, "status", "--porcelain"); status == "" {
+			return nil
+		}
+		if _, err := a.git(ctx, dir, "commit", "-m", fmt.Sprintf("%s %s: remove application", ds.Application, ds.Environment)); err != nil {
+			return err
+		}
+		if _, err := a.git(ctx, dir, "push", "origin", "HEAD:"+a.Branch); err != nil {
+			if attempt < 3 {
+				continue
+			}
+			return err
+		}
+		return nil
+	}
 }
 
 func short(sha string) string {

@@ -82,6 +82,7 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		resourceOutputs: map[string]domain.Outputs{}, workloadOutputs: map[string]domain.Outputs{},
 		instances: map[string]*domain.ResourceInstance{}, workloadInstanceIDs: map[string]string{},
 		wds: map[string]*domain.WorkloadDeployment{}, touched: map[string]bool{},
+		extra: map[string]*domain.PlanItem{}, reapplied: map[string]string{},
 	}
 	runErr := ex.run(ctx)
 
@@ -116,6 +117,8 @@ type execution struct {
 	wds                 map[string]*domain.WorkloadDeployment
 	cluster             *kubernetes.ClusterAccess
 	touched             map[string]bool
+	extra               map[string]*domain.PlanItem // resources outside the plan applied again
+	reapplied           map[string]string           // resource ID -> names of changed components it requires
 	delivery            string
 	removed             []string
 	nextWave            int
@@ -207,8 +210,9 @@ func Namespace(application string, env domain.Environment) string {
 }
 
 // runWaves executes waves in dependency order. After each wave it compares
-// output fingerprints and, when outputs changed, adds dependent workloads
-// (with their running image) and re-layers the waves not yet executed.
+// output fingerprints and, when outputs changed, applies managed resources that
+// require the changed components again, adds dependent workloads (with their
+// running image) and re-layers the waves not yet executed.
 func (ex *execution) runWaves(ctx context.Context) error {
 	g := ex.pc.Graph
 	for id := range ex.pc.Waves.Scope {
@@ -240,6 +244,29 @@ func (ex *execution) runWaves(ctx context.Context) error {
 		}
 		for _, id := range waves[wi] {
 			ex.done[id] = true
+		}
+		for _, id := range waveplanner.ResourcesToReapply(g, changed, ex.scope, ex.done, ex.pc.Plan) {
+			if it := ex.pc.Plan.Item(id); it != nil {
+				it.Action = domain.ActionUpdate
+			} else {
+				ri := ex.instances[id]
+				if ri == nil || ri.Status != domain.RIReady {
+					continue
+				}
+				it, err := infraplanner.ReapplyItem(g, id, ri, ex.pc.Resolver)
+				if err != nil {
+					return &domain.ExecutionError{Wave: wi, Component: g.Nodes[id].Name, Step: domain.StepInfrastructureReady, Err: err}
+				}
+				ex.extra[id] = it
+			}
+			var causes []string
+			for _, dep := range g.Nodes[id].DependsOn {
+				if contains(changed, dep) {
+					causes = append(causes, g.Nodes[dep].Name)
+				}
+			}
+			ex.scope[id], ex.reapplied[id] = true, strings.Join(causes, ", ")
+			ex.w.logf("deployment %s: %s is applied again (outputs of %s changed)", ex.job.DeploymentID, g.Nodes[id].Name, ex.reapplied[id])
 		}
 		for _, c := range waveplanner.PropagateOutputChanges(g, ex.scope, changed, ex.pc.Running) {
 			wd := &domain.WorkloadDeployment{WorkloadID: c.WorkloadID, ImageRepository: c.Running.ImageRepository, ImageVersion: c.Running.ImageVersion, WaveNumber: wi + 1}
@@ -274,6 +301,15 @@ func (ex *execution) runWaves(ctx context.Context) error {
 	return nil
 }
 
+// item returns the plan item of a resource, including resources outside the
+// plan that are applied again during execution.
+func (ex *execution) item(componentID string) *domain.PlanItem {
+	if it := ex.pc.Plan.Item(componentID); it != nil {
+		return it
+	}
+	return ex.extra[componentID]
+}
+
 func (ex *execution) definition(componentID string) *domain.ResourceDefinition {
 	if res, ok := ex.pc.Graph.Resolutions[componentID]; ok {
 		return res.Definition
@@ -286,7 +322,7 @@ func (ex *execution) definition(componentID string) *domain.ResourceDefinition {
 
 // reconcileInfrastructure for one resource item of a wave.
 func (ex *execution) reconcileResource(ctx context.Context, wave int, id string) error {
-	item := ex.pc.Plan.Item(id)
+	item := ex.item(id)
 	def := ex.definition(id)
 	step := ex.startStep(ctx, wave, domain.StepInfrastructureReady, item.Name)
 	ex.w.logf("deployment %s: wave %d %s %s (%s)", ex.job.DeploymentID, wave, item.Action, item.Name, def.Name)
@@ -298,9 +334,11 @@ func (ex *execution) reconcileResource(ctx context.Context, wave int, id string)
 	if _, err := ex.outputsOf(ctx, id); err != nil {
 		return ex.fail(ctx, []string{step}, wave, item.Name, domain.StepInfrastructureReady, err)
 	}
-	ex.finishStep(ctx, step, domain.StepSucceeded, "", map[string]any{
-		"action": item.Action, "definition": def.Name, "managementMode": string(def.ManagementMode), "resourceInstanceId": ri.ID,
-	})
+	detail := map[string]any{"action": item.Action, "definition": def.Name, "managementMode": string(def.ManagementMode), "resourceInstanceId": ri.ID}
+	if cause, ok := ex.reapplied[id]; ok {
+		detail["appliedAgainBecauseOutputsChanged"] = cause
+	}
+	ex.finishStep(ctx, step, domain.StepSucceeded, "", detail)
 	return nil
 }
 
@@ -316,6 +354,18 @@ func (ex *execution) applyResource(ctx context.Context, item *domain.PlanItem, d
 		ri := ex.instances[item.ComponentID]
 		if ri == nil || ri.Status != domain.RIReady {
 			return nil, fmt.Errorf("instance to reuse is not READY")
+		}
+		// A deployment with another catalog version reuses the instance under
+		// the same-named definition of that version.
+		ref := ri.InfrastructureReference
+		if def.ManagementMode == domain.Existing {
+			ref = def.ExistingResourceReference
+		}
+		if ri.DefinitionID != def.ID || ri.InfrastructureReference != ref {
+			if err := repo.UpdateDefinition(ctx, ri.ID, def.ID, ref); err != nil {
+				return nil, err
+			}
+			ri.DefinitionID, ri.InfrastructureReference = def.ID, ref
 		}
 		return ri, nil
 	case domain.ActionLink:
@@ -369,8 +419,10 @@ func (ex *execution) provision(ctx context.Context, ri *domain.ResourceInstance,
 		return nil, err
 	}
 	ri.Status, ri.InfrastructureReference, ri.ProviderStateReference = domain.RIReady, res.InfrastructureReference, res.ProviderStateReference
+	ri.DefinitionID = def.ID
 	ri.AppliedOverrides = item.NewBaseline
-	ri.AppliedInputFingerprint = infraplanner.InputFingerprint(def, item.FinalParameters)
+	ri.AppliedInputFingerprint = infraplanner.InputFingerprint(def, item.FinalParameters,
+		infraplanner.RequiredOutputFingerprints(ex.pc.Graph, item.ComponentID, func(dep string) string { return ex.resourceOutputs[dep].Fingerprint() }))
 	delete(ex.resourceOutputs, item.ComponentID)
 	return ri, repo.SaveState(ctx, ri)
 }
@@ -612,8 +664,8 @@ func (ex *execution) render(ctx context.Context, wl *domain.Workload, wd domain.
 
 // propagateOutputChanges compares the output fingerprints of a finished wave
 // with the previous ones, stores the new fingerprints and marks workloads
-// HEALTHY. It returns the components whose outputs changed. Platform
-// infrastructure outputs are not referenced by configuration and never cascade.
+// HEALTHY. It returns the components whose outputs changed, including the
+// cluster and network: what runs on or requires them is redone.
 func (ex *execution) propagateOutputChanges(ctx context.Context, ids []string) ([]string, error) {
 	var changed []string
 	previous := map[string]string{}
@@ -626,7 +678,7 @@ func (ex *execution) propagateOutputChanges(ctx context.Context, ids []string) (
 		case domain.NodeResource:
 			ri := ex.instances[id]
 			fp := ex.resourceOutputs[id].Fingerprint()
-			if ri.OutputFingerprint != fp && !node.Platform {
+			if ri.OutputFingerprint != fp {
 				changed = append(changed, id)
 			}
 			if err := ex.w.Orch.Resources.UpdateOutputFingerprint(ctx, ri.ID, fp); err != nil {
@@ -691,6 +743,9 @@ func (ex *execution) runRemovals(ctx context.Context) error {
 				}
 				if d.Kind == domain.KindTeardown {
 					if err := w.CD.RemoveApplication(ctx, ds); err != nil {
+						return ex.fail(ctx, steps, wave, component, domain.StepRemoved, err)
+					}
+					if err := w.Kube.DeleteNamespace(ctx, cluster, ex.namespace); err != nil {
 						return ex.fail(ctx, steps, wave, component, domain.StepRemoved, err)
 					}
 				}

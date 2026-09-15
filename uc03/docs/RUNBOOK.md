@@ -26,7 +26,7 @@ Internet cần tới: registry.terraform.io, argoproj.github.io (Helm chart), qu
 | `IDP_GITOPS_REPO` | worker | `git@github.com:<owner>/final-idp-gitops.git` |
 | `IDP_GITOPS_SSH_KEY_FILE` | worker | deploy key có quyền ghi (IDP push) |
 | `IDP_GITOPS_READ_SSH_KEY_FILE` | worker | deploy key chỉ đọc (Argo CD) |
-| `IDP_AWS_ECR_REGISTRY` | import | registry ECR của account, điền vào `eks-cluster.image_registry_mirror` |
+| `IDP_AWS_ECR_REGISTRY` | import | registry ECR của account, điền vào `eks-cluster.image_registry_mirror`. Phải đặt **trước** `import-fixtures`: phiên bản catalog đã tạo không sửa được |
 | `IDP_HEALTH_TIMEOUT` | không | thời gian chờ sync/rollout, mặc định 6m |
 | `IDP_LISTEN` | không | mặc định `127.0.0.1:8088` |
 
@@ -58,12 +58,18 @@ export IDP_GITOPS_SSH_KEY_FILE=$KEYDIR/gitops_write IDP_GITOPS_READ_SSH_KEY_FILE
 
 go build -o bin/idp ./cmd/idp
 ./bin/idp migrate
-./bin/idp import-fixtures              # catalog, shop-app v1–v3, reporting-app v1–v2, configuration
+./bin/idp import-fixtures              # catalog v1, v2; shop-app v1–v3, reporting-app v1–v2; configuration
 ./prerequisites/build-push-images.sh localhost:5055
 ./prerequisites/shared-postgres.sh     # PostgreSQL dùng chung cho definition EXISTING
+./prerequisites/kind-internal-cluster.sh   # cụm Kubernetes nội bộ có sẵn (kind + Argo CD), đăng ký vào Secret Store
 ```
 
-Cụm kind, Argo CD, Postgres, Redis **không** được dựng trước: deployment đầu tiên tạo chúng.
+Hai loại nơi triển khai:
+
+- `kind-local` là **cụm nội bộ có sẵn**: platform dựng một lần bằng `kind-internal-cluster.sh` (cụm `idp-internal`); catalog khai báo `k8s-cluster` là `EXISTING` trỏ tới `idpsecret://platform/kind-internal-cluster`. IDP chỉ liên kết, không tạo/xóa cụm. Postgres, Redis của từng app vẫn do deployment tạo trong cụm.
+- `aws` là **cloud**: deployment đầu tiên dựng VPC, EKS + Argo CD, Aurora, ElastiCache; gỡ app thì xóa.
+
+Catalog có phiên bản (`fixtures/catalog/v<N>.yaml`, bất biến). Muốn sửa catalog thì thêm file phiên bản mới rồi chạy lại `import-fixtures`; phiên bản đã có bị bỏ qua. Deploy chọn phiên bản catalog (`catalogVersion` trong API, ô chọn trên form, `IDP_CATALOG_VERSION` với `idpctl.sh`); để trống thì dùng phiên bản đang chạy, hoặc của staging khi promote, hoặc mới nhất.
 
 ## 4. Chạy
 
@@ -89,10 +95,12 @@ go test -tags integration ./internal/service/   # Postgres thật (idp_test), ad
 | `PLAN_CHANGED` khi confirm | Catalog/config/instance đổi sau khi tạo plan; xem plan dựng lại rồi confirm lại |
 | `PLAN_CHANGED_BEFORE_EXECUTION` | Input đổi giữa confirm và lúc worker chạy; tạo deployment mới |
 | Argo CD không sync | `kubectl -n argocd get applications.argoproj.io` trong cụm; kiểm tra deploy key đọc và kết nối github.com:22 |
+| `PARTIAL_DEPLOYMENT_CATALOG_VERSION_MISMATCH` | Deploy một phần phải dùng phiên bản catalog đang chạy; muốn đổi thì deploy toàn bộ app |
+| Đổi thông tin kết nối cụm nội bộ | Chạy lại `kind-internal-cluster.sh` (ghi đè bản ghi trong Secret Store). Lần deploy sau, output của `k8s-cluster` đổi nên Postgres/Redis được apply lại và workload trên cụm được deploy lại |
 
 ## 7. Dọn dẹp
 
 ```bash
-scripts/idpctl.sh teardown shop-app STAGING kind-local   # rồi confirm id trả về
-kind get clusters                                        # cụm idp-* phải biến mất sau teardown
+scripts/idpctl.sh teardown shop-app STAGING kind-local   # rồi confirm id trả về: xóa workload, Postgres/Redis; cụm nội bộ chỉ gỡ liên kết
+./prerequisites/kind-internal-cluster.sh destroy         # platform xóa cụm nội bộ khi không còn dùng
 ```
