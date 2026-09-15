@@ -1,0 +1,119 @@
+{{define "error.html"}}{{template "head" "Error"}}{{template "problems" .Problems}}<a href="javascript:history.back()">Back</a>{{template "foot"}}{{end}}
+
+{{define "applications.html"}}{{template "head" "Applications"}}
+<h1>Applications</h1>
+<div class="card"><table><tr><th>Application</th><th>Latest version</th><th></th></tr>
+{{range .Apps}}<tr><td><strong>{{.Name}}</strong><div class="muted">{{.Description}}</div></td><td>v{{.LatestVersion}}</td>
+<td><a href="/apps/{{.Name}}/deploy">Deploy</a> · <a href="/apps/{{.Name}}/deployments">Deployments</a></td></tr>{{end}}
+</table></div>{{template "foot"}}{{end}}
+
+{{define "form.html"}}{{template "head" "Deploy"}}
+{{$f := .Form}}
+<h1>Deploy {{$f.Application.Name}}</h1>
+{{template "problems" .Problems}}
+<form method="get" class="card"><div class="row">
+<div><label>Environment</label><select name="environment" onchange="this.form.submit()">
+{{range $e := (list "STAGING" "PRODUCTION")}}<option {{if eq $e (printf "%s" $f.Environment)}}selected{{end}}>{{$e}}</option>{{end}}</select></div>
+<div><label>Deployment target</label><select name="target" onchange="this.form.submit()">
+{{range $f.Targets}}<option value="{{.Target}}" {{if eq .Target $f.Target}}selected{{end}}>{{.Target}} ({{.CloudProvider}}{{if .Region}}, {{.Region}}{{end}})</option>{{end}}</select></div>
+<div><label>Application Definition version</label><select name="version" onchange="this.form.submit()">
+{{range $f.Versions}}<option value="{{.Number}}" {{if and $f.Version (eq .Number $f.Version.VersionNumber)}}selected{{end}}>v{{.Number}}{{if eq .Number $f.RunningVersion}} (running){{end}}</option>{{end}}</select></div>
+</div>
+<p class="muted">Running on {{$f.Environment}} / {{$f.Target}}: {{if $f.RunningVersion}}<strong>version {{$f.RunningVersion}}</strong>{{else}}nothing yet{{end}}</p>
+{{if $f.Warning}}<p class="bad">{{$f.Warning}}</p>{{end}}
+</form>
+
+{{if $f.Version}}
+<form method="post" class="card">
+<input type="hidden" name="environment" value="{{$f.Environment}}"><input type="hidden" name="version" value="{{$f.Version.VersionNumber}}">
+<input type="hidden" name="target" value="{{$f.Target}}">
+<h2>Workloads of version {{$f.Version.VersionNumber}}</h2>
+<p class="muted">Deploying a version other than the running one requires every workload. A partial deployment uses the running version.</p>
+<table><tr><th>Deploy</th><th>Workload</th><th>Image repository</th><th>Running image</th><th>Image version</th></tr>
+{{range .Rows}}<tr><td><input type="checkbox" name="workloads" value="{{.Workload.Name}}" {{if .Selected}}checked{{end}}></td>
+<td><strong>{{.Workload.Name}}</strong><div class="muted">{{.Workload.Type}}</div></td>
+<td class="mono">{{.Workload.ImageRepository}}</td><td class="mono">{{if .RunningImage}}{{.RunningImage}}{{else}}—{{end}}</td>
+<td><input type="text" name="image.{{.Workload.Name}}" value="{{.Tag}}" list="tags-{{.Workload.Name}}" placeholder="tag">
+<datalist id="tags-{{.Workload.Name}}">{{range .Tags}}<option value="{{.}}">{{end}}</datalist></td></tr>{{end}}
+</table>
+<p><button>Build deployment plan</button></p>
+</form>{{end}}
+{{template "foot"}}{{end}}
+
+{{define "history.html"}}{{template "head" "Deployments"}}
+<h1>{{.App.Name}} · Deployments</h1>
+{{template "problems" .Problems}}
+<div class="card"><table><tr><th>Created</th><th>Kind</th><th>Environment</th><th>Target</th><th>Version</th><th>Status</th></tr>
+{{range .Deployments}}<tr><td><a href="/deployments/{{.ID}}">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</a></td><td>{{.Kind}}</td><td>{{.Environment}}</td><td>{{.Target}}</td><td>v{{.VersionNumber}}</td>
+<td><span class="badge {{statusClass .Status}}">{{.Status}}</span></td></tr>{{else}}<tr><td colspan="6" class="muted">No deployments yet.</td></tr>{{end}}
+</table></div>
+<form method="post" action="/apps/{{.App.Name}}/teardown" class="card warn"><h2>Remove application from an environment and target</h2>
+<p class="muted">Plans removing every workload, destroying managed resources, unlinking shared ones and destroying the cluster and network built for it. Nothing happens until you confirm the plan.</p>
+<div class="row"><div><label>Environment</label><select name="environment"><option>STAGING</option><option>PRODUCTION</option></select></div>
+<div><label>Target</label><select name="target"><option>kind-local</option><option>aws</option></select></div>
+<div><button class="danger">Plan removal</button></div></div></form>
+<p><a href="/apps/{{.App.Name}}/deploy">New deployment</a></p>
+{{template "foot"}}{{end}}
+
+{{define "planitems"}}
+<table><tr><th>Wave</th><th>Component</th><th>Action</th><th>Details</th></tr>
+{{range $w := .}}{{range $i, $it := $w.Items}}<tr>
+<td class="wave">{{if eq $i 0}}{{$w.Number}}{{end}}</td>
+<td><strong>{{$it.Name}}</strong><div class="muted">{{if eq (printf "%s" $it.Kind) "RESOURCE"}}{{$it.ResourceType}}{{if $it.Platform}} · target infrastructure{{end}}{{else}}workload{{end}}</div></td>
+<td class="action-{{$it.Action}}">{{$it.Action}}</td>
+<td>{{if eq (printf "%s" $it.Kind) "RESOURCE"}}definition <code>{{$it.DefinitionName}}</code> ({{$it.ManagementMode}}){{if $it.ResourceInstanceID}} · instance <code>{{short $it.ResourceInstanceID}}</code>{{end}}
+{{if $it.Parameters}}<div class="mono muted">{{json $it.Parameters}}</div>{{end}}
+{{if $it.DataLossWarning}}<div class="bad"><strong>Data loss:</strong> destroying this resource deletes its data permanently.</div>{{end}}
+{{else}}<code>{{$it.ImageRepository}}:{{$it.ImageVersion}}</code>{{if $it.InclusionReason}} · {{$it.InclusionReason}}{{end}}{{end}}</td></tr>{{end}}{{end}}
+</table>{{end}}
+
+{{define "deployment.html"}}{{template "head" "Deployment"}}
+{{$d := .D}}
+{{if and $d.Deployment (or (eq (printf "%s" $d.Deployment.Status) "CONFIRMED") (eq (printf "%s" $d.Deployment.Status) "DEPLOYING"))}}<meta http-equiv="refresh" content="4">{{end}}
+<h1>{{if eq (printf "%s" $d.Deployment.Kind) "TEARDOWN"}}Remove{{else}}Deploy{{end}} {{$d.ApplicationName}} v{{$d.VersionNumber}} → {{$d.Deployment.Environment}} / {{$d.Deployment.Target}}
+<span class="badge {{statusClass (printf "%s" $d.Deployment.Status)}}">{{$d.Deployment.Status}}</span></h1>
+<p class="muted mono">deployment {{$d.Deployment.ID}} · created {{$d.Deployment.CreatedAt.Format "2006-01-02 15:04:05"}}{{if $d.JobStatus}} · job {{$d.JobStatus}}{{end}}
+{{if $d.Deployment.Context.Region}} · {{$d.Deployment.Context.CloudProvider}} {{$d.Deployment.Context.Region}}{{end}} · <a href="/apps/{{$d.ApplicationName}}/deployments">history</a></p>
+{{template "problems" .Problems}}
+{{if .Changed}}<div class="card warn"><strong>PLAN_CHANGED:</strong> the inputs changed since the plan was created. Review the rebuilt plan below and confirm again.</div>{{end}}
+
+{{if $d.PlanView}}{{$p := $d.PlanView.Plan}}
+{{if $d.PlanView.Stale}}<div class="card warn">This plan differs from the confirmed-for-review plan; confirming will return PLAN_CHANGED first.</div>{{end}}
+<form method="post" action="/deployments/{{$d.Deployment.ID}}/confirm">
+{{if $p.Waves}}<div class="card"><h2>Deployment waves</h2>{{template "planitems" $p.Waves}}</div>{{end}}
+{{if $p.Removals}}<div class="card warn"><h2>Removals (after all waves are healthy)</h2>{{template "planitems" $p.Removals}}</div>{{end}}
+{{if $p.PotentialRedeploy}}<div class="card"><h2>May be redeployed automatically</h2><p class="muted">If outputs they use change, these running workloads join later waves with their running image.</p>
+<ul>{{range $p.PotentialRedeploy}}<li>{{.Name}}</li>{{end}}</ul></div>{{end}}
+{{$has := false}}{{range $p.Waves}}{{range .Items}}{{if .AllowedOverrides}}{{$has = true}}{{end}}{{end}}{{end}}
+{{if $has}}<div class="card"><h2>Infrastructure overrides</h2><p class="muted">Leave empty to keep the current value. Applied overrides stay as the baseline for later deployments.</p>
+<table><tr><th>Component</th><th>Parameter</th><th>Current</th><th>Allowed</th><th>New value</th></tr>
+{{range $p.Waves}}{{range $it := .Items}}{{range $k, $rule := $it.AllowedOverrides}}<tr><td>{{$it.Name}}</td><td><code>{{$k}}</code></td>
+<td class="mono">{{index $it.Parameters $k}}</td>
+<td class="muted">{{$rule.Type}}{{if $rule.Enum}} {{$rule.Enum}}{{end}}{{if $rule.Min}} min {{$rule.Min}}{{end}}{{if $rule.Max}} max {{$rule.Max}}{{end}}{{if $rule.Immutable}} · immutable after creation{{end}}{{if $rule.IncreaseOnly}} · increase only{{end}}</td>
+<td><input type="text" name="override.{{$it.Name}}.{{$k}}"></td></tr>{{end}}{{end}}{{end}}</table></div>{{end}}
+<div class="card"><p class="mono muted">fingerprint {{$d.PlanView.FingerprintAlgo}}:{{$d.PlanView.Fingerprint}}</p>
+<button>{{if eq (printf "%s" $d.Deployment.Kind) "TEARDOWN"}}Confirm removal{{else}}Deploy{{end}}</button></div>
+</form>{{end}}
+{{if $d.PlanError}}<div class="card problems"><strong>The plan cannot be rebuilt:</strong> {{$d.PlanError}}</div>{{end}}
+
+{{if $d.Record}}{{if $d.Record.ErrorSummary}}<div class="card problems"><strong>Deployment failed</strong><pre class="mono" style="white-space:pre-wrap">{{$d.Record.ErrorSummary}}</pre></div>{{end}}{{end}}
+
+{{if $d.Images}}<div class="card"><h2>Images</h2><table><tr><th>Wave</th><th>Workload</th><th>Image</th><th>Included</th><th>Runs now</th></tr>
+{{range $d.Images}}<tr><td>{{.Wave}}</td><td>{{.Workload}}</td><td class="mono">{{.Image}}</td><td>{{.InclusionReason}}</td>
+<td>{{if .RunningHere}}<span class="ok">yes</span>{{else if .ReplacedBy}}<span class="muted">replaced by <a href="/deployments/{{.ReplacedBy}}">{{short .ReplacedBy}}</a></span>{{else}}<span class="muted">no</span>{{end}}</td></tr>{{end}}</table></div>{{end}}
+
+{{if $d.Steps}}<div class="card"><h2>Progress</h2><table><tr><th>#</th><th>Wave</th><th>Component</th><th>Step</th><th>Status</th><th>Detail</th></tr>
+{{range $d.Steps}}<tr><td>{{.Sequence}}</td><td>{{.Wave}}</td><td>{{.Component}}</td><td>{{.Name}}</td><td><span class="badge {{statusClass .Status}}">{{.Status}}</span></td>
+<td>{{if .ErrorSummary}}<div class="bad mono" style="white-space:pre-wrap">{{.ErrorSummary}}</div>{{end}}{{if .Detail}}<div class="mono muted">{{json .Detail}}</div>{{end}}</td></tr>{{end}}</table></div>{{end}}
+
+{{if $d.Removed}}<div class="card"><h2>Removed, destroyed or unlinked</h2><ul>{{range $d.Removed}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+{{if $d.Infrastructure}}<div class="card"><h2>Infrastructure</h2><table><tr><th>Component</th><th>Definition</th><th>Status</th><th>Reference</th></tr>
+{{range $d.Infrastructure}}<tr><td>{{.Component}}</td><td>{{.Definition}} ({{.Mode}})</td><td><span class="badge {{statusClass .Status}}">{{.Status}}</span></td><td class="mono">{{.Reference}}</td></tr>{{end}}</table></div>{{end}}
+{{if $d.Record}}{{if $d.Record.DeliveryReference}}<p class="mono muted">delivery {{$d.Record.DeliveryReference}}</p>{{end}}{{end}}
+
+{{if $d.Live}}<div class="card"><h2>Live status</h2>{{if $d.Live.Note}}<p class="muted">{{$d.Live.Note}}</p>{{end}}
+{{if $d.Live.CD}}<p>CD: <span class="badge {{statusClass $d.Live.CD.Sync}}">{{$d.Live.CD.Sync}}</span> <span class="badge {{statusClass $d.Live.CD.Health}}">{{$d.Live.CD.Health}}</span> <span class="mono muted">{{short $d.Live.CD.Revision}}</span></p>{{end}}
+{{if $d.Live.Workloads}}<table><tr><th>Workload</th><th>Ready</th><th>Image</th><th>Endpoint</th></tr>
+{{range $name, $st := $d.Live.Workloads}}<tr><td>{{$name}}</td><td class="{{if $st.Available}}ok{{else}}bad{{end}}">{{$st.Ready}}/{{$st.Desired}} {{$st.Detail}}</td><td class="mono">{{$st.Image}}</td><td class="mono">{{index $d.Live.Endpoints $name}}</td></tr>{{end}}</table>{{end}}
+</div>{{end}}
+{{template "foot"}}{{end}}

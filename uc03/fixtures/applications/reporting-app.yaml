@@ -1,0 +1,39 @@
+# UC-01 input for reporting-app. In STAGING on kind-local its PostgreSQL
+# resolves to the EXISTING shared definition (more specific applicability).
+application: reporting-app
+description: Report generator that reads a shared PostgreSQL in staging
+versions:
+  - # version 1
+    resources:
+      - {name: reportsdb, type: PostgreSQL}
+    workloads:
+      - name: reporter
+        type: Backend Service
+        imageRepository: registry.company.local/shop-backend
+        port: 8080
+        outputs: [endpoint]
+        variables:
+          - {name: LOG_LEVEL, required: true}
+          - {name: DB_HOST, required: true}
+          - {name: DB_PORT, required: true}
+          - {name: DB_NAME, required: true}
+          - {name: DB_USERNAME, required: true}
+        secrets:
+          - {name: DB_PASSWORD, required: true}
+          - {name: API_KEY, required: false}
+    dependencies:
+      - {source: reporter, target: reportsdb}
+
+  - # version 2: the shared database is no longer needed (UNLINK)
+    resources: []
+    workloads:
+      - name: reporter
+        type: Backend Service
+        imageRepository: registry.company.local/shop-backend
+        port: 8080
+        outputs: [endpoint]
+        variables:
+          - {name: LOG_LEVEL, required: true}
+          - {name: STORAGE_MODE, required: true}
+        secrets: []
+    dependencies: []

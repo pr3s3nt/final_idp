@@ -1,0 +1,7 @@
+/bin/
+/var/
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+.score-k8s/

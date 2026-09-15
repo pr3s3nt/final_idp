@@ -1,0 +1,135 @@
+# Platform Resource Definition catalog. This is the only place the platform
+# decides what infrastructure a deployment builds. `requires` pulls extra
+# graph nodes (resource -> resource edges); `${ENV_VAR}` is expanded at import.
+definitions:
+  # --- target kind-local -----------------------------------------------------
+  - name: kind-cluster
+    resourceType: k8s-cluster
+    managementMode: MANAGED
+    provisionerReference: terraform://modules/kind-cluster
+    supportedContexts:
+      - {target: kind-local, cloudProvider: local}
+    defaultParameters:
+      node_count: 1
+      node_image: kindest/node:v1.36.1
+      argocd_chart_version: "10.9.1"
+      image_registry_mirror: localhost:5055
+      registry_container: idp-uc03-registry
+    allowedOverrides:
+      node_count: {type: integer, min: 1, max: 3, immutable: true}
+    exposedOutputs: [cluster_name, image_registry_mirror, cluster_kind]
+    sensitiveOutputs: [kubeconfig]
+    requires: []
+
+  - name: postgres-k8s
+    resourceType: PostgreSQL
+    managementMode: MANAGED
+    provisionerReference: terraform://modules/postgres-k8s
+    supportedContexts:
+      - {target: kind-local, cloudProvider: local}
+    defaultParameters:
+      storage_gb: 1
+      password_revision: 0
+    allowedOverrides:
+      storage_gb: {type: integer, min: 1, max: 5, increaseOnly: true}
+      password_revision: {type: integer, min: 0, max: 1000, increaseOnly: true}
+    exposedOutputs: [host, port, database, username]
+    sensitiveOutputs: [password]
+    requires: [k8s-cluster]
+
+  - name: redis-k8s
+    resourceType: Redis
+    managementMode: MANAGED
+    provisionerReference: terraform://modules/redis-k8s
+    supportedContexts:
+      - {target: kind-local, cloudProvider: local}
+    defaultParameters: {}
+    allowedOverrides: {}
+    exposedOutputs: [host, port]
+    sensitiveOutputs: []
+    requires: [k8s-cluster]
+
+  - name: postgres-shared-staging
+    resourceType: PostgreSQL
+    managementMode: EXISTING
+    provisionerReference: none://existing
+    existingResourceReference: idpsecret://platform/shared-postgres-staging
+    supportedContexts:
+      - {target: kind-local, cloudProvider: local}
+    applicabilityConditions:
+      application: [reporting-app]
+      environment: [STAGING]
+    defaultParameters: {}
+    allowedOverrides: {}
+    exposedOutputs: [host, port, database, username]
+    sensitiveOutputs: [password]
+    requires: []
+
+  # --- target aws ------------------------------------------------------------
+  - name: aws-network
+    resourceType: network
+    managementMode: MANAGED
+    provisionerReference: terraform://modules/aws-network
+    supportedContexts:
+      - {target: aws, cloudProvider: aws, region: ap-southeast-1}
+    defaultParameters:
+      vpc_cidr: 10.60.0.0/16
+      az_count: 2
+    allowedOverrides:
+      vpc_cidr: {type: cidr, cidrPrefixLength: 16, cidrWithin: 10.0.0.0/8, immutable: true}
+      az_count: {type: integer, min: 2, max: 3, immutable: true}
+    exposedOutputs: [vpc_id, vpc_cidr, public_subnet_ids, private_subnet_ids, data_security_group_id, db_subnet_group, cache_subnet_group]
+    sensitiveOutputs: []
+    requires: []
+
+  - name: eks-cluster
+    resourceType: k8s-cluster
+    managementMode: MANAGED
+    provisionerReference: terraform://modules/eks-cluster
+    supportedContexts:
+      - {target: aws, cloudProvider: aws, region: ap-southeast-1}
+    defaultParameters:
+      kubernetes_version: "1.36"
+      node_instance_type: t3.medium
+      node_count: 2
+      argocd_chart_version: "10.9.1"
+      image_registry_mirror: ${IDP_AWS_ECR_REGISTRY}
+    allowedOverrides:
+      kubernetes_version: {type: enum, enum: ["1.34", "1.35", "1.36"], increaseOnly: true, maxStep: 1}
+      node_instance_type: {type: enum, enum: [t3.medium, t3.large]}
+      node_count: {type: integer, min: 1, max: 3}
+    exposedOutputs: [cluster_name, endpoint, ca_data, region, image_registry_mirror, cluster_kind]
+    sensitiveOutputs: []
+    requires: [network]
+
+  - name: aurora-postgresql
+    resourceType: PostgreSQL
+    managementMode: MANAGED
+    provisionerReference: terraform://modules/aurora-postgresql
+    supportedContexts:
+      - {target: aws, cloudProvider: aws, region: ap-southeast-1}
+    defaultParameters:
+      engine_version: "17.10"
+      min_acu: 0.5
+      max_acu: 2
+      password_revision: 0
+    allowedOverrides:
+      min_acu: {type: number, min: 0.5, max: 2}
+      max_acu: {type: number, min: 1, max: 8}
+      password_revision: {type: integer, min: 0, max: 1000, increaseOnly: true}
+    exposedOutputs: [host, port, database, username]
+    sensitiveOutputs: [password]
+    requires: [network]
+
+  - name: redis-elasticache
+    resourceType: Redis
+    managementMode: MANAGED
+    provisionerReference: terraform://modules/redis-elasticache
+    supportedContexts:
+      - {target: aws, cloudProvider: aws, region: ap-southeast-1}
+    defaultParameters:
+      node_type: cache.t4g.micro
+    allowedOverrides: {}
+    exposedOutputs: [host, port]
+    sensitiveOutputs: []
+    requires: [network]

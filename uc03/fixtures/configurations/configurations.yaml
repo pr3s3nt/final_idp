@@ -1,0 +1,70 @@
+# UC-02 input: one configuration per application + environment. Names are
+# resolved to stable component IDs across all imported versions. Secrets marked
+# `generate: true` get a random value stored in the Secret Store; only the
+# opaque reference is persisted.
+configurations:
+  - application: shop-app
+    environment: STAGING
+    variables:
+      backend:
+        LOG_LEVEL: {direct: debug}
+        DB_HOST: {resourceOutput: postgresql.host}
+        DB_PORT: {resourceOutput: postgresql.port}
+        DB_NAME: {resourceOutput: postgresql.database}
+        DB_USERNAME: {resourceOutput: postgresql.username}
+      worker:
+        REDIS_HOST: {resourceOutput: redis.host}
+        REDIS_PORT: {resourceOutput: redis.port}
+        DB_HOST: {resourceOutput: postgresql.host}
+        DB_PORT: {resourceOutput: postgresql.port}
+        DB_NAME: {resourceOutput: postgresql.database}
+        DB_USERNAME: {resourceOutput: postgresql.username}
+      frontend:
+        BACKEND_URL: {workloadOutput: backend.endpoint}
+        APP_TITLE: {direct: "Shop (staging)"}
+    secrets:
+      backend:
+        DB_PASSWORD: {resourceOutput: postgresql.password}
+        API_KEY: {generate: true}
+      worker:
+        DB_PASSWORD: {resourceOutput: postgresql.password}
+
+  - application: shop-app
+    environment: PRODUCTION
+    variables:
+      backend:
+        LOG_LEVEL: {direct: info}
+        DB_HOST: {resourceOutput: postgresql.host}
+        DB_PORT: {resourceOutput: postgresql.port}
+        DB_NAME: {resourceOutput: postgresql.database}
+        DB_USERNAME: {resourceOutput: postgresql.username}
+      worker:
+        REDIS_HOST: {resourceOutput: redis.host}
+        REDIS_PORT: {resourceOutput: redis.port}
+        DB_HOST: {resourceOutput: postgresql.host}
+        DB_PORT: {resourceOutput: postgresql.port}
+        DB_NAME: {resourceOutput: postgresql.database}
+        DB_USERNAME: {resourceOutput: postgresql.username}
+      frontend:
+        BACKEND_URL: {workloadOutput: backend.endpoint}
+        APP_TITLE: {direct: "Shop"}
+    secrets:
+      backend:
+        DB_PASSWORD: {resourceOutput: postgresql.password}
+        API_KEY: {generate: true}
+      worker:
+        DB_PASSWORD: {resourceOutput: postgresql.password}
+
+  - application: reporting-app
+    environment: STAGING
+    variables:
+      reporter:
+        LOG_LEVEL: {direct: info}
+        DB_HOST: {resourceOutput: reportsdb.host}
+        DB_PORT: {resourceOutput: reportsdb.port}
+        DB_NAME: {resourceOutput: reportsdb.database}
+        DB_USERNAME: {resourceOutput: reportsdb.username}
+        STORAGE_MODE: {direct: memory}
+    secrets:
+      reporter:
+        DB_PASSWORD: {resourceOutput: reportsdb.password}

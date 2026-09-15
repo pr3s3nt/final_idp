@@ -1,0 +1,112 @@
+# UC-01 input for shop-app: three immutable versions, imported in order.
+# Image repositories use the logical registry host of the UC-01 examples; the
+# Target Manifest Adapter maps it to the registry of the target cluster.
+application: shop-app
+description: Demo shop with frontend, backend, worker, PostgreSQL and Redis
+versions:
+  - # version 1
+    resources:
+      - {name: postgresql, type: PostgreSQL}
+      - {name: redis, type: Redis}
+    workloads:
+      - name: backend
+        type: Backend Service
+        imageRepository: registry.company.local/shop-backend
+        port: 8080
+        outputs: [endpoint]
+        variables:
+          - {name: LOG_LEVEL, required: true}
+          - {name: DB_HOST, required: true}
+          - {name: DB_PORT, required: true}
+          - {name: DB_NAME, required: true}
+          - {name: DB_USERNAME, required: true}
+        secrets:
+          - {name: DB_PASSWORD, required: true}
+          - {name: API_KEY, required: true}
+      - name: worker
+        type: Worker
+        imageRepository: registry.company.local/shop-worker
+        port: 8081
+        outputs: []
+        variables:
+          - {name: REDIS_HOST, required: true}
+          - {name: REDIS_PORT, required: true}
+          - {name: DB_HOST, required: true}
+          - {name: DB_PORT, required: true}
+          - {name: DB_NAME, required: true}
+          - {name: DB_USERNAME, required: true}
+        secrets:
+          - {name: DB_PASSWORD, required: true}
+      - name: frontend
+        type: Frontend
+        imageRepository: registry.company.local/shop-frontend
+        port: 3000
+        outputs: [endpoint]
+        variables:
+          - {name: BACKEND_URL, required: true}
+    dependencies:
+      - {source: backend, target: postgresql}
+      - {source: worker, target: redis}
+      - {source: worker, target: postgresql}
+      - {source: frontend, target: backend}
+
+  - # version 2: worker and redis removed; frontend gains APP_TITLE
+    resources:
+      - {name: postgresql, type: PostgreSQL}
+    workloads:
+      - name: backend
+        type: Backend Service
+        imageRepository: registry.company.local/shop-backend
+        port: 8080
+        outputs: [endpoint]
+        variables:
+          - {name: LOG_LEVEL, required: true}
+          - {name: DB_HOST, required: true}
+          - {name: DB_PORT, required: true}
+          - {name: DB_NAME, required: true}
+          - {name: DB_USERNAME, required: true}
+        secrets:
+          - {name: DB_PASSWORD, required: true}
+          - {name: API_KEY, required: true}
+      - name: frontend
+        type: Frontend
+        imageRepository: registry.company.local/shop-frontend
+        port: 3000
+        outputs: [endpoint]
+        variables:
+          - {name: BACKEND_URL, required: true}
+          - {name: APP_TITLE, required: true}
+    dependencies:
+      - {source: backend, target: postgresql}
+      - {source: frontend, target: backend}
+
+  - # version 3: backend requires FEATURE_FLAGS, which no environment configures (A1 demo)
+    resources:
+      - {name: postgresql, type: PostgreSQL}
+    workloads:
+      - name: backend
+        type: Backend Service
+        imageRepository: registry.company.local/shop-backend
+        port: 8080
+        outputs: [endpoint]
+        variables:
+          - {name: LOG_LEVEL, required: true}
+          - {name: DB_HOST, required: true}
+          - {name: DB_PORT, required: true}
+          - {name: DB_NAME, required: true}
+          - {name: DB_USERNAME, required: true}
+          - {name: FEATURE_FLAGS, required: true}
+        secrets:
+          - {name: DB_PASSWORD, required: true}
+          - {name: API_KEY, required: true}
+      - name: frontend
+        type: Frontend
+        imageRepository: registry.company.local/shop-frontend
+        port: 3000
+        outputs: [endpoint]
+        variables:
+          - {name: BACKEND_URL, required: true}
+          - {name: APP_TITLE, required: true}
+    dependencies:
+      - {source: backend, target: postgresql}
+      - {source: frontend, target: backend}
