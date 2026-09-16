@@ -327,7 +327,62 @@ func TestWorkerLifecycleOnKindLocal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d9 := h.confirmAndRun(t, td.Deployment.ID, nil)
+	if td.Deployment.Kind != domain.KindTeardown || td.Deployment.Status != domain.AwaitingConfirmation {
+		t.Fatalf("UC-05 must create an awaiting TEARDOWN, got %s / %s", td.Deployment.Kind, td.Deployment.Status)
+	}
+	if len(td.Deployment.WorkloadDeployments) != 0 || len(td.Plan.Waves) != 0 {
+		t.Fatalf("a teardown must not deploy workloads: snapshots=%d waves=%d", len(td.Deployment.WorkloadDeployments), len(td.Plan.Waves))
+	}
+	var workloadRows, jobsBefore, recordsBefore int
+	if err := h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM workload_deployment WHERE deployment_id = $1`, td.Deployment.ID).Scan(&workloadRows); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM deployment_execution_job WHERE deployment_id = $1`, td.Deployment.ID).Scan(&jobsBefore); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM deployment_record WHERE deployment_id = $1`, td.Deployment.ID).Scan(&recordsBefore); err != nil {
+		t.Fatal(err)
+	}
+	if workloadRows != 0 || jobsBefore != 0 || recordsBefore != 0 {
+		t.Fatalf("planning UC-05 must persist no workload, job or record rows: workloads=%d jobs=%d records=%d", workloadRows, jobsBefore, recordsBefore)
+	}
+	actions := map[string]int{}
+	for _, wave := range td.Plan.Removals {
+		for _, it := range wave.Items {
+			actions[it.Action]++
+			if it.Action == domain.ActionDestroy && !it.DataLossWarning {
+				t.Fatalf("managed resource %s must carry a data-loss warning", it.Name)
+			}
+			if it.Action != domain.ActionDestroy && it.DataLossWarning {
+				t.Fatalf("non-destructive action %s on %s must not carry a data-loss warning", it.Action, it.Name)
+			}
+		}
+	}
+	if actions[domain.ActionRemove] != 3 || actions[domain.ActionDestroy] != 2 || actions[domain.ActionUnlink] != 1 {
+		t.Fatalf("UC-05 removal plan actions = %v, want 3 REMOVE, 2 DESTROY, 1 UNLINK", actions)
+	}
+	confirmed, err := h.orch.ConfirmDeployment(ctx, td.Deployment.ID, nil)
+	if err != nil || !confirmed.Accepted {
+		t.Fatalf("confirm teardown: %+v %v", confirmed, err)
+	}
+	var jobsAfter int
+	if err := h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM deployment_execution_job WHERE deployment_id = $1`, td.Deployment.ID).Scan(&jobsAfter); err != nil {
+		t.Fatal(err)
+	}
+	if jobsAfter != 1 {
+		t.Fatalf("confirming UC-05 must create exactly one job, got %d", jobsAfter)
+	}
+	if _, err := h.orch.ConfirmDeployment(ctx, td.Deployment.ID, nil); !domain.HasCode(err, domain.CodeAlreadyConfirmed) {
+		t.Fatalf("confirming UC-05 twice must be rejected, got %v", err)
+	}
+	if processed, err := h.worker.RunOnce(ctx); err != nil || !processed {
+		t.Fatalf("worker: processed=%v err=%v", processed, err)
+	}
+	q := &service.QueryService{Repositories: h.repo, Orch: h.orch}
+	d9, err := q.GetDeploymentDetail(ctx, td.Deployment.ID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if d9.Deployment.Status != domain.Succeeded {
 		t.Fatalf("teardown: %s", d9.Record.ErrorSummary)
 	}
@@ -350,6 +405,59 @@ func TestWorkerLifecycleOnKindLocal(t *testing.T) {
 	if len(left) != 0 || len(runningAfter) != 0 {
 		t.Fatalf("teardown must leave no active instances: %d resources, %d workloads", len(left), len(runningAfter))
 	}
+	deploymentsBefore := h.count(t, "deployment")
+	if _, err := h.orch.CreateTeardown(ctx, "shop-app", "STAGING", "kind-local"); !domain.HasCode(err, domain.CodeNothingToTeardown) {
+		t.Fatalf("a second teardown with nothing left must be rejected, got %v", err)
+	}
+	if got := h.count(t, "deployment"); got != deploymentsBefore {
+		t.Fatalf("a rejected empty teardown must not leave a deployment row: before=%d after=%d", deploymentsBefore, got)
+	}
+}
+
+func TestUC05PlanDriftAndConfirmedOwnerGuard(t *testing.T) {
+	t.Run("plan drift before confirmation", func(t *testing.T) {
+		h := newHarness(t)
+		ctx := context.Background()
+		deployed := h.deploy(t, fullShop("1"), nil)
+		td, err := h.orch.CreateTeardown(ctx, "shop-app", "STAGING", "kind-local")
+		if err != nil {
+			t.Fatal(err)
+		}
+		instances, err := h.repo.Resources.FindResourceInstances(ctx, deployed.Deployment.ApplicationID, domain.Staging, "kind-local")
+		if err != nil || len(instances) == 0 {
+			t.Fatalf("active resources: %v / %d", err, len(instances))
+		}
+		if err := h.repo.Resources.UpdateStatus(ctx, instances[0].ID, domain.RIDestroyed); err != nil {
+			t.Fatal(err)
+		}
+		res, err := h.orch.ConfirmDeployment(ctx, td.Deployment.ID, nil)
+		if err != nil || !res.PlanChanged || res.Accepted {
+			t.Fatalf("changed teardown plan must be re-presented: %+v %v", res, err)
+		}
+		var jobs int
+		if err := h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM deployment_execution_job WHERE deployment_id = $1`, td.Deployment.ID).Scan(&jobs); err != nil {
+			t.Fatal(err)
+		}
+		if jobs != 0 {
+			t.Fatalf("PLAN_CHANGED must not create a job, got %d", jobs)
+		}
+	})
+
+	t.Run("confirmed owner blocks another teardown", func(t *testing.T) {
+		h := newHarness(t)
+		ctx := context.Background()
+		h.deploy(t, fullShop("1"), nil)
+		td, err := h.orch.CreateTeardown(ctx, "shop-app", "STAGING", "kind-local")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res, err := h.orch.ConfirmDeployment(ctx, td.Deployment.ID, nil); err != nil || !res.Accepted {
+			t.Fatalf("confirm teardown: %+v %v", res, err)
+		}
+		if _, err := h.orch.CreateTeardown(ctx, "shop-app", "STAGING", "kind-local"); !domain.HasCode(err, domain.CodeDeploymentInProgress) {
+			t.Fatalf("a confirmed teardown must hold the owner, got %v", err)
+		}
+	})
 }
 
 func TestWorkerFailuresAndPlanDrift(t *testing.T) {

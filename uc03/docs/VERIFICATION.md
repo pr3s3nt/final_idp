@@ -214,3 +214,14 @@ Cụm được cài **cả hai hệ thống CD**: Argo CD chart 10.9.1 (đã có
 Điểm đáng ghi của lượt này: **tài liệu thiết kế không phải sửa một dòng nào về kiến trúc.** Sequence UC-03, VOPC, domain model, ERD, operation contract và traceability giữ nguyên; chỉ các dòng ví dụ đổi từ "ví dụ Argo CD hoặc Flux" thành "ví dụ Fleet, Argo CD hoặc Flux". Interface `cd.Integration`, worker và delivery reference (commit SHA) không đổi. Phần Git dùng chung được tách ra `cd/gitdelivery.go`, mỗi adapter chỉ còn phần riêng: Argo CD dùng `Application` + secret nhãn repository, Fleet dùng `GitRepo` + secret `kubernetes.io/ssh-auth` cùng namespace `fleet-local`, `forceSyncGeneration` để ép đọc lại ngay thay vì chờ `pollingInterval`.
 
 Trạng thái CD của Fleet được quy về tập trung lập trong `fleetStatus()` (`SYNCED/SYNCING/OUT_OF_SYNC`, `HEALTHY/PROGRESSING/DEGRADED/MISSING`), có unit test bảng cho năm tình huống; đây là phần đầu tiên của tầng adapter CD có unit test.
+
+## 7. Lượt kiểm chứng UC-05 (16/09/2026)
+
+Phạm vi demo giữ nguyên hai mục đã hoãn D13/D14. Test integration của UC-05 được bổ sung để khóa các invariant: teardown không có `workload_deployment`/deployment wave/job trước confirm; plan đúng `REMOVE`/`DESTROY`/`UNLINK` và cảnh báo mất dữ liệu; confirm chỉ tạo một job; confirm lặp bị từ chối; plan drift trả `PLAN_CHANGED` mà không tạo job; teardown đã confirm giữ owner; teardown rỗng bị từ chối mà không để lại row. `go test ./...`, `go vet ./...`, `go test -tags integration ./internal/service/` và `git diff --check` đều pass.
+
+| Target | Kết quả thật |
+|---|---|
+| `kind-local` | Deploy `57b5f429` SUCCEEDED; ghi/đọc note qua frontend thành công. Teardown `b62d4e79` có 3 `REMOVE`, 2 `DESTROY`, 1 `UNLINK` và SUCCEEDED. Sau đó namespace, Fleet `GitRepo` và mọi instance active của shop-app đều không còn; cụm dùng chung `idp-internal`, repo delivery và reporting-app không bị xóa |
+| `aws` | Lần deploy đầu `8ade2fcd` tạo hạ tầng nhưng FAILED ở `CD_SYNCED` vì worker đang cấu hình Fleet trong khi module AWS cài Argo CD. Chạy worker với adapter Argo CD rồi deploy lại `ce92185b`: toàn bộ hạ tầng được REUSE, Application Synced/Healthy, 3 workload Ready và ghi/đọc note qua Aurora thành công. Teardown `6d34278f` gỡ 3 workload, EKS, Aurora, ElastiCache và network, kết thúc SUCCEEDED |
+
+Sau teardown AWS: DB có 0 resource/workload active ở PRODUCTION; kiểm tra trực tiếp cho thấy không còn EKS, RDS/Aurora, ElastiCache, VPC/ENI/EIP/security group có tag của lượt chạy, IAM role `idp-*` hay ECR `shop-*`. Hai ARN subnet còn xuất hiện trong Resource Groups Tagging API là cache trễ; EC2 trả `InvalidSubnetID.NotFound`. Ba ECR repo tiền điều kiện cũng đã được `terraform destroy`.
