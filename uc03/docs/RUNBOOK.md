@@ -84,6 +84,27 @@ Catalog có phiên bản (`fixtures/catalog/v<N>.yaml`, bất biến). Muốn s�
 ./bin/idp worker   # Deployment Worker (một tiến trình)
 ```
 
+### Chạy bằng Docker
+
+Image chứa sẵn `terraform`, `score-k8s`, AWS CLI, Git và OpenSSH; cùng một image chạy được server, worker và các lệnh quản trị:
+
+```bash
+docker build -t final-idp:local .
+
+# Ví dụ DB chạy trên host Linux; thay URL/secret theo môi trường thực tế.
+docker run --rm --network host -v idp-data:/data \
+  -e IDP_SECRET_KEY -e IDP_DATABASE_URL \
+  final-idp:local migrate
+docker run --rm --network host -v idp-data:/data \
+  -e IDP_SECRET_KEY -e IDP_DATABASE_URL -e IDP_DELIVERY_REPO_PATTERN \
+  final-idp:local serve
+docker run --rm --network host -v idp-data:/data \
+  -e IDP_SECRET_KEY -e IDP_DATABASE_URL -e IDP_DELIVERY_REPO_PATTERN \
+  final-idp:local worker
+```
+
+Server là lệnh mặc định và lắng nghe `0.0.0.0:8088`. Worker dùng cùng volume `/data` để chia sẻ Secret Store, checkout delivery repository, Terraform state và provider cache. Khi chạy target AWS, truyền thêm AWS credentials theo cơ chế chuẩn của AWS CLI/SDK.
+
 Theo dõi: UI trang `/deployments/<id>`, hoặc `scripts/idpctl.sh show <id>`; log Terraform ở `var/terraform/workspaces/<resource-instance-id>/terraform.log`.
 
 ## 5. Kiểm thử tự động
