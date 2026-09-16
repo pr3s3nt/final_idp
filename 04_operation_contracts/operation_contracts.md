@@ -104,13 +104,13 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
 ## 5. `confirmDeployment()`
 
 - **Operation**: `confirmDeployment(deploymentId, overrides)`
-- **Cross References**: UC-03 – Deploy Application, bước Developer đặt permitted overrides và chọn Deploy; A1 – Deployment input hoặc dependency không hợp lệ.
+- **Cross References**: UC-03 – Deploy Application, bước Developer đặt permitted overrides và chọn Deploy; A1 – Deployment input hoặc dependency không hợp lệ. UC-05 – Remove Application from Environment dùng lại chính operation này ở bước Developer xác nhận gỡ, khi đó không có override nào được gửi.
 - **Preconditions**:
-  - Một `Deployment` với `deploymentId` tồn tại, có `status = AWAITING_CONFIRMATION`, có đúng một `Deployment Context`, ít nhất một `Workload Deployment`, và có `planFingerprint`/`planFingerprintAlgo` đã persist.
-  - Các input bền vững để rebuild plan còn tồn tại và nhất quán: Application Definition Version và Catalog Version được tham chiếu (cả hai bất biến), Environment Configuration, snapshot Workload Deployment/images, Deployment Context và deployment target; current Resource Instance và Workload Instance state có thể được đọc lại.
+  - Một `Deployment` với `deploymentId` tồn tại, có `status = AWAITING_CONFIRMATION`, có đúng một `Deployment Context`, và có `planFingerprint`/`planFingerprintAlgo` đã persist. Số `Workload Deployment` phụ thuộc loại deployment: `kind = DEPLOY` có **ít nhất một**; `kind = TEARDOWN` **không có cái nào**, vì UC-05 không triển khai workload nào.
+  - Các input bền vững để rebuild plan còn tồn tại và nhất quán: Application Definition Version và Catalog Version được tham chiếu (cả hai bất biến), Environment Configuration, snapshot Workload Deployment/images (rỗng khi `kind = TEARDOWN`), Deployment Context và deployment target; current Resource Instance và Workload Instance state có thể được đọc lại.
   - Không giả định execution của request `createDeployment()` hoặc infrastructure plan in-memory còn tồn tại. `overrides` là candidate values từ confirm request và chỉ được validate sau khi rebuilt-plan fingerprint khớp fingerprint đã lưu.
 - **Postconditions**:
-  - Infrastructure plan được rebuild từ persisted inputs và current state bằng cùng chuỗi `buildDeploymentGraph()` (gọi `resolveResourceDefinitions()` trong phiên bản catalog của Deployment) → `planDeploymentWaves()` → `findResourceInstances()` (theo khóa chủ sở hữu) → `planInfrastructureChanges()` → `findPotentialRedeploys()`. Với cùng các input đó, resolved parameters được suy ra một cách tất định từ `resource_definition.default_parameters` kết hợp Deployment Context, còn allowed-overrides definition được suy ra một cách tất định từ `resource_definition.allowed_overrides`; fingerprint được tính lại bằng đúng canonicalization/hash version trong `planFingerprintAlgo`.
+  - Infrastructure plan được rebuild từ persisted inputs và current state bằng cùng chuỗi `buildDeploymentGraph()` (gọi `resolveResourceDefinitions()` trong phiên bản catalog của Deployment) → `planDeploymentWaves()` → `findResourceInstances()` (theo khóa chủ sở hữu) → `planInfrastructureChanges()` → `findPotentialRedeploys()`. Với cùng các input đó, resolved parameters được suy ra một cách tất định từ `resource_definition.default_parameters` kết hợp Deployment Context, còn allowed-overrides definition được suy ra một cách tất định từ `resource_definition.allowed_overrides`; fingerprint được tính lại bằng đúng canonicalization/hash version trong `planFingerprintAlgo`. Với `kind = TEARDOWN`, plan được dựng lại bằng chuỗi tương ứng của UC-05 — liệt kê thành phần đã khai báo của phiên bản (chỉ tên, không resolve), đọc Resource Instance và Workload Instance hiện có, rồi lập các tầng gỡ — và không có override nào để validate.
   - Khi rebuilt fingerprint khớp `planFingerprint`, `overrides` được validate theo policy trong `resource_definition.allowed_overrides`.
   - Sau khi fingerprint khớp và overrides hợp lệ, trong **một transaction DB**: `deployment.status` được đổi bằng atomic compare-and-swap có predicate `deployment_id = deploymentId AND status = AWAITING_CONFIRMATION` sang `CONFIRMED` (cập nhật `updated_at`), **và** một instance `Deployment Execution Job` cùng một row `deployment_execution_job` được tạo với `deployment_id`, `selected_overrides` chứa đúng các override hợp lệ, `status` ở giá trị khởi tạo (dự kiến `QUEUED`, D6), `created_at`, `updated_at`. Không bao giờ có deployment `CONFIRMED` mà không có job, hay job mà deployment chưa `CONFIRMED`.
   - Request trả lời ngay sau khi transaction commit; operation **không** gọi `reconcileInfrastructure()` hay bất kỳ bước thực thi nào. Việc thực thi do Deployment Worker đảm nhận khi lấy job (`claimNextExecutionJob()`), bắt đầu bằng việc đổi `deployment.status` từ `CONFIRMED` sang `DEPLOYING`.
@@ -127,7 +127,7 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
 ## 6. `reconcileInfrastructure()`
 
 - **Operation**: `reconcileInfrastructure(finalPlan, planItems, requiredResourceOutputs)`
-- **Cross References**: UC-03 – Deploy Application, bước Deployment Worker triển khai resource của một tầng (kể cả cụm Kubernetes và network), và bước xử lý thành phần không còn trong phiên bản; A2 – Provisioning, delivery hoặc workload thất bại.
+- **Cross References**: UC-03 – Deploy Application, bước Deployment Worker triển khai resource của một tầng (kể cả cụm Kubernetes và network), và bước xử lý thành phần không còn trong phiên bản; A2 – Provisioning, delivery hoặc workload thất bại. UC-05 – Remove Application from Environment dùng lại operation này cho các tầng gỡ, khi đó **mọi** item đều là hủy hoặc gỡ liên kết.
 - **Preconditions**:
   - Deployment đang ở `status = DEPLOYING` và được Deployment Worker thực thi từ job đã lưu. `finalPlan` là plan dựng lại từ persisted inputs với `selected_overrides` của job; `planItems` là các resource item của **một tầng** (gồm cả item được thêm lại do lan truyền, contract 11), hoặc các item gỡ/hủy/gỡ liên kết khi phiên bản được deploy không còn resource đó.
   - Mỗi item đã resolve tới một `Resource Definition` thuộc phiên bản catalog `deployment.catalog_version_id`, có `resourceDefinitionId`, `provisionerReference` (với `MANAGED`) hoặc `existing_resource_reference` (với `EXISTING`), và `supportedContexts` phù hợp với `Deployment Context`/`deploymentTarget`.
@@ -138,8 +138,8 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
   - Với mỗi item update (`MANAGED`) thành công, provisioner được gọi với input hiện tại; `resource_definition_id`, `infrastructure_reference`, `provider_state_reference`, `applied_input_fingerprint`, `status = READY`, `updated_at` được cập nhật theo lần apply này; identity và `created_at` không đổi.
   - Với mỗi item reuse, instance hiện hữu được giữ và provisioner không được gọi; identity, `infrastructure_reference` và `applied_input_fingerprint` không đổi, `status` được xác nhận là `READY`. Nếu Deployment dùng phiên bản catalog khác nhưng đầu vào không đổi, `resource_definition_id` được trỏ sang definition cùng `name` của phiên bản catalog đang dùng.
   - Với mỗi item liên kết thứ có sẵn `EXISTING` (resource dùng chung hoặc cụm Kubernetes nội bộ), không provisioner nào được gọi và hạ tầng thật không thay đổi; instance của chủ sở hữu được tạo hoặc giữ với `infrastructure_reference = existing_resource_reference`, `applied_input_fingerprint = NULL` và `status = READY`.
-  - Với mỗi item hủy (`MANAGED`, resource không còn trong phiên bản), provisioner thực hiện destroy; instance được giữ lại với `status = DESTROYED`.
-  - Với mỗi item gỡ liên kết (`EXISTING`, resource không còn trong phiên bản), không provisioner nào được gọi, hạ tầng thật không thay đổi; instance được giữ lại với `status = UNLINKED`.
+  - Với mỗi item hủy (`MANAGED`, resource không còn trong phiên bản — hoặc mọi resource của chủ sở hữu khi `deployment.kind = TEARDOWN`), provisioner thực hiện destroy; instance được giữ lại với `status = DESTROYED`.
+  - Với mỗi item gỡ liên kết (`EXISTING`, resource không còn trong phiên bản — hoặc mọi resource `EXISTING` của chủ sở hữu khi `deployment.kind = TEARDOWN`), không provisioner nào được gọi, hạ tầng thật không thay đổi; instance được giữ lại với `status = UNLINKED`.
   - Execution result chứa `infrastructureReferences` trỏ tới đúng các Resource Instance đã xử lý. `deployment.status` giữ `DEPLOYING`; operation không đặt trạng thái trung gian nào cho Deployment.
   - `output_fingerprint` không bị đổi bởi operation này; nó được cập nhật sau khi output được thu thập và so sánh (contract 11). Không row `resource_output` nào được tạo.
 - **Exceptions / Guarantees**:
@@ -172,12 +172,13 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
 ## 8. `publishDesiredDeploymentState()`
 
 - **Operation**: `publishDesiredDeploymentState(desiredState)`
-- **Cross References**: UC-03 – Deploy Application, bước Deployment Worker publish desired deployment state của một tầng tới CD abstraction, và lần publish cuối gỡ các workload không còn trong phiên bản; A2 – Provisioning, delivery hoặc workload thất bại.
+- **Cross References**: UC-03 – Deploy Application, bước Deployment Worker publish desired deployment state của một tầng tới CD abstraction, và lần publish cuối gỡ các workload không còn trong phiên bản; A2 – Provisioning, delivery hoặc workload thất bại; UC-05 – Remove Application from Environment, bước publish desired state không còn workload nào của environment đó.
 - **Preconditions**:
   - Deployment đang ở `status = DEPLOYING`. Các workload của tầng đã có `Resolved Configuration` và `Resolved Specification` hoàn chỉnh; mỗi `Workload Deployment.imageRepository` + `imageVersion` của tầng đã xuất hiện đúng trong resolved specification.
   - Base Kubernetes manifest đã được sinh bởi `score-k8s`, target-specific adaptation đã được áp dụng cho `deploymentTarget`, và Environment Variable/Secret đã được materialize đầy đủ vào `desiredState`.
   - `desiredState` không chứa unresolved Resource Output Reference hoặc Workload Output Reference; secret material tuân thủ cơ chế Kubernetes Secret hoặc secret reference mà không làm lộ plaintext ngoài delivery boundary.
   - `desiredState` gồm workload của tầng hiện tại và các tầng trước, và **vẫn giữ** workload đang chạy nhưng không còn trong phiên bản; chỉ lần publish cuối (sau khi mọi tầng đã healthy) mới bỏ các workload đó.
+  - Khi `deployment.kind = TEARDOWN`, đây là một lần publish gỡ thuần: `desiredState` không upsert workload nào, nên các precondition về tầng, Resolved Configuration, Resolved Specification và image ở trên không áp dụng.
   - CD Integration đã resolve được một Concrete CD Provider cho target.
   - Application có một `Delivery Repository`, hoặc có thể tạo được: quy ước đặt tên do platform cấu hình và thông tin đăng nhập hệ thống lưu trữ Git nằm trong Secret Store và còn dùng được.
 - **Postconditions**:
@@ -185,8 +186,8 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
   - Desired deployment state chỉ được ghi vào `Delivery Repository` của application này, tách theo `deploymentTarget` và `environment`; không application nào khác ghi vào nơi chứa đó.
   - Trong CD System, desired deployment state cho application/environment/target được tạo hoặc cập nhật và association delivery tới Kubernetes deployment target được hình thành; CD System đọc nơi chứa bằng khóa đọc của chính application này.
   - Execution state nhận một `deliveryReference` định danh durable desired-state/CD delivery; acknowledgment của CD không được dùng làm trạng thái Deployment (D5).
-  - Với mỗi workload của tầng, row `workload_instance` theo `(workload_id, environment, deployment_target)` được tạo hoặc cập nhật với `current_workload_deployment_id` trỏ tới Workload Deployment của deployment này và `status = DEPLOYING`.
-  - Ở lần publish cuối gỡ workload, mỗi workload không còn trong phiên bản có `workload_instance.status = REMOVED`; dòng được giữ lại.
+  - Với mỗi workload của tầng, row `workload_instance` theo `(workload_id, environment, deployment_target)` được tạo hoặc cập nhật với `current_workload_deployment_id` trỏ tới Workload Deployment của deployment này và `status = DEPLOYING`. Với `kind = TEARDOWN` không workload nào được upsert nên không row nào chuyển sang `DEPLOYING`.
+  - Ở lần publish cuối gỡ workload — hoặc ở tầng gỡ của một `TEARDOWN`, khi đó là **mọi** workload của chủ sở hữu — mỗi workload bị gỡ có `workload_instance.status = REMOVED` sau khi IDP xác minh nó đã biến mất khỏi cụm; dòng được giữ lại. Việc code chưa bảo đảm bước xác minh này trong mọi nhánh teardown được theo dõi ở D13.
   - `deployment.status` giữ `DEPLOYING`; không có trạng thái "đã gửi sang CD". Việc workload healthy được xác nhận riêng bởi `waitForWorkloadsHealthy()` trước contract 10.
   - Không `Deployment Record` hoặc association `deployment_record_resource_instance` nào được tạo bởi operation này; `deliveryReference` chỉ được persist bởi `saveDeploymentRecord()`.
   - Không Application Definition Version, Environment Configuration hoặc Resource Instance nào bị thay đổi bởi việc publish.
@@ -198,10 +199,10 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
 ## 9. `saveDeploymentRecord()`
 
 - **Operation**: `saveDeploymentRecord(deployment, workloadImages, infrastructureReferences, deliveryReferences, removedComponents)`
-- **Cross References**: UC-03 – Deploy Application, bước Deployment Worker lưu Deployment Record sau khi xử lý xong các tầng và các thành phần cần gỡ; A2 – Provisioning, delivery hoặc workload thất bại; UC-04 – View Deployment Result (nguồn dữ liệu được đọc về sau).
+- **Cross References**: UC-03 – Deploy Application, bước Deployment Worker lưu Deployment Record sau khi xử lý xong các tầng và các thành phần cần gỡ; A2 – Provisioning, delivery hoặc workload thất bại; UC-04 – View Deployment Result (nguồn dữ liệu được đọc về sau); UC-05 – Remove Application from Environment, bước lưu kết quả lần gỡ.
 - **Preconditions**:
-  - Deployment Worker đang thực thi đúng một `Deployment` với `status = DEPLOYING`; row `deployment` tồn tại với đúng một Deployment Context và ít nhất một Workload Deployment.
-  - `workloadImages` bằng snapshot đã persist trong các row `workload_deployment` của Deployment, gồm cả workload `CASCADED` được thêm trong lúc thực thi.
+  - Deployment Worker đang thực thi đúng một `Deployment` với `status = DEPLOYING`; row `deployment` tồn tại với đúng một Deployment Context. `kind = DEPLOY` có ít nhất một Workload Deployment; `kind = TEARDOWN` không có Workload Deployment nào.
+  - `workloadImages` bằng snapshot đã persist trong các row `workload_deployment` của Deployment, gồm cả workload `CASCADED` được thêm trong lúc thực thi. Với `kind = TEARDOWN`, `workloadImages` rỗng và toàn bộ kết quả nằm ở `removedComponents`.
   - Mỗi item trong `infrastructureReferences` định danh một row `resource_instance` đã xử lý cho execution này; không truyền resolved Resource Output.
   - `removedComponents` là danh sách ID cố định của workload đã gỡ và resource đã hủy/gỡ liên kết trong execution này (rỗng nếu không có).
   - Ở success path, mọi tầng đã healthy và các thành phần cần gỡ đã được xử lý. Ở A2 path, execution context chứa tầng, thành phần liên quan (nếu có) và `errorSummary`; `deliveryReferences` có thể rỗng.
@@ -210,7 +211,7 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
   - `environment`, `deployment_target`, `delivery_reference`, `removed_components`, `status`, `error_summary`, `created_at`, `updated_at` của `deployment_record` phản ánh kết quả thực tế của execution; `created_at` không đổi khi update.
   - Images được truy xuất qua `deployment_record.deployment_id` → `workload_deployment.deployment_id`, không tạo bản sao image.
   - Với mỗi Resource Instance được tham chiếu, đúng một row `deployment_record_resource_instance` tồn tại; association cũ không còn thuộc execution result bị phá vỡ khi record được cập nhật.
-  - Ở success path, `deployment.status` được đổi bằng compare-and-swap từ `DEPLOYING` sang `SUCCEEDED` (cập nhật `updated_at`), và `error_summary = NULL`. `SUCCEEDED` nghĩa là mọi workload trong phạm vi (kể cả `CASCADED`) đã healthy; trạng thái này do IDP tự quyết, không lấy từ acknowledgment của CD (D5).
+  - Ở success path, `deployment.status` được đổi bằng compare-and-swap từ `DEPLOYING` sang `SUCCEEDED` (cập nhật `updated_at`), và `error_summary = NULL`. `SUCCEEDED` nghĩa là mọi workload trong phạm vi (kể cả `CASCADED`) đã healthy khi `kind = DEPLOY`, hoặc mọi thành phần trong plan gỡ đã được gỡ, hủy hay gỡ liên kết khi `kind = TEARDOWN`; trạng thái này do IDP tự quyết, không lấy từ acknowledgment của CD (D5).
   - Ở A2 path, `deployment.status` chuyển từ `DEPLOYING` sang `FAILED` và `deployment_record.error_summary` khác `NULL`; `delivery_reference` được giữ nếu provider đã cấp trước khi lỗi.
   - Tiến trình theo tầng/thành phần được thể hiện qua các row `deployment_step` (có `wave_number`, `related_component_reference`); ai ghi các row này và ghi lúc nào để lại cho D4.
   - Không `Resource Output`, `Workload Output`, `Resolved Configuration`, resolved secret hoặc plaintext Secret nào được persist trong `deployment_record` hay `deployment_step`.
