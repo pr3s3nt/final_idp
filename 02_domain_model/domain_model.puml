@@ -128,6 +128,17 @@ class "Resource Definition" as ResourceDefinition <<entity>> {
   requires: List<String>
 }
 
+class "Delivery Repository" as DeliveryRepository <<entity>> {
+  deliveryRepositoryId: String
+  applicationId: String
+  repositoryUrl: String
+  branch: String
+  writeKeyReference: String
+  readKeyReference: String
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
 class "Deployment" as Deployment <<aggregate root>> {
   deploymentId: String
   applicationId: String
@@ -295,6 +306,17 @@ note right of ApplicationDefinitionVersion
 end note
 
 ApplicationDefinition "1" *-- "0..*" PlatformRequirement : platform requirements (not versioned)
+ApplicationDefinition "1" *-- "0..1" DeliveryRepository : delivery repository (not versioned)
+
+note right of DeliveryRepository
+  Where the desired state of this application lives, split by
+  deployment target and environment inside. IDP creates it on the
+  application's first deployment, using the naming pattern the
+  platform configures, and generates a key pair for this
+  application only: a write key for IDP and a read key for the CD
+  system. Only secret references are stored here; the keys and the
+  Git hosting credential stay in the Secret Store.
+end note
 
 note right of PlatformRequirement
   Not declared by the Developer. IDP adds k8s-cluster for

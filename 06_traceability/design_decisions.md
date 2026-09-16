@@ -31,6 +31,7 @@ Trong mỗi Bước, từng use case là một mục con `## UC 01 …`, `## UC 
 | 10 | Confirm chạy tác vụ dài trong HTTP request | `confirmDeployment` chỉ nhận việc (đổi status + tạo job trong DB cùng một transaction) và trả lời ngay; Deployment Worker chạy nền. Phục hồi khi worker chết: hoãn | Đã áp dụng vào toàn bộ tài liệu thiết kế; phần hoãn ghi vào `deferred_issues.md` (D6) |
 | 11 | Secret bị orphan khi save lỗi | Hoãn, giải quyết sau | Đã ghi vào `deferred_issues.md` (D7) |
 | 12 | Nơi triển khai và hạ tầng của nó; phiên bản catalog | Hai loại nơi triển khai: cloud (IDP dựng VPC và cụm) và cụm Kubernetes nội bộ (có sẵn); cụm/VPC nằm trong đồ thị deploy; dưới đổi thì trên làm lại; catalog có phiên bản, Developer chọn khi deploy | Đã áp dụng vào toàn bộ tài liệu thiết kế (code chưa sửa); phần hoãn ghi vào D10, D11, D12 |
+| 13 | Desired state của mọi application nằm chung một nơi | Mỗi application có một Delivery Repository riêng; IDP tự tạo repo và sinh cặp khóa riêng cho app ở lần deploy đầu | Đã áp dụng vào toàn bộ tài liệu thiết kế (code chưa sửa) |
 
 ## Vấn đề 1 — Bản nháp UC-01/UC-02
 
@@ -371,3 +372,31 @@ Ví dụ: deploy `shop-app` (frontend, backend, PostgreSQL) lên AWS. IDP phải
 **Sẽ sửa:** use case realization (đặc tả UC-03, UC-04, Bước 1–3), sequence UC-03 và UC-04, VOPC, domain model, ERD, operation contracts 4–6 và 11, state machine Resource Instance, traceability. Contract 3 (UC-02) chưa sửa vì phụ thuộc D12.
 
 **Đã áp dụng (nhánh `uc03-impl`, 15/09/2026):** use case realization (đặc tả UC-03, UC-04; Bước 1–3 UC-03), sequence UC-03 và UC-04, VOPC (`vopc_uc03`, design class diagram, README), domain model, domain objects, persistence classification, ERD (`catalog_version`, `resource_definition`, `application_component`, `resource_instance`, `deployment`), contracts 4, 5, 6, 11, state machine Resource Instance và ghi chú Deployment, traceability; phần hoãn ghi vào D10, D11, D12. Code trong `uc03/` chưa sửa theo quyết định này.
+
+## Vấn đề 13 — Mỗi application một nơi chứa desired state
+
+**Vấn đề:** thiết kế chỉ nói IDP "publish desired deployment state tới CD abstraction", không nói desired state nằm ở đâu. Bản cài đặt đặt mọi application vào **một** repo Git dùng chung, phân tách bằng thư mục `<nơi triển khai>/<app>-<environment>/workloads/…`, và mọi cụm dùng chung một cặp khóa. Hệ quả:
+
+- Khóa ghi của IDP và khóa đọc nạp vào Argo CD của một cụm mở được desired state của **mọi** application, kể cả app không deploy lên cụm đó.
+- Lịch sử commit của các application trộn lẫn; không phân quyền hay audit theo application được.
+
+**Quyết định:**
+
+1. **Mỗi application có một Delivery Repository riêng** — nơi chứa desired state của application đó. Trong repo vẫn chia theo nơi triển khai và environment như cũ (`<target>/<app>-<env>/workloads/…`), vì một application dùng chung một repo cho mọi environment.
+2. **IDP tự tạo repo ở lần deploy đầu tiên của application.** Platform không phải làm thủ công cho từng app. Tên repo suy ra từ mẫu platform cấu hình, ví dụ `<tổ chức>/idp-<app>-gitops`. Repo đã tồn tại đúng tên thì dùng lại, không báo lỗi.
+3. **IDP sinh một cặp khóa riêng cho từng application** khi tạo repo: khóa ghi để IDP đẩy manifest, khóa đọc nạp vào Argo CD của cụm dưới dạng thông tin truy cập của riêng repo đó. Nhờ vậy khóa của application này không mở được repo của application khác. Khóa lưu trong Secret Store; database, log và Deployment Record chỉ thấy reference.
+4. **Thông tin gọi hệ thống lưu trữ Git** (token của tài khoản máy, quyền tạo repo và gắn deploy key) nằm trong Secret Store, chỉ Deployment Worker đọc.
+5. **Việc đăng ký application → repo được lưu bền vững** (URL, nhánh). IDP ghi khi tự tạo; platform cũng đăng ký tay được một repo có sẵn.
+6. **Gỡ application khỏi một environment/nơi triển khai** chỉ xóa phần desired state của environment đó trong repo. Repo và khóa giữ lại để còn lịch sử.
+7. **Tạo repo, sinh khóa hoặc đăng ký thất bại** → deployment FAILED ở bước giao hàng (A2), không publish sang repo nào khác.
+
+**Hệ quả cần xử lý khi sửa tài liệu:**
+
+- Thêm domain object **Delivery Repository** (thuộc Application) và bảng tương ứng; thêm thành phần lưu trữ để đọc/ghi đăng ký.
+- Thêm abstraction cho hệ thống lưu trữ Git (tạo repo, gắn khóa) và implementation cụ thể; UC-03 vẫn không phụ thuộc vào một sản phẩm cụ thể.
+- Contract 8 mô tả việc bảo đảm repo của application tồn tại trước khi publish; A2 thêm trường hợp tạo repo thất bại.
+- Đặc tả UC-03 thêm quy tắc: desired state của mỗi application nằm ở repo riêng, application này không ghi được vào repo của application khác.
+
+**Sẽ ảnh hưởng:** `usecase_realization_step_1_3.md` (đặc tả UC-03, Bước 1–3), sequence UC-03, VOPC UC-03 + design class diagram + README, domain model + domain objects + persistence classification, ERD, operation contract 8, traceability.
+
+**Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** toàn bộ danh sách trên. Code trong `uc03/` chưa sửa theo quyết định này.

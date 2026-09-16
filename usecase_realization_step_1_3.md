@@ -423,6 +423,7 @@ Image tag/version được xác định tại thời điểm deployment, không 
 - Resolve Resource Definition phù hợp trong phiên bản catalog được chọn, theo deployment context.
 - Tìm resource để dùng lại theo đúng chủ sở hữu (application + environment + resource requirement + deployment target); resource dùng chung chỉ được dùng khi Resource Definition khai báo trỏ tới resource có sẵn.
 - Reconcile infrastructure, gồm cả VPC và cụm Kubernetes khi deploy lên cloud; khi deploy lên cụm nội bộ thì chỉ kết nối vào cụm có sẵn.
+- Bảo đảm application có nơi chứa desired state của riêng nó (Delivery Repository) trước khi giao hàng; tạo nơi đó ở lần deploy đầu tiên nếu chưa có.
 - Gỡ workload, hủy resource hoặc gỡ liên kết resource dùng chung không còn trong phiên bản được deploy.
 - Nhận yêu cầu deploy và trả lời Developer ngay; việc triển khai chạy nền.
 - Triển khai lần lượt từng tầng: resolve Environment Configuration từ output của các tầng trước, sinh Kubernetes manifest, chuyển desired deployment state cho hệ thống Continuous Delivery và chờ workload healthy.
@@ -615,6 +616,7 @@ Image tag/version được xác định tại thời điểm deployment, không 
     * Environment Variable được chuyển thành ConfigMap hoặc Kubernetes configuration tương ứng.
     * Secret được chuyển thành Kubernetes Secret hoặc secret reference phù hợp.
     * IDP publish desired deployment state tới CD Integration; CD Integration chuyển desired state tới concrete CD implementation để triển khai xuống cụm Kubernetes của nơi triển khai. Thông tin kết nối cụm lấy từ output của `k8s-cluster`.
+    * Desired state được ghi vào **Delivery Repository của chính application đó**. Lần đầu application được deploy, IDP tạo nơi chứa này, sinh một cặp khóa riêng cho application (khóa ghi cho IDP, khóa đọc cho CD system) và ghi nhận lại để các lần sau dùng tiếp.
     * IDP chờ tới khi pod của workload healthy.
     * IDP thu thập Workload Output tương ứng.
 
@@ -688,7 +690,7 @@ Deployment dừng nếu:
 
 ### A2 – Provisioning, delivery hoặc workload thất bại
 
-Nếu infrastructure provisioning (kể cả VPC, cụm Kubernetes), manifest generation, CD delivery thất bại, workload không healthy tại một tầng, hoặc việc gỡ workload / hủy resource / gỡ liên kết resource thất bại:
+Nếu infrastructure provisioning (kể cả VPC, cụm Kubernetes), việc chuẩn bị Delivery Repository của application, manifest generation, CD delivery thất bại, workload không healthy tại một tầng, hoặc việc gỡ workload / hủy resource / gỡ liên kết resource thất bại:
 
 - **IDP** ghi nhận deployment thất bại và không triển khai các tầng sau.
 - **IDP** lưu tầng, thành phần liên quan, failed step và error summary.
@@ -711,6 +713,7 @@ Nếu infrastructure provisioning (kể cả VPC, cụm Kubernetes), manifest ge
 | Workload Output        | Workload + output                                       |
 | Resolved Configuration | Workload, variable/secret, resolved source              |
 | Workload Instance      | Workload, environment, deployment target, image đang chạy, trạng thái, dấu vân tay output |
+| Delivery Repository    | Application, nơi chứa desired state, nhánh, tham chiếu tới cặp khóa của application |
 | Deployment Record      | Image version, target, phiên bản catalog, status, infrastructure reference, tiến trình theo tầng/thành phần |
 
 ## 8. Quy tắc nghiệp vụ
@@ -744,7 +747,11 @@ Nếu infrastructure provisioning (kể cả VPC, cụm Kubernetes), manifest ge
 - Developer không trực tiếp thao tác với Terraform module, Kubernetes ConfigMap, Kubernetes Secret hoặc Kubernetes manifest.
 - `score-k8s` được sử dụng để sinh base Kubernetes manifest từ resolved application specification.
 - Target-specific manifest adaptation/patch được áp dụng sau bước sinh base manifest khi cần.
-- UC-03 sử dụng CD abstraction và không phụ thuộc trực tiếp vào Argo CD, Flux hoặc một sản phẩm CD cụ thể.
+- Mỗi application có một Delivery Repository riêng; desired state của application này không bao giờ được ghi vào nơi chứa của application khác. Trong một Delivery Repository, desired state được tách theo nơi triển khai và environment.
+- IDP tạo Delivery Repository ở lần deploy đầu tiên của application, theo quy ước đặt tên do platform cấu hình; nơi chứa đã tồn tại đúng tên thì được dùng lại.
+- Mỗi application có cặp khóa truy cập riêng cho nơi chứa của mình; khóa và thông tin đăng nhập hệ thống lưu trữ Git chỉ nằm trong Secret Store, không nằm trong database, log hay Deployment Record.
+- Gỡ application khỏi một environment và nơi triển khai chỉ xóa phần desired state của environment đó; Delivery Repository và khóa của application được giữ lại.
+- UC-03 sử dụng CD abstraction và không phụ thuộc trực tiếp vào Argo CD, Flux hoặc một sản phẩm CD cụ thể; việc tạo nơi chứa desired state cũng đi qua một abstraction, không phụ thuộc vào một hệ thống lưu trữ Git cụ thể.
 
 UC-04 – View Deployment Result
 
@@ -858,7 +865,7 @@ Chịu trách nhiệm khai báo giá trị cấu hình theo từng environment, 
 Chịu trách nhiệm biến một phiên bản Application Definition + phiên bản catalog + Environment Configuration của một environment (staging hoặc production) + nơi triển khai (cloud hoặc cụm Kubernetes nội bộ) và deployment context + image version của các workload được chọn thành một deployment thực tế. Trách nhiệm chia làm hai phần:
 
 - **Nhận yêu cầu deploy:** kiểm tra configuration khớp phiên bản, dựng dependency/resource graph (kể cả cụm Kubernetes và network của nơi triển khai), xác định phạm vi và chia tầng theo thứ tự phụ thuộc, tìm resource để dùng lại theo đúng chủ sở hữu, lập plan (gồm cả thành phần sẽ bị gỡ, hủy hoặc gỡ liên kết) cho Developer xem; khi Developer xác nhận thì lưu job triển khai và trả lời ngay.
-- **Thực thi chạy nền (Deployment Worker):** với từng tầng reconcile infrastructure, kể cả VPC và cụm trên cloud (hoặc chỉ liên kết cụm nội bộ và resource dùng chung), resolve configuration, sinh manifest, gửi desired state sang CD system, chờ workload healthy và thu output; tự động làm lại resource và workload phụ thuộc khi output thay đổi; gỡ workload, hủy resource hoặc gỡ liên kết resource dùng chung không còn trong phiên bản.
+- **Thực thi chạy nền (Deployment Worker):** với từng tầng reconcile infrastructure, kể cả VPC và cụm trên cloud (hoặc chỉ liên kết cụm nội bộ và resource dùng chung), resolve configuration, sinh manifest, bảo đảm Delivery Repository của application tồn tại rồi gửi desired state sang CD system, chờ workload healthy và thu output; tự động làm lại resource và workload phụ thuộc khi output thay đổi; gỡ workload, hủy resource hoặc gỡ liên kết resource dùng chung không còn trong phiên bản.
 
 ## UC 04 View Deployment Result
 
@@ -944,7 +951,7 @@ UC-02 chỉ lưu value hoặc reference, chưa resolve giá trị thật của R
 
 - **materializeSecretConfiguration()** - Chuyển Secret đã resolve thành Kubernetes Secret hoặc secret reference phù hợp.
 
-- **publishDesiredDeploymentState()** - Gửi desired deployment state của các workload trong một tầng sang CD abstraction; khi deploy phiên bản mới, desired state không còn các workload bị gỡ để CD system gỡ chúng khỏi cluster.
+- **publishDesiredDeploymentState()** - Bảo đảm application có Delivery Repository của riêng nó (tạo nơi chứa và cặp khóa ở lần đầu, ghi nhận lại), rồi gửi desired deployment state của các workload trong một tầng sang CD abstraction; khi deploy phiên bản mới, desired state không còn các workload bị gỡ để CD system gỡ chúng khỏi cluster.
 
 - **waitForWorkloadsHealthy()** - Chờ tới khi pod của các workload trong tầng healthy trên deployment target.
 
@@ -1097,11 +1104,15 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 - **CD Integration / CD Provider Interface** - Abstraction để publish desired deployment state mà không phụ thuộc trực tiếp vào Argo CD, Flux hay implementation cụ thể.
 
+- **Delivery Repository Provider** - Abstraction để bảo đảm nơi chứa desired state của một application tồn tại: tạo nơi chứa theo quy ước đặt tên, sinh và gắn cặp khóa của application. Không phụ thuộc vào một hệ thống lưu trữ Git cụ thể.
+
 - **Workload Status Provider / Kubernetes Adapter** - Kiểm tra workload đã healthy chưa và đọc dữ liệu runtime của workload phục vụ Workload Output Collector.
 
 ### Integration implementations
 
 - **Concrete CD Provider** - Implementation cụ thể của CD abstraction, ví dụ Argo CD Adapter hoặc Flux Adapter.
+
+- **Concrete Git Hosting Provider** - Implementation cụ thể của Delivery Repository Provider cho một hệ thống lưu trữ Git, ví dụ GitHub Adapter; đọc thông tin đăng nhập từ Secret Store.
 
 ### External systems
 
@@ -1121,6 +1132,8 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 - **Resource Definition Catalog** - Đọc các phiên bản catalog và Resource Definition của phiên bản được chọn. Catalog do platform quản lý; IDP chỉ đọc.
 
+- **Delivery Repository Registry** - Lưu/đọc Delivery Repository của từng application: nơi chứa desired state, nhánh và tham chiếu tới cặp khóa trong Secret Store.
+
 - **Resource Instance Repository** - Lưu/đọc Resource Instance theo đúng chủ sở hữu (application + environment + resource requirement hoặc cụm Kubernetes/network + deployment target): trạng thái, reference, liên kết tới thứ có sẵn, dấu vân tay output và dấu vân tay đầu vào lần apply gần nhất, phục vụ reconcile/reuse, gỡ/hủy và lan truyền thay đổi output.
 
 - **Workload Instance Repository** - Lưu/đọc trạng thái hiện hành của từng workload theo environment và deployment target: image đang chạy, trạng thái health và dấu vân tay output.
@@ -1130,7 +1143,7 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 Luồng responsibility:
 
 - **Trong request:** Web UI → Deployment API → Deployment Orchestrator → Graph Builder (→ Resource Definition Resolver → Resource Definition Catalog) → Wave Planner → Infrastructure Planner → Wave Planner (thành phần có thể bị làm lại) → Deployment Repository (lưu deployment; khi xác nhận thì lưu job) → Web UI.
-- **Chạy nền:** Deployment Worker → (với mỗi tầng) Infrastructure Reconciler → Provisioner → Terraform/OpenTofu Runner → Resource Output Collector → Configuration Resolver → Resolved Spec Generator → Score Renderer → score-k8s → Target Adapter → Config/Secret Materializer → CD Integration → Concrete CD Provider → CD System → Kubernetes → Workload Status Provider → Workload Output Collector → Wave Planner (lan truyền sang resource và workload) → (sau các tầng) gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản → Resource/Workload Instance Repository → Deployment Repository.
+- **Chạy nền:** Deployment Worker → (với mỗi tầng) Infrastructure Reconciler → Provisioner → Terraform/OpenTofu Runner → Resource Output Collector → Configuration Resolver → Resolved Spec Generator → Score Renderer → score-k8s → Target Adapter → Config/Secret Materializer → Delivery Repository Provider (bảo đảm nơi chứa của application) → CD Integration → Concrete CD Provider → CD System → Kubernetes → Workload Status Provider → Workload Output Collector → Wave Planner (lan truyền sang resource và workload) → (sau các tầng) gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản → Resource/Workload Instance Repository → Deployment Repository.
 
 Deployment Orchestrator và Deployment Worker chỉ điều phối. Các việc dựng graph, chia tầng và lan truyền thay đổi output, resolve Resource Definition, reconcile infrastructure, resolve configuration, sinh manifest, giao tiếp với CD và thu output nằm ở các component riêng.
 

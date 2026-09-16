@@ -31,6 +31,9 @@ control "Environment Configuration Materializer" as ConfigMaterializer
 control "Secret Materializer" as SecretMaterializer
 participant "CD Integration / CD Provider Interface" as CDIntegration <<interface>>
 control "Concrete CD Provider" as CDProvider
+participant "Delivery Repository Provider" as RepoProvider <<interface>>
+control "Concrete Git Hosting Provider" as GitHosting
+entity "Delivery Repository Registry" as DeliveryRepo
 participant "CD System" as CDSystem
 participant "Kubernetes Cluster" as Kubernetes
 participant "Workload Status Provider /\nKubernetes Adapter" as WorkloadStatusProvider <<interface>>
@@ -265,6 +268,16 @@ loop For each wave, in dependency order
     Worker -> SecretMaterializer: materializeSecretConfiguration(\nmanifestWithEnvironmentConfiguration, resolvedSecrets)
     SecretMaterializer --> Worker: Desired deployment state
     Worker -> CDIntegration: publishDesiredDeploymentState(desiredState)
+    CDIntegration -> DeliveryRepo: findDeliveryRepository(deployment.applicationId)
+    DeliveryRepo --> CDIntegration: Delivery Repository of this application, if any
+    opt [the application has no delivery repository yet]
+      CDIntegration -> RepoProvider: ensureDeliveryRepository(application)
+      RepoProvider -> GitHosting: create the repository named by the platform pattern;\ngenerate a key pair for this application and attach it
+      GitHosting --> RepoProvider: repository URL and branch
+      RepoProvider --> CDIntegration: repository URL, branch, secret references of the key pair
+      CDIntegration -> DeliveryRepo: saveDeliveryRepository(applicationId, url, branch, keyReferences)
+      DeliveryRepo --> CDIntegration: Delivery Repository persisted
+    end
     CDIntegration -> CDProvider: publish(desiredState)
     CDProvider -> CDSystem: synchronize(desiredState)
     CDSystem -> Kubernetes: Deploy workloads and configuration
@@ -276,6 +289,10 @@ loop For each wave, in dependency order
       The cluster to deliver to and read from is the
       k8s-cluster of this deployment; its connection data
       comes from the k8s-cluster Resource Output.
+      Desired state is written only to this application's
+      delivery repository; the CD system reads it with the
+      read key of this application. Keys and the Git hosting
+      credential live in the Secret Store only.
     end note
     Worker -> WorkloadInstanceRepo: saveWorkloadInstances(waveWorkloads, DEPLOYING)
     WorkloadInstanceRepo --> Worker: Workload instances saved

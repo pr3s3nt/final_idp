@@ -220,6 +220,25 @@ Mỗi lần platform sửa catalog tạo một dòng mới cùng toàn bộ `res
 
 Constraint bổ sung: `CHECK` khi `management_mode = EXISTING` thì `existing_resource_reference` khác `NULL`. Các `requires` trong một phiên bản không tạo thành vòng; điều kiện này được kiểm tra khi platform nạp phiên bản catalog. Dòng của phiên bản đã tạo không bị `UPDATE` hay `DELETE`.
 
+## Delivery Repository Registry
+
+### `delivery_repository`
+
+Nơi chứa desired state của từng application. IDP insert row ở lần deploy đầu tiên của application (sau khi tạo nơi chứa và sinh cặp khóa) và chỉ đọc ở các lần sau; platform cũng có thể đăng ký một nơi chứa có sẵn.
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `delivery_repository_id` | UUID | PK, NOT NULL | Identity của Delivery Repository. |
+| `application_id` | UUID | FK → `application_definition.application_id`, NOT NULL, UNIQUE | Application sở hữu nơi chứa; mỗi application có tối đa một. |
+| `repository_url` | VARCHAR(2048) | NOT NULL | Địa chỉ nơi chứa desired state, ví dụ `git@host:org/idp-<app>-gitops.git`. |
+| `branch` | VARCHAR(255) | NOT NULL | Nhánh chứa desired state. |
+| `write_key_reference` | VARCHAR(2048) | NOT NULL | Secret reference tới khóa ghi của application; không phải giá trị khóa. |
+| `read_key_reference` | VARCHAR(2048) | NOT NULL | Secret reference tới khóa đọc cấp cho CD system; không phải giá trị khóa. |
+| `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
+| `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
+
+Table này hoàn toàn không có column chứa khóa hay thông tin đăng nhập hệ thống lưu trữ Git; chúng nằm trong Secret Store như plaintext Secret của UC-02.
+
 ## Resource Instance Repository
 
 ### `resource_instance`
@@ -382,6 +401,8 @@ Constraint bổ sung: `UNIQUE (deployment_record_id, resource_instance_id)`.
 
 ### Secret reference, không phải plaintext
 
+- `delivery_repository` chỉ lưu `write_key_reference` và `read_key_reference`; khóa của application và thông tin đăng nhập hệ thống lưu trữ Git nằm trong Secret Store.
+
 - `secret` hoàn toàn không có column plaintext/value. Direct secret đi qua Secret Store và DB chỉ nhận `secret_ref` opaque.
 - `CHECK` trên `secret.value_source` bảo đảm `SECRET_REF` và `RESOURCE_OUTPUT` loại trừ lẫn nhau.
 - Với sensitive resource output, DB chỉ lưu `resource_requirement_id` + `resource_output_name`; resolved secret value không được persist.
@@ -454,6 +475,7 @@ Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, opera
 | Resource Output Reference | Embedded reference fields in `configuration_value`, or in `secret` for sensitive output binding |
 | Workload Output Reference | Embedded fields `configuration_value.workload_id` + `workload_output_name` |
 | Platform Requirement | `application_component` với `component_type = PLATFORM_REQUIREMENT` + `platform_requirement_type` |
+| Delivery Repository | `delivery_repository` |
 | Catalog Version | `catalog_version` (platform-managed catalog) |
 | Resource Definition | `resource_definition` (platform-managed catalog, theo phiên bản) |
 | Deployment | `deployment` |

@@ -179,16 +179,20 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
   - `desiredState` không chứa unresolved Resource Output Reference hoặc Workload Output Reference; secret material tuân thủ cơ chế Kubernetes Secret hoặc secret reference mà không làm lộ plaintext ngoài delivery boundary.
   - `desiredState` gồm workload của tầng hiện tại và các tầng trước, và **vẫn giữ** workload đang chạy nhưng không còn trong phiên bản; chỉ lần publish cuối (sau khi mọi tầng đã healthy) mới bỏ các workload đó.
   - CD Integration đã resolve được một Concrete CD Provider cho target.
+  - Application có một `Delivery Repository`, hoặc có thể tạo được: quy ước đặt tên do platform cấu hình và thông tin đăng nhập hệ thống lưu trữ Git nằm trong Secret Store và còn dùng được.
 - **Postconditions**:
-  - Trong CD System, desired deployment state cho application/environment/target được tạo hoặc cập nhật và association delivery tới Kubernetes deployment target được hình thành.
+  - Application có đúng một instance `Delivery Repository` và một row tương ứng với `application_id`, `repository_url`, `branch` và secret reference của cặp khóa. Ở lần deploy đầu tiên của application, nơi chứa được tạo theo quy ước đặt tên, một cặp khóa riêng của application được sinh và gắn vào nơi chứa đó, rồi row được tạo; các lần sau dùng lại row đã có. Nơi chứa đã tồn tại đúng tên được dùng lại thay vì báo lỗi.
+  - Desired deployment state chỉ được ghi vào `Delivery Repository` của application này, tách theo `deploymentTarget` và `environment`; không application nào khác ghi vào nơi chứa đó.
+  - Trong CD System, desired deployment state cho application/environment/target được tạo hoặc cập nhật và association delivery tới Kubernetes deployment target được hình thành; CD System đọc nơi chứa bằng khóa đọc của chính application này.
   - Execution state nhận một `deliveryReference` định danh durable desired-state/CD delivery; acknowledgment của CD không được dùng làm trạng thái Deployment (D5).
   - Với mỗi workload của tầng, row `workload_instance` theo `(workload_id, environment, deployment_target)` được tạo hoặc cập nhật với `current_workload_deployment_id` trỏ tới Workload Deployment của deployment này và `status = DEPLOYING`.
   - Ở lần publish cuối gỡ workload, mỗi workload không còn trong phiên bản có `workload_instance.status = REMOVED`; dòng được giữ lại.
   - `deployment.status` giữ `DEPLOYING`; không có trạng thái "đã gửi sang CD". Việc workload healthy được xác nhận riêng bởi `waitForWorkloadsHealthy()` trước contract 10.
   - Không `Deployment Record` hoặc association `deployment_record_resource_instance` nào được tạo bởi operation này; `deliveryReference` chỉ được persist bởi `saveDeploymentRecord()`.
   - Không Application Definition Version, Environment Configuration hoặc Resource Instance nào bị thay đổi bởi việc publish.
+  - Khóa của application và thông tin đăng nhập hệ thống lưu trữ Git không được persist ngoài Secret Store: `delivery_repository` chỉ giữ secret reference, và chúng không xuất hiện trong Deployment Record, `deployment_step` hay log.
 - **Exceptions / Guarantees**:
-  - A2: nếu manifest generation/materialization trước publish hoặc CD delivery thất bại, không có success status giả; Deployment Worker không triển khai các tầng sau, `deployment.status` chuyển sang `FAILED`, và delivery reference (nếu provider đã cấp), tầng, thành phần cùng error summary được giữ cho `saveDeploymentRecord()`.
+  - A2: nếu việc tạo `Delivery Repository`, sinh/gắn cặp khóa, manifest generation/materialization trước publish hoặc CD delivery thất bại, không có success status giả; Deployment Worker không triển khai các tầng sau, `deployment.status` chuyển sang `FAILED`, và delivery reference (nếu provider đã cấp), tầng, thành phần cùng error summary được giữ cho `saveDeploymentRecord()`.
   - Việc CD System accept desired state không đồng nghĩa Kubernetes workload đã ready; contract chỉ bảo đảm delivery reference phản ánh đúng acknowledgment nhận được.
 
 ## 9. `saveDeploymentRecord()`

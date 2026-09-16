@@ -166,6 +166,20 @@ package "Platform Resource Definition Catalog" {
   }
 }
 
+package "Delivery Repository Registry" {
+  entity "delivery_repository" as delivery_repository {
+    * delivery_repository_id : UUID <<PK>>
+    --
+    * application_id : UUID <<FK, NOT NULL, UNIQUE>>
+    * repository_url : VARCHAR(2048) <<NOT NULL>>
+    * branch : VARCHAR(255) <<NOT NULL>>
+    * write_key_reference : VARCHAR(2048) <<NOT NULL>>
+    * read_key_reference : VARCHAR(2048) <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+}
+
 package "Resource Instance Repository" {
   entity "resource_instance" as resource_instance {
     * resource_instance_id : UUID <<PK>>
@@ -316,6 +330,7 @@ resource_definition ||--o{ resource_instance : last applied or linked with
 application_definition ||--o{ resource_instance : owner application
 application_component ||--o{ resource_instance : owner requirement or platform requirement
 
+application_definition ||--o| delivery_repository : desired state of this application
 application_definition ||--o{ workload_instance : owner application
 application_component ||--o{ workload_instance : instance of workload
 workload_deployment ||--o{ workload_instance : currently running
@@ -344,6 +359,13 @@ note right of application_definition_version
   Immutable: rows of a saved version (and its workloads, resource
   requirements, definitions, dependencies) are never updated or
   deleted. FKs to versions use ON DELETE RESTRICT.
+end note
+
+note bottom of delivery_repository
+  One per application. IDP creates the repository on the first
+  deployment and generates a key pair for this application only.
+  Only secret references are stored; keys and the Git hosting
+  credential stay in the Secret Store.
 end note
 
 note right of application_component

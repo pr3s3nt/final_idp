@@ -204,6 +204,10 @@ package "Integration abstractions" {
     -deliveryReference: String
     +publishDesiredDeploymentState(desiredState)
   }
+  interface "Delivery Repository Provider" as RepoProvider <<interface>> {
+    -namingPattern: String
+    +ensureDeliveryRepository(application)
+  }
   interface "CD Integration / CD Status Provider" as CDStatusProvider <<interface>> {
     -deliveryReference: String
     +getCDStatus(deliveryReference)
@@ -223,6 +227,12 @@ package "Integration implementations" {
     -endpoint: String
     +publish(desiredState)
     +getStatus(deliveryReference)
+  }
+  class "Concrete Git Hosting Provider" as GitHosting <<control>> {
+    -hostingType: String
+    -credentialReference: String
+    +createRepository(name)
+    +attachKeyPair(repository, writeKey, readKey)
   }
 }
 
@@ -276,6 +286,11 @@ package "Persistence" {
     +save(configurationWithValueReferences)
     +findByApplicationAndEnvironment(applicationId, environment)
     +findById(environmentConfigurationId)
+  }
+  class "Delivery Repository Registry" as DeliveryRepositoryRegistry <<entity>> {
+    -deliveryRepositories: Collection
+    +findDeliveryRepository(applicationId)
+    +saveDeliveryRepository(applicationId, url, branch, keyReferences)
   }
   class "Resource Definition Catalog" as ResourceDefinitionCatalog <<entity>> {
     -catalogVersions: Collection
@@ -376,6 +391,9 @@ ResourceOutputCollector "1" --> "1" ResourceInstanceRepository
 WorkloadOutputCollector ..> WorkloadStatusProvider
 ManifestGenerator ..> ScoreK8s
 CDIntegration <|.. ConcreteCDProvider
+CDIntegration ..> RepoProvider
+CDIntegration "1" --> "1" DeliveryRepositoryRegistry
+RepoProvider <|.. GitHosting
 ProvisionerAdapter ..> IaCRunner : reconcile()/destroy() delegate apply/destroyInfrastructureModules()
 ConcreteCDProvider ..> CDSystem
 CDSystem ..> KubernetesCluster

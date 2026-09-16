@@ -111,6 +111,10 @@ package "Integration abstractions" {
     -deliveryReference: String
     +publishDesiredDeploymentState(desiredState)
   }
+  interface "Delivery Repository Provider" as RepoProvider <<interface>> {
+    -namingPattern: String
+    +ensureDeliveryRepository(application)
+  }
   interface "Workload Status Provider / Kubernetes Adapter" as WorkloadStatusProvider <<interface>> {
     -target: String
     +waitForWorkloadsHealthy(target, workloads)
@@ -123,6 +127,12 @@ package "Integration implementations" {
     -providerType: String
     -endpoint: String
     +publish(desiredState)
+  }
+  class "Concrete Git Hosting Provider" as GitHosting <<control>> {
+    -hostingType: String
+    -credentialReference: String
+    +createRepository(name)
+    +attachKeyPair(repository, writeKey, readKey)
   }
 }
 
@@ -162,6 +172,11 @@ package "Persistence" {
     -environmentConfigurations: Collection
     +findByApplicationAndEnvironment(applicationId, environment)
     +findById(environmentConfigurationId)
+  }
+  class "Delivery Repository Registry" as DeliveryRepoRegistry <<entity>> {
+    -deliveryRepositories: Collection
+    +findDeliveryRepository(applicationId)
+    +saveDeliveryRepository(applicationId, url, branch, keyReferences)
   }
   class "Resource Definition Catalog" as CatalogRepo <<entity>> {
     -catalogVersions: Collection
@@ -239,6 +254,9 @@ WorkloadOutputCollector ..> WorkloadStatusProvider
 ManifestGenerator ..> ScoreK8s
 Provisioner ..> IaCRunner : reconcile()/destroy() delegate apply/destroyInfrastructureModules()
 CDIntegration <|.. CDProvider
+CDIntegration ..> RepoProvider
+CDIntegration "1" --> "1" DeliveryRepoRegistry
+RepoProvider <|.. GitHosting
 CDProvider ..> CDSystem
 CDSystem ..> Kubernetes
 WorkloadStatusProvider ..> Kubernetes
@@ -260,6 +278,12 @@ end note
 note right of CatalogRepo
   Catalog versions are immutable and managed by the
   platform; IDP only reads them.
+end note
+
+note right of DeliveryRepoRegistry
+  One delivery repository per application, created on its
+  first deployment with a key pair of its own. The registry
+  stores only secret references.
 end note
 
 @enduml

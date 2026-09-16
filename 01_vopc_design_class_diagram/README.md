@@ -61,14 +61,17 @@ Thư mục này mô tả **View Of Participating Classes (VOPC)** cho bốn use 
 | Provisioner Adapter / Provisioner Interface | Integration abstractions | Cung cấp abstraction cho việc reconcile và hủy infrastructure theo các plan item. |
 | CD Integration / CD Provider Interface | Integration abstractions | Cung cấp abstraction để publish desired deployment state tới CD provider. |
 | CD Integration / CD Status Provider | Integration abstractions | Cung cấp abstraction read-only để lấy deployment/sync status từ CD provider. |
+| Delivery Repository Provider | Integration abstractions | Bảo đảm nơi chứa desired state của một application tồn tại: tạo theo quy ước đặt tên của platform, sinh và gắn cặp khóa riêng của application. |
 | Workload Status Provider / Kubernetes Adapter | Integration abstractions | UC-03: chờ workload healthy và đọc dữ liệu runtime phục vụ Workload Output Collector. UC-04: truy vấn workload health và exposed endpoint từ Kubernetes Cluster. |
 | Concrete CD Provider | Integration implementations | Hiện thực publish/status operation cho một CD system cụ thể như Argo CD hoặc Flux. |
+| Concrete Git Hosting Provider | Integration implementations | Hiện thực Delivery Repository Provider cho một hệ thống lưu trữ Git cụ thể (ví dụ GitHub); đọc thông tin đăng nhập từ Secret Store. |
 | Terraform/OpenTofu Runner | External systems | Thực thi infrastructure module (apply hoặc destroy) và trả resource state cùng raw outputs. |
 | score-k8s | External systems | Render resolved application specification thành base Kubernetes manifest. |
 | CD System | External systems | Nhận desired state, đồng bộ workload xuống cluster và cung cấp CD status. |
 | Kubernetes Cluster | External systems | Chạy workload/configuration; cung cấp pod health, dữ liệu runtime của workload và endpoint. Trên cloud, cụm do IDP dựng qua Provisioner; cụm nội bộ có sẵn. Thông tin kết nối lấy từ output của `k8s-cluster`. |
 | Application Repository | Persistence | Lưu/đọc Application Definition theo phiên bản bất biến cho UC-01 và UC-03; thành phần giữ ID cố định qua phiên bản; tạo Platform Requirement (cụm Kubernetes, network) của application khi cần lần đầu. |
 | Resource Definition Catalog | Persistence | Đọc các phiên bản catalog bất biến và Resource Definition của phiên bản được chọn; catalog do platform quản lý, IDP chỉ đọc. |
+| Delivery Repository Registry | Persistence | Lưu/đọc nơi chứa desired state của từng application: URL, nhánh và secret reference của cặp khóa. |
 | Specification Repository / Config Repo Service | Persistence | Lưu hoặc version hóa application specification đã sinh. |
 | Application Query / Application Repository | Persistence | Đọc workload, variable, Secret và dependency requirement của phiên bản Application Definition mới nhất phục vụ UC-02. |
 | Environment Configuration Repository | Persistence | Lưu value/reference theo environment (STAGING, PRODUCTION) và đọc lại khi deployment. |

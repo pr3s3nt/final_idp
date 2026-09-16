@@ -9,6 +9,7 @@ Phân loại dưới đây bao phủ toàn bộ domain object trong `domain_mode
 | Workload | PERSISTENT | Application Repository | Được lưu theo từng phiên bản với ID cố định qua phiên bản; image repository và configuration requirements phải tồn tại qua các lần deploy. |
 | Resource Requirement | PERSISTENT | Application Repository | Được lưu theo từng phiên bản với ID cố định; được dùng lại để dựng graph, resolve resource và làm khóa chủ sở hữu của Resource Instance. |
 | Platform Requirement | PERSISTENT | Application Repository | ID cố định của cụm Kubernetes/network mà application cần phải tồn tại qua nhiều deployment vì là khóa chủ sở hữu của Resource Instance; không thuộc phiên bản, được tạo khi Deployment Worker cần lần đầu. |
+| Delivery Repository | PERSISTENT | Delivery Repository Registry | Nơi chứa desired state của application và secret reference của cặp khóa phải tồn tại qua nhiều deployment; IDP ghi ở lần deploy đầu tiên và đọc lại ở mọi lần sau. Không lưu khóa hay thông tin đăng nhập, chỉ reference. |
 | Environment Variable Definition | PERSISTENT | Application Repository | Requirement khai báo ở UC-01 (theo phiên bản, ID cố định) phải được tải lại trong UC-02 và UC-03. |
 | Secret Definition | PERSISTENT | Application Repository | Tên/requirement của Secret là metadata của Workload (theo phiên bản, ID cố định); không chứa secret plaintext. |
 | Dependency | PERSISTENT | Application Repository | Topology `depends on` là một phần bền vững của từng phiên bản. |
