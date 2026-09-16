@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/pr3s3nt/final_idp/uc03/internal/config"
 	"github.com/pr3s3nt/final_idp/uc03/internal/domain/manifest"
 	"github.com/pr3s3nt/final_idp/uc03/internal/domain/resourceoutput"
 	"github.com/pr3s3nt/final_idp/uc03/internal/integration/cd"
+	"github.com/pr3s3nt/final_idp/uc03/internal/integration/deliveryrepo"
 	"github.com/pr3s3nt/final_idp/uc03/internal/integration/imageregistry"
 	"github.com/pr3s3nt/final_idp/uc03/internal/integration/kubernetes"
 	"github.com/pr3s3nt/final_idp/uc03/internal/integration/provisioner"
@@ -30,6 +32,7 @@ func runPlatform(ctx context.Context, cfg *config.Config, db *persistence.DB, cm
 		Resources:   &persistence.ResourceInstanceRepository{DB: db},
 		Workloads:   &persistence.WorkloadInstanceRepository{DB: db},
 		Deployments: &persistence.DeploymentRepository{DB: db},
+		Delivery:    &persistence.DeliveryRepositoryRegistry{DB: db},
 	}
 	secrets, err := secretstore.NewEncryptedFile(filepath.Join(cfg.DataDir, "secrets"), cfg.SecretKey)
 	if err != nil {
@@ -39,9 +42,15 @@ func runPlatform(ctx context.Context, cfg *config.Config, db *persistence.DB, cm
 	kube := &kubernetes.Adapter{}
 	prov := &provisioner.Terraform{ModulesDir: cfg.ModulesDir, DataDir: cfg.DataDir}
 	outputs := &resourceoutput.Collector{Provisioner: prov, Secrets: secrets}
-	argo := &cd.ArgoCD{RepoURL: cfg.GitOpsRepo, Branch: cfg.GitOpsBranch, WriteKeyFile: cfg.GitOpsKeyFile,
-		ReadKeyFile: cfg.GitOpsReadKeyFile, KnownHostsFile: filepath.Join(filepath.Dir(cfg.GitOpsKeyFile), "known_hosts"),
-		WorkDir: filepath.Join(cfg.DataDir, "gitops"), Kube: kube}
+	deliveryDir := filepath.Join(cfg.DataDir, "delivery")
+	if err := os.MkdirAll(deliveryDir, 0o700); err != nil {
+		return err
+	}
+	provider := &deliveryrepo.GitHub{Pattern: cfg.DeliveryRepoPattern, Branch: cfg.DeliveryBranch,
+		TokenReference: cfg.GitHostingTokenRef, Secrets: secrets, WorkDir: deliveryDir,
+		APIBase: cfg.GitHostingAPI, SSHHost: cfg.GitHostingSSHHost}
+	argo := &cd.ArgoCD{Provider: provider, Registry: repos.Delivery, Secrets: secrets, Branch: cfg.DeliveryBranch,
+		KnownHostsFile: cfg.KnownHostsFile, WorkDir: deliveryDir, Kube: kube}
 	orch := &service.Orchestrator{Repositories: repos, Images: registry, Secrets: secrets}
 
 	switch cmd {
@@ -59,8 +68,8 @@ func runPlatform(ctx context.Context, cfg *config.Config, db *persistence.DB, cm
 		}
 		return nil
 	case "worker":
-		if cfg.GitOpsRepo == "" || cfg.GitOpsKeyFile == "" || cfg.GitOpsReadKeyFile == "" {
-			return fmt.Errorf("IDP_GITOPS_REPO, IDP_GITOPS_SSH_KEY_FILE and IDP_GITOPS_READ_SSH_KEY_FILE are required by the worker")
+		if cfg.DeliveryRepoPattern == "" {
+			return fmt.Errorf("IDP_DELIVERY_REPO_PATTERN is required by the worker, for example pr3s3nt/idp-<app>-gitops")
 		}
 		hash := sha256.Sum256([]byte("config-hash:" + cfg.SecretKey))
 		worker := &service.Worker{Orch: orch, Provisioner: prov, ResourceOutputs: outputs, Kube: kube, CD: argo,

@@ -6,6 +6,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/pr3s3nt/final_idp/uc03/internal/domain"
 	"github.com/pr3s3nt/final_idp/uc03/internal/integration/kubernetes"
 )
 
@@ -28,10 +29,11 @@ type WorkloadState struct {
 // target: upserted workloads and, in the final publish of a removal, workloads
 // to drop. Workloads not mentioned are left untouched.
 type DesiredState struct {
-	Cluster     *kubernetes.ClusterAccess
-	Target      string
-	Application string
-	Environment string
+	Cluster       *kubernetes.ClusterAccess
+	Target        string
+	ApplicationID string // owns the delivery repository the state is written to
+	Application   string
+	Environment   string
 	Namespace   string
 	DeploymentID string
 	Wave        int
@@ -45,6 +47,14 @@ type Status struct {
 	Sync     string `json:"sync"`   // SYNCED | SYNCING | OUT_OF_SYNC | UNKNOWN
 	Health   string `json:"health"` // HEALTHY | PROGRESSING | DEGRADED | MISSING | UNKNOWN
 	Message  string `json:"message,omitempty"`
+}
+
+// DeliveryRepositoryStore is the Delivery Repository Registry as the CD
+// integration uses it: find where an application keeps its desired state, and
+// record it the first time the IDP prepares it.
+type DeliveryRepositoryStore interface {
+	Find(ctx context.Context, applicationID string) (*domain.DeliveryRepository, error)
+	Save(ctx context.Context, r domain.DeliveryRepository) (*domain.DeliveryRepository, error)
 }
 
 type Integration interface {

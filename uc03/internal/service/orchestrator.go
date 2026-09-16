@@ -33,6 +33,7 @@ type Repositories struct {
 	Resources   *persistence.ResourceInstanceRepository
 	Workloads   *persistence.WorkloadInstanceRepository
 	Deployments *persistence.DeploymentRepository
+	Delivery    *persistence.DeliveryRepositoryRegistry
 }
 
 // Orchestrator is the Deployment Orchestrator. It validates, builds the graph

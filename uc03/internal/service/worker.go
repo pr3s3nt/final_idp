@@ -525,8 +525,9 @@ func (ex *execution) workloadOutputsOf(ctx context.Context, workloadID string) (
 
 func (ex *execution) desiredState(wave int) cd.DesiredState {
 	d := ex.pc.Deployment
-	return cd.DesiredState{Cluster: ex.cluster, Target: d.Target, Application: ex.pc.Version.ApplicationName,
-		Environment: string(d.Environment), Namespace: ex.namespace, DeploymentID: d.ID, Wave: wave}
+	return cd.DesiredState{Cluster: ex.cluster, Target: d.Target, ApplicationID: d.ApplicationID,
+		Application: ex.pc.Version.ApplicationName, Environment: string(d.Environment),
+		Namespace: ex.namespace, DeploymentID: d.ID, Wave: wave}
 }
 
 // deployWorkloads resolves configuration, renders and publishes one wave of

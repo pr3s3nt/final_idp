@@ -12,10 +12,10 @@ Mọi lệnh chạy trong thư mục `uc03/`.
 | Terraform | 1.9.8 |
 | score-k8s | 0.15.0 |
 | kubectl, jq, git, ssh | bất kỳ bản gần đây |
-| gh (tạo GitOps repo một lần) | 2.62 |
+| gh (chỉ dùng một lần để lấy token nạp vào Secret Store) | 2.62 |
 | aws CLI + credentials (chỉ target `aws`) | 2.35 |
 
-Internet cần tới: registry.terraform.io, argoproj.github.io (Helm chart), quay.io/ghcr.io/docker.io (image Argo CD, postgres, redis), github.com:22 (GitOps).
+Internet cần tới: registry.terraform.io, argoproj.github.io (Helm chart), quay.io/ghcr.io/docker.io (image Argo CD, postgres, redis), github.com:22 và api.github.com (delivery repository riêng của từng application).
 
 ## 2. Biến môi trường
 
@@ -23,14 +23,17 @@ Internet cần tới: registry.terraform.io, argoproj.github.io (Helm chart), qu
 |---|---|---|
 | `IDP_SECRET_KEY` | có | Khóa Secret Store; phải giống nhau giữa import, serve, worker |
 | `IDP_DATABASE_URL` | không | mặc định `postgres://idp:idp@127.0.0.1:55433/idp?sslmode=disable` |
-| `IDP_GITOPS_REPO` | worker | `git@github.com:<owner>/final-idp-gitops.git` |
-| `IDP_GITOPS_SSH_KEY_FILE` | worker | deploy key có quyền ghi (IDP push) |
-| `IDP_GITOPS_READ_SSH_KEY_FILE` | worker | deploy key chỉ đọc (Argo CD) |
+| `IDP_DELIVERY_REPO_PATTERN` | worker | quy ước đặt tên delivery repository, ví dụ `pr3s3nt/idp-<app>-gitops`; `<app>` được thay bằng tên application |
+| `IDP_DELIVERY_BRANCH` | không | nhánh chứa desired state, mặc định `main` |
+| `IDP_GIT_HOSTING_TOKEN_SECRET` | không | secret reference của token tạo repo, mặc định `idpsecret://platform/git-hosting-token` |
+| `IDP_GIT_HOSTING_API` | không | mặc định `https://api.github.com` |
+| `IDP_GIT_HOSTING_SSH_HOST` | không | mặc định `github.com` |
+| `IDP_GIT_KNOWN_HOSTS` | không | mặc định `<IDP_DATA_DIR>/delivery/known_hosts`; tự ghi bằng `ssh-keyscan` ở lần dùng đầu |
 | `IDP_AWS_ECR_REGISTRY` | import | registry ECR của account, điền vào `eks-cluster.image_registry_mirror`. Phải đặt **trước** `import-fixtures`: phiên bản catalog đã tạo không sửa được |
 | `IDP_HEALTH_TIMEOUT` | không | thời gian chờ sync/rollout, mặc định 6m |
 | `IDP_LISTEN` | không | mặc định `127.0.0.1:8088` |
 
-`known_hosts` của GitHub được đọc từ cùng thư mục với `IDP_GITOPS_SSH_KEY_FILE`.
+Mỗi application có một delivery repository riêng: IDP tạo repo theo `IDP_DELIVERY_REPO_PATTERN` ở lần deploy đầu tiên của application, sinh một cặp khóa chỉ dùng cho application đó (khóa ghi cho IDP, khóa đọc cho Argo CD) và lưu cả hai vào Secret Store. Database chỉ giữ secret reference. Gỡ application khỏi một environment chỉ xóa thư mục của environment đó, repo và cặp khóa được giữ lại.
 
 ## 3. Chuẩn bị một lần
 
@@ -44,19 +47,21 @@ docker exec idp-uc03-db psql -U idp -d idp -c "CREATE DATABASE idp_test"
 docker run -d --name idp-uc03-registry --restart unless-stopped -p 127.0.0.1:5055:5000 registry:2
 docker network connect kind idp-uc03-registry   # tạo mạng bằng `docker network create kind` nếu chưa có
 
-# GitOps repo + deploy key (không dùng token gh trong IDP/cụm)
-KEYDIR=~/.config/idp-uc03; mkdir -p $KEYDIR && chmod 700 $KEYDIR
-ssh-keygen -q -t ed25519 -N '' -f $KEYDIR/gitops_write; ssh-keygen -q -t ed25519 -N '' -f $KEYDIR/gitops_read
-ssh-keyscan -t ed25519,rsa,ecdsa github.com > $KEYDIR/known_hosts
-gh repo create <owner>/final-idp-gitops --private --add-readme
-gh repo deploy-key add $KEYDIR/gitops_write.pub --allow-write --title idp-uc03-write -R <owner>/final-idp-gitops
-gh repo deploy-key add $KEYDIR/gitops_read.pub --title idp-uc03-argocd-read -R <owner>/final-idp-gitops
-
-export IDP_SECRET_KEY=... IDP_AWS_ECR_REGISTRY=<account>.dkr.ecr.ap-southeast-1.amazonaws.com
-export IDP_GITOPS_REPO=git@github.com:<owner>/final-idp-gitops.git
-export IDP_GITOPS_SSH_KEY_FILE=$KEYDIR/gitops_write IDP_GITOPS_READ_SSH_KEY_FILE=$KEYDIR/gitops_read
+# Khóa Secret Store: giữ trong uc03/.env (0600, đã gitignore) để không mất giữa các phiên
+umask 077; printf 'IDP_SECRET_KEY=%s\n' "$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" > .env
+set -a; . ./.env; set +a
 
 go build -o bin/idp ./cmd/idp
+
+# Token tạo delivery repository: cần quyền tạo repo private và gắn deploy key.
+# Token đi thẳng từ file vào Secret Store, không qua biến môi trường hay log.
+umask 077; T=$(mktemp); trap 'rm -f "$T"' EXIT
+printf '%s' "$(gh auth token)" > "$T"        # hoặc dán một fine-grained token có Administration: write
+./bin/idp secret-put platform/git-hosting-token "$T"
+
+export IDP_AWS_ECR_REGISTRY=<account>.dkr.ecr.ap-southeast-1.amazonaws.com
+export IDP_DELIVERY_REPO_PATTERN='pr3s3nt/idp-<app>-gitops'   # nháy đơn: `<app>` là ký tự chuyển hướng của shell
+
 ./bin/idp migrate
 ./bin/idp import-fixtures              # catalog v1, v2; shop-app v1–v3, reporting-app v1–v2; configuration
 ./prerequisites/build-push-images.sh localhost:5055

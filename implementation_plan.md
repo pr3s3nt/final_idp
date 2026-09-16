@@ -25,7 +25,7 @@ Nguyên tắc:
 | Kiểm chứng AWS | Chỉ dựng **1 cụm shop-app STAGING**, kiểm chứng xong gỡ hết và xác minh sạch |
 | MANAGED trên AWS | PostgreSQL = **Aurora PostgreSQL (Serverless v2)**; Redis = ElastiCache |
 | EXISTING | Chỉ kiểm chứng trên kind |
-| CD | **Argo CD** + **GitOps repo private `pr3s3nt/final-idp-gitops` tạo bằng `gh`** (đầu giai đoạn 3) + **hai SSH deploy key chỉ cho repo đó**: key ghi cho IDP (`IDP_GITOPS_SSH_KEY_FILE`, file 0600 ngoài repo), key chỉ đọc cho Argo CD (tạo thành repo credential trong cụm). Không dùng token `gh` trong IDP hay cụm |
+| CD | **Argo CD** + **một delivery repository private cho mỗi application**, do IDP tạo ở lần deploy đầu theo `IDP_DELIVERY_REPO_PATTERN` (mặc định dùng `pr3s3nt/idp-<app>-gitops`) + **một cặp SSH deploy key riêng cho mỗi application**: key ghi cho IDP, key chỉ đọc thành repo credential của application đó trong cụm. Token tạo repo nằm trong Secret Store, chỉ worker đọc (vấn đề thiết kế 13) |
 | Override resource | **Giữ lại** làm baseline trên Resource Instance |
 | Deploy chồng | **Chặn**: A1 `DEPLOYMENT_IN_PROGRESS` khi cùng app+env+target có deployment CONFIRMED/DEPLOYING |
 

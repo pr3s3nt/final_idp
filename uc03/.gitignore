@@ -1,5 +1,6 @@
 /bin/
 /var/
+.env
 *.tfstate
 *.tfstate.*
 .terraform/

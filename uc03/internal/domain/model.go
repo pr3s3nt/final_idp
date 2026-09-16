@@ -159,6 +159,21 @@ type CatalogVersion struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// DeliveryRepository is where the desired state of one application lives. The
+// IDP creates it on the application's first deployment, split inside by
+// deployment target and environment. Only secret references are kept here; the
+// key pair of the application stays in the Secret Store.
+type DeliveryRepository struct {
+	ID                string    `json:"id"`
+	ApplicationID     string    `json:"applicationId"`
+	RepositoryURL     string    `json:"repositoryUrl"`
+	Branch            string    `json:"branch"`
+	WriteKeyReference string    `json:"writeKeyReference"`
+	ReadKeyReference  string    `json:"readKeyReference"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
+}
+
 type ResourceDefinition struct {
 	ID                        string
 	CatalogVersionID          string
