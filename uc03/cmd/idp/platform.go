@@ -49,13 +49,24 @@ func runPlatform(ctx context.Context, cfg *config.Config, db *persistence.DB, cm
 	provider := &deliveryrepo.GitHub{Pattern: cfg.DeliveryRepoPattern, Branch: cfg.DeliveryBranch,
 		TokenReference: cfg.GitHostingTokenRef, Secrets: secrets, WorkDir: deliveryDir,
 		APIBase: cfg.GitHostingAPI, SSHHost: cfg.GitHostingSSHHost}
-	argo := &cd.ArgoCD{Provider: provider, Registry: repos.Delivery, Secrets: secrets, Branch: cfg.DeliveryBranch,
+	delivery := cd.Delivery{Provider: provider, Registry: repos.Delivery, Secrets: secrets, Branch: cfg.DeliveryBranch,
 		KnownHostsFile: cfg.KnownHostsFile, WorkDir: deliveryDir, Kube: kube}
+	// The CD system is chosen by the platform; UC-03 only ever sees the CD
+	// abstraction, so either provider serves the same deployment flow.
+	var cdProvider cd.Integration
+	switch cfg.CDProvider {
+	case "fleet":
+		cdProvider = cd.NewFleet(delivery)
+	case "argocd":
+		cdProvider = cd.NewArgoCD(delivery)
+	default:
+		return fmt.Errorf("IDP_CD_PROVIDER must be fleet or argocd, not %q", cfg.CDProvider)
+	}
 	orch := &service.Orchestrator{Repositories: repos, Images: registry, Secrets: secrets}
 
 	switch cmd {
 	case "serve":
-		query := &service.QueryService{Repositories: repos, Orch: orch, Kube: kube, CD: argo, ResourceOutputs: outputs}
+		query := &service.QueryService{Repositories: repos, Orch: orch, Kube: kube, CD: cdProvider, ResourceOutputs: outputs}
 		srv := &web.Server{Orch: orch, Query: query, Registry: registry}
 		httpServer := &http.Server{Addr: cfg.ListenAddr, Handler: srv.Handler()}
 		go func() {
@@ -72,7 +83,7 @@ func runPlatform(ctx context.Context, cfg *config.Config, db *persistence.DB, cm
 			return fmt.Errorf("IDP_DELIVERY_REPO_PATTERN is required by the worker, for example pr3s3nt/idp-<app>-gitops")
 		}
 		hash := sha256.Sum256([]byte("config-hash:" + cfg.SecretKey))
-		worker := &service.Worker{Orch: orch, Provisioner: prov, ResourceOutputs: outputs, Kube: kube, CD: argo,
+		worker := &service.Worker{Orch: orch, Provisioner: prov, ResourceOutputs: outputs, Kube: kube, CD: cdProvider,
 			Renderer: &manifest.ScoreRenderer{}, Secrets: secrets, HashKey: hash[:],
 			HealthTimeout: cfg.HealthTimeout, SyncTimeout: cfg.HealthTimeout}
 		return worker.Run(ctx, cfg.PollInterval)

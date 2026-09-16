@@ -298,7 +298,7 @@ Sequence UC-03 thể hiện rõ thời điểm ghi từng bước; có operation
 Có hai loại trạng thái khác nhau:
 
 - **Trạng thái vòng đời của deployment** — do IDP quyết định (chờ xác nhận, đang triển khai, thành công, thất bại), được state machine và các contract dùng để chặn thao tác.
-- **Trạng thái giao hàng (delivery status)** — do hệ thống CD báo về, ví dụ Argo CD báo `Synced`, `OutOfSync`, `Progressing`, `Degraded`.
+- **Trạng thái giao hàng (delivery status)** — do hệ thống CD báo về, ví dụ Argo CD báo `Synced`, `OutOfSync`, `Progressing`, `Degraded`; Fleet lại báo bằng `GitRepo.status.summary` (`ready`, `notReady`, `errApplied`, `outOfSync`, `modified`) và condition `Ready`. Hai sản phẩm, hai tập giá trị hoàn toàn khác nhau.
 
 Contract 9 (`saveDeploymentRecord`, `04_operation_contracts/operation_contracts.md`) trộn hai loại này:
 
@@ -310,7 +310,7 @@ Tức là: **CD báo gì → `deployment_record.status` → `deployment.status`*
 Hệ quả:
 
 1. **Trạng thái của IDP bị trộn giá trị của CD:** `deployment.status` có thể mang giá trị như `Progressing`, `OutOfSync` — không nằm trong state machine nào, làm các guard (ví dụ chỉ xác nhận được khi `AWAITING_CONFIRMATION`) mất ý nghĩa.
-2. **Phá lớp trừu tượng CD:** UC-03 quy định không phụ thuộc trực tiếp vào Argo CD, Flux…; nhưng lưu nguyên giá trị của Argo CD thì khi đổi sang Flux, dữ liệu status đổi theo.
+2. **Phá lớp trừu tượng CD:** UC-03 quy định không phụ thuộc trực tiếp vào Argo CD, Flux…; nhưng lưu nguyên giá trị của Argo CD thì khi đổi CD system, dữ liệu status đổi theo. Rủi ro này không còn là giả định: vấn đề 14 đã đổi mặc định sang Fleet, nơi không có giá trị nào tên `Synced` hay `Progressing`.
 3. **Hai nơi lưu cùng một thứ:** `deployment.status` và `deployment_record.status` luôn phải bằng nhau, dễ lệch nhau.
 
 ### Liên quan tới các quyết định/mục khác
@@ -323,7 +323,7 @@ Hệ quả:
 
 1. `deployment.status` chỉ chứa trạng thái vòng đời của IDP, không bao giờ chép giá trị từ CD.
 2. Bỏ `deployment_record.status` (record 1–1 với deployment, lấy trạng thái từ `deployment.status`).
-3. Trạng thái CD, nếu cần lưu, lưu ở trường riêng (ví dụ `delivery_status`) và quy về tập giá trị trung lập do CD abstraction chuyển đổi (ví dụ `ACCEPTED`, `SYNCING`, `SYNCED`, `FAILED`), không lưu nguyên tên của Argo CD hay Flux.
+3. Trạng thái CD, nếu cần lưu, lưu ở trường riêng (ví dụ `delivery_status`) và quy về tập giá trị trung lập do CD abstraction chuyển đổi (ví dụ `ACCEPTED`, `SYNCING`, `SYNCED`, `FAILED`), không lưu nguyên tên của Argo CD, Fleet hay Flux.
 
 ### Câu hỏi cần chốt khi giải quyết
 

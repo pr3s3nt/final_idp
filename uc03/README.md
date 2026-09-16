@@ -25,7 +25,7 @@ Go implementation of UC-03 as designed in `../01_…` to `../06_traceability`, w
 | Environment Configuration Resolver | `internal/domain/configresolver` |
 | Resolved Specification Generator, Score Renderer, Target Manifest Adapter, Config/Secret Materializers | `internal/domain/manifest`, `internal/domain/targetadapter` |
 | Provisioner Adapter → Terraform Runner | `internal/integration/provisioner` + `terraform/modules/*` |
-| CD Integration → Concrete CD Provider (Argo CD + GitOps) | `internal/integration/cd` |
+| CD Integration → Concrete CD Provider (Fleet hoặc Argo CD, chọn bằng `IDP_CD_PROVIDER`) | `internal/integration/cd` |
 | Workload Status Provider / Kubernetes Adapter | `internal/integration/kubernetes` |
 | Secret Store | `internal/integration/secretstore` |
 | Application, Environment Configuration, Resource/Workload Instance, Deployment repositories; Resource Definition Catalog (versions) | `internal/persistence` |

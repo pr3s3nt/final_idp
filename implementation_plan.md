@@ -1,4 +1,4 @@
-# Plan triển khai đầy đủ UC-03 – Deploy Application (Go, Argo CD, kind + AWS)
+# Plan triển khai đầy đủ UC-03 – Deploy Application (Go, Fleet/Argo CD, kind + AWS)
 
 ## 1. Context
 
@@ -10,7 +10,7 @@ Nguyên tắc:
 - Giữ cấu trúc Humanitec: provisioner resolve từ `provisioner_reference`; Resource Definition chọn bằng matching tường minh theo `supported_contexts`/`applicability_conditions` (lỗi khi mơ hồ); **mọi hạ tầng của app/env nằm trong đồ thị** và được provision theo DAG (kể cả resource → resource); graph/plan transient, dựng lại mỗi lần.
 - **Catalog Resource Definition là nơi duy nhất của platform quyết định hạ tầng**; không có file cấu hình target hay script dựng hạ tầng song song.
 - Mỗi component VOPC UC-03 là một package/type riêng; Orchestrator/Worker chỉ điều phối.
-- Mock chỉ trong test; đường chạy cuối dùng Terraform, score-k8s, Argo CD, Kubernetes, AWS thật.
+- Mock chỉ trong test; đường chạy cuối dùng Terraform, score-k8s, Fleet hoặc Argo CD, Kubernetes, AWS thật.
 - Không sửa tài liệu thiết kế, không commit/push nếu người dùng không yêu cầu; mọi mở rộng/lệch thiết kế ghi vào mục **Deviations** của `implementation_plan.md`.
 
 ## 2. Quyết định đã chốt với người dùng
@@ -25,7 +25,7 @@ Nguyên tắc:
 | Kiểm chứng AWS | Chỉ dựng **1 cụm shop-app STAGING**, kiểm chứng xong gỡ hết và xác minh sạch |
 | MANAGED trên AWS | PostgreSQL = **Aurora PostgreSQL (Serverless v2)**; Redis = ElastiCache |
 | EXISTING | Chỉ kiểm chứng trên kind |
-| CD | **Argo CD** + **một delivery repository private cho mỗi application**, do IDP tạo ở lần deploy đầu theo `IDP_DELIVERY_REPO_PATTERN` (mặc định dùng `pr3s3nt/idp-<app>-gitops`) + **một cặp SSH deploy key riêng cho mỗi application**: key ghi cho IDP, key chỉ đọc thành repo credential của application đó trong cụm. Token tạo repo nằm trong Secret Store, chỉ worker đọc (vấn đề thiết kế 13) |
+| CD | **Fleet (mặc định) hoặc Argo CD**, chọn bằng `IDP_CD_PROVIDER`; cả hai cài sẵn trong cụm nội bộ (vấn đề thiết kế 14) + **một delivery repository private cho mỗi application**, do IDP tạo ở lần deploy đầu theo `IDP_DELIVERY_REPO_PATTERN` (mặc định dùng `pr3s3nt/idp-<app>-gitops`) + **một cặp SSH deploy key riêng cho mỗi application**: key ghi cho IDP, key chỉ đọc thành thông tin truy cập của application đó trong cụm. Token tạo repo nằm trong Secret Store, chỉ worker đọc (vấn đề thiết kế 13). Target `aws` vẫn chạy Argo CD |
 | Override resource | **Giữ lại** làm baseline trên Resource Instance |
 | Deploy chồng | **Chặn**: A1 `DEPLOYMENT_IN_PROGRESS` khi cùng app+env+target có deployment CONFIRMED/DEPLOYING |
 

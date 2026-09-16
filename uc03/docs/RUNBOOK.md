@@ -15,7 +15,7 @@ Mọi lệnh chạy trong thư mục `uc03/`.
 | gh (chỉ dùng một lần để lấy token nạp vào Secret Store) | 2.62 |
 | aws CLI + credentials (chỉ target `aws`) | 2.35 |
 
-Internet cần tới: registry.terraform.io, argoproj.github.io (Helm chart), quay.io/ghcr.io/docker.io (image Argo CD, postgres, redis), github.com:22 và api.github.com (delivery repository riêng của từng application).
+Internet cần tới: registry.terraform.io, argoproj.github.io và rancher.github.io (Helm chart của Argo CD, Fleet), quay.io/ghcr.io/docker.io (image Argo CD, postgres, redis), github.com:22 và api.github.com (delivery repository riêng của từng application).
 
 ## 2. Biến môi trường
 
@@ -29,11 +29,12 @@ Internet cần tới: registry.terraform.io, argoproj.github.io (Helm chart), qu
 | `IDP_GIT_HOSTING_API` | không | mặc định `https://api.github.com` |
 | `IDP_GIT_HOSTING_SSH_HOST` | không | mặc định `github.com` |
 | `IDP_GIT_KNOWN_HOSTS` | không | mặc định `<IDP_DATA_DIR>/delivery/known_hosts`; tự ghi bằng `ssh-keyscan` ở lần dùng đầu |
+| `IDP_CD_PROVIDER` | không | hệ thống CD đồng bộ cụm: `fleet` (mặc định) hoặc `argocd`. UC-03 chỉ làm việc với CD abstraction nên đổi giá trị này không đổi luồng deploy |
 | `IDP_AWS_ECR_REGISTRY` | import | registry ECR của account, điền vào `eks-cluster.image_registry_mirror`. Phải đặt **trước** `import-fixtures`: phiên bản catalog đã tạo không sửa được |
 | `IDP_HEALTH_TIMEOUT` | không | thời gian chờ sync/rollout, mặc định 6m |
 | `IDP_LISTEN` | không | mặc định `127.0.0.1:8088` |
 
-Mỗi application có một delivery repository riêng: IDP tạo repo theo `IDP_DELIVERY_REPO_PATTERN` ở lần deploy đầu tiên của application, sinh một cặp khóa chỉ dùng cho application đó (khóa ghi cho IDP, khóa đọc cho Argo CD) và lưu cả hai vào Secret Store. Database chỉ giữ secret reference. Gỡ application khỏi một environment chỉ xóa thư mục của environment đó, repo và cặp khóa được giữ lại.
+Mỗi application có một delivery repository riêng: IDP tạo repo theo `IDP_DELIVERY_REPO_PATTERN` ở lần deploy đầu tiên của application, sinh một cặp khóa chỉ dùng cho application đó (khóa ghi cho IDP, khóa đọc cho hệ thống CD — Fleet hoặc Argo CD tùy `IDP_CD_PROVIDER`) và lưu cả hai vào Secret Store. Database chỉ giữ secret reference. Gỡ application khỏi một environment chỉ xóa thư mục của environment đó, repo và cặp khóa được giữ lại.
 
 ## 3. Chuẩn bị một lần
 
@@ -66,13 +67,13 @@ export IDP_DELIVERY_REPO_PATTERN='pr3s3nt/idp-<app>-gitops'   # nháy đơn: `<a
 ./bin/idp import-fixtures              # catalog v1, v2; shop-app v1–v3, reporting-app v1–v2; configuration
 ./prerequisites/build-push-images.sh localhost:5055
 ./prerequisites/shared-postgres.sh     # PostgreSQL dùng chung cho definition EXISTING
-./prerequisites/kind-internal-cluster.sh   # cụm Kubernetes nội bộ có sẵn (kind + Argo CD), đăng ký vào Secret Store
+./prerequisites/kind-internal-cluster.sh   # cụm Kubernetes nội bộ có sẵn (kind + Argo CD + Fleet), đăng ký vào Secret Store
 ```
 
 Hai loại nơi triển khai:
 
 - `kind-local` là **cụm nội bộ có sẵn**: platform dựng một lần bằng `kind-internal-cluster.sh` (cụm `idp-internal`); catalog khai báo `k8s-cluster` là `EXISTING` trỏ tới `idpsecret://platform/kind-internal-cluster`. IDP chỉ liên kết, không tạo/xóa cụm. Postgres, Redis của từng app vẫn do deployment tạo trong cụm.
-- `aws` là **cloud**: deployment đầu tiên dựng VPC, EKS + Argo CD, Aurora, ElastiCache; gỡ app thì xóa.
+- `aws` là **cloud**: deployment đầu tiên dựng VPC, EKS + Argo CD, Aurora, ElastiCache; gỡ app thì xóa. Target này vẫn dùng Argo CD; Fleet mới chỉ chạy trên `kind-local`.
 
 Catalog có phiên bản (`fixtures/catalog/v<N>.yaml`, bất biến). Muốn sửa catalog thì thêm file phiên bản mới rồi chạy lại `import-fixtures`; phiên bản đã có bị bỏ qua. Deploy chọn phiên bản catalog (`catalogVersion` trong API, ô chọn trên form, `IDP_CATALOG_VERSION` với `idpctl.sh`); để trống thì dùng phiên bản đang chạy, hoặc của staging khi promote, hoặc mới nhất.
 
@@ -100,6 +101,7 @@ go test -tags integration ./internal/service/   # Postgres thật (idp_test), ad
 | `PLAN_CHANGED` khi confirm | Catalog/config/instance đổi sau khi tạo plan; xem plan dựng lại rồi confirm lại |
 | `PLAN_CHANGED_BEFORE_EXECUTION` | Input đổi giữa confirm và lúc worker chạy; tạo deployment mới |
 | Argo CD không sync | `kubectl -n argocd get applications.argoproj.io` trong cụm; kiểm tra deploy key đọc và kết nối github.com:22 |
+| Fleet không sync | `kubectl -n fleet-local get gitrepo` xem `COMMIT` và cột trạng thái; `kubectl -n fleet-local get gitrepo <app>-<env> -o jsonpath='{.status.summary}'`. Báo `Modified` nghĩa là object trong cụm lệch Git — thường do manifest giành một nhãn mà Fleet/Helm tự đặt (xem `idp.dev/managed-by` trong `manifest/pipeline.go`) |
 | `PARTIAL_DEPLOYMENT_CATALOG_VERSION_MISMATCH` | Deploy một phần phải dùng phiên bản catalog đang chạy; muốn đổi thì deploy toàn bộ app |
 | Đổi thông tin kết nối cụm nội bộ | Chạy lại `kind-internal-cluster.sh` (ghi đè bản ghi trong Secret Store). Lần deploy sau, output của `k8s-cluster` đổi nên Postgres/Redis được apply lại và workload trên cụm được deploy lại |
 

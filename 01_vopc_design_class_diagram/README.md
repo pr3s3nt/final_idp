@@ -63,7 +63,7 @@ Thư mục này mô tả **View Of Participating Classes (VOPC)** cho bốn use 
 | CD Integration / CD Status Provider | Integration abstractions | Cung cấp abstraction read-only để lấy deployment/sync status từ CD provider. |
 | Delivery Repository Provider | Integration abstractions | Bảo đảm nơi chứa desired state của một application tồn tại: tạo theo quy ước đặt tên của platform, sinh và gắn cặp khóa riêng của application. |
 | Workload Status Provider / Kubernetes Adapter | Integration abstractions | UC-03: chờ workload healthy và đọc dữ liệu runtime phục vụ Workload Output Collector. UC-04: truy vấn workload health và exposed endpoint từ Kubernetes Cluster. |
-| Concrete CD Provider | Integration implementations | Hiện thực publish/status operation cho một CD system cụ thể như Argo CD hoặc Flux. |
+| Concrete CD Provider | Integration implementations | Hiện thực publish/status operation cho một CD system cụ thể như Fleet, Argo CD hoặc Flux. |
 | Concrete Git Hosting Provider | Integration implementations | Hiện thực Delivery Repository Provider cho một hệ thống lưu trữ Git cụ thể (ví dụ GitHub); đọc thông tin đăng nhập từ Secret Store. |
 | Terraform/OpenTofu Runner | External systems | Thực thi infrastructure module (apply hoặc destroy) và trả resource state cùng raw outputs. |
 | score-k8s | External systems | Render resolved application specification thành base Kubernetes manifest. |

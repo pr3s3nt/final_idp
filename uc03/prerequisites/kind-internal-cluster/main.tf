@@ -1,6 +1,6 @@
 # Platform-owned internal Kubernetes cluster for target kind-local, created once
 # by prerequisites/kind-internal-cluster.sh before any deployment: a kind
-# cluster wired to the local image registry, with Argo CD installed. The IDP
+# cluster wired to the local image registry, with both Argo CD and Fleet installed. The IDP
 # never creates or destroys it; the catalog definition kind-internal-cluster
 # (EXISTING) points to its connection record in the Secret Store.
 terraform {
@@ -43,6 +43,12 @@ variable "tags" {
 locals {
   cluster_name = substr(replace(lower(var.name), "/[^a-z0-9-]/", "-"), 0, 40)
   workers      = var.node_count - 1
+}
+
+variable "fleet_chart_version" {
+  description = "Fleet chart version; fleet-crd and fleet are released together."
+  type        = string
+  default     = "0.16.1"
 }
 
 resource "kind_cluster" "this" {
@@ -118,6 +124,33 @@ resource "helm_release" "argocd" {
       params = { "server.insecure" = true }
     }
   })]
+}
+
+# Both CD systems run side by side (design decision 14): the IDP picks one per
+# deployment through IDP_CD_PROVIDER, which is how the CD abstraction is shown
+# to be replaceable rather than only claimed to be.
+resource "helm_release" "fleet_crd" {
+  depends_on       = [null_resource.registry_mirror]
+  name             = "fleet-crd"
+  repository       = "https://rancher.github.io/fleet-helm-charts/"
+  chart            = "fleet-crd"
+  version          = var.fleet_chart_version
+  namespace        = "cattle-fleet-system"
+  create_namespace = true
+  wait             = true
+  timeout          = 900
+}
+
+resource "helm_release" "fleet" {
+  depends_on       = [helm_release.fleet_crd]
+  name             = "fleet"
+  repository       = "https://rancher.github.io/fleet-helm-charts/"
+  chart            = "fleet"
+  version          = var.fleet_chart_version
+  namespace        = "cattle-fleet-system"
+  create_namespace = true
+  wait             = true
+  timeout          = 900
 }
 
 output "cluster_name" { value = local.cluster_name }

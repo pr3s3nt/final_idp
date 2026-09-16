@@ -31,7 +31,8 @@ Trong mỗi Bước, từng use case là một mục con `## UC 01 …`, `## UC 
 | 10 | Confirm chạy tác vụ dài trong HTTP request | `confirmDeployment` chỉ nhận việc (đổi status + tạo job trong DB cùng một transaction) và trả lời ngay; Deployment Worker chạy nền. Phục hồi khi worker chết: hoãn | Đã áp dụng vào toàn bộ tài liệu thiết kế; phần hoãn ghi vào `deferred_issues.md` (D6) |
 | 11 | Secret bị orphan khi save lỗi | Hoãn, giải quyết sau | Đã ghi vào `deferred_issues.md` (D7) |
 | 12 | Nơi triển khai và hạ tầng của nó; phiên bản catalog | Hai loại nơi triển khai: cloud (IDP dựng VPC và cụm) và cụm Kubernetes nội bộ (có sẵn); cụm/VPC nằm trong đồ thị deploy; dưới đổi thì trên làm lại; catalog có phiên bản, Developer chọn khi deploy | Đã áp dụng vào toàn bộ tài liệu thiết kế (code chưa sửa); phần hoãn ghi vào D10, D11, D12 |
-| 13 | Desired state của mọi application nằm chung một nơi | Mỗi application có một Delivery Repository riêng; IDP tự tạo repo và sinh cặp khóa riêng cho app ở lần deploy đầu | Đã áp dụng vào toàn bộ tài liệu thiết kế (code chưa sửa) |
+| 13 | Desired state của mọi application nằm chung một nơi | Mỗi application có một Delivery Repository riêng; IDP tự tạo repo và sinh cặp khóa riêng cho app ở lần deploy đầu | Đã áp dụng vào toàn bộ tài liệu thiết kế và code |
+| 14 | Hệ thống CD cụ thể là Argo CD | Đổi mặc định sang Fleet, giữ cả hai adapter và chọn bằng cấu hình | Đã áp dụng; kiến trúc không đổi vì CD vốn là abstraction |
 
 ## Vấn đề 1 — Bản nháp UC-01/UC-02
 
@@ -400,3 +401,33 @@ Ví dụ: deploy `shop-app` (frontend, backend, PostgreSQL) lên AWS. IDP phải
 **Sẽ ảnh hưởng:** `usecase_realization_step_1_3.md` (đặc tả UC-03, Bước 1–3), sequence UC-03, VOPC UC-03 + design class diagram + README, domain model + domain objects + persistence classification, ERD, operation contract 8, traceability.
 
 **Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** toàn bộ danh sách trên. Code trong `uc03/` chưa sửa theo quyết định này.
+
+## Vấn đề 14 — Đổi hệ thống CD sang Fleet
+
+**Bối cảnh:** Bản cài đặt đang dùng Argo CD. Người dùng muốn chuyển sang Fleet (Rancher Fleet).
+
+**Điều đáng chú ý nhất: kiến trúc không phải sửa.** Từ đầu, UC-03 chỉ nói chuyện với **CD Integration / CD Provider Interface**; tên sản phẩm chỉ xuất hiện trong tài liệu dưới dạng ví dụ, và business rule đã ghi rõ "Argo CD chỉ nằm trong adapter". Vì vậy sequence UC-03, VOPC, design class diagram, domain model, ERD, operation contract và traceability **không đổi một dòng nào** khi thay CD system. Đây là lần đầu lớp trừu tượng đó được kiểm chứng bằng một sản phẩm thứ hai chạy thật, chứ không chỉ là tuyên bố trên giấy.
+
+**Quyết định:**
+
+1. **Giữ cả hai adapter**, chọn bằng cấu hình (`IDP_CD_PROVIDER`), mặc định Fleet. Lý do: chứng minh được abstraction thay thế được, và hai application có thể chạy hai CD system khác nhau trên cùng một cụm.
+2. **Delivery reference không đổi**: vẫn là commit SHA, vì Fleet cũng báo commit đang triển khai (`GitRepo.status.commit`). Không có thay đổi schema nào.
+3. **Trạng thái CD vẫn được quy về tập trung lập** của IDP (`SYNCED`, `SYNCING`, `OUT_OF_SYNC`, `HEALTHY`, `PROGRESSING`, `DEGRADED`, `MISSING`); adapter Fleet chuyển đổi từ `status.summary` và condition `Ready`, không để giá trị riêng của Fleet lọt ra ngoài adapter.
+4. **Phần Git là chung, phần cụm là riêng.** Việc bảo đảm delivery repository, đẩy desired state và lấy commit SHA giống hệt nhau ở cả hai CD system, nên được tách thành phần dùng chung; mỗi adapter chỉ khác ở đối tượng tạo trong cụm và cách đọc trạng thái.
+5. **Phạm vi đợt này là target `kind-local`.** Module `eks-cluster` của target `aws` vẫn cài Argo CD; chưa chạy Fleet trên AWS.
+
+**Khác biệt cụ thể giữa hai CD system** (để người đọc tài liệu không phải tra lại):
+
+| Việc | Argo CD | Fleet |
+|---|---|---|
+| Đối tượng khai báo | `Application` trong `argocd` | `GitRepo` (`fleet.cattle.io/v1alpha1`) trong `fleet-local` |
+| Khóa đọc repo | Secret nhãn `argocd.argoproj.io/secret-type: repository` | Secret kiểu `kubernetes.io/ssh-auth`, cùng namespace với `GitRepo`, trỏ bằng `clientSecretName` |
+| Đã sync tới commit nào | `status.sync.revision` | `status.commit` |
+| Sức khỏe | `status.health.status` | condition `Ready` + `status.summary` |
+| Xóa resource khi file biến mất | `syncPolicy.automated.prune` | `keepResources` (mặc định tắt nên có xóa) |
+
+**Sẽ ảnh hưởng:** chỉ các dòng ví dụ trong `usecase_realization_step_1_3.md`, `01_vopc_design_class_diagram/README.md`, `06_traceability/deferred_issues.md`; phần còn lại là code và tài liệu vận hành.
+
+**Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** tài liệu và code đều xong, kiểm chứng thật trên cụm nội bộ (`uc03/docs/VERIFICATION.md` §6). Hai application chạy hai CD system khác nhau trên cùng một cụm.
+
+**Một hệ quả phát hiện khi chạy thật:** manifest do IDP sinh ra từng đánh dấu bằng nhãn chuẩn `app.kubernetes.io/managed-by: idp`. Fleet triển khai bundle qua Helm, mà Helm luôn đặt nhãn đó thành `Helm`, nên object trong cụm lệch Git vĩnh viễn và Fleet không bao giờ báo xong. Bài học chung, không riêng Fleet: **IDP chỉ được đánh dấu bằng nhãn thuộc không gian tên của mình** (`idp.dev/managed-by`), vì nhãn `app.kubernetes.io/managed-by` thuộc về công cụ trực tiếp áp manifest xuống cụm, và công cụ đó thay đổi theo CD system.

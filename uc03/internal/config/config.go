@@ -21,6 +21,7 @@ type Config struct {
 	// deployment. Keys and the hosting credential live in the Secret Store.
 	DeliveryRepoPattern string // owner/idp-<app>-gitops
 	DeliveryBranch      string
+	CDProvider          string // which CD system syncs the clusters: fleet | argocd
 	GitHostingTokenRef  string // secret reference of the Git hosting credential
 	GitHostingAPI       string
 	GitHostingSSHHost   string
@@ -41,6 +42,7 @@ func Load() (*Config, error) {
 		ListenAddr:        env("IDP_LISTEN", "127.0.0.1:8088"),
 		DeliveryRepoPattern: os.Getenv("IDP_DELIVERY_REPO_PATTERN"),
 		DeliveryBranch:      env("IDP_DELIVERY_BRANCH", "main"),
+		CDProvider:          env("IDP_CD_PROVIDER", "fleet"),
 		GitHostingTokenRef:  env("IDP_GIT_HOSTING_TOKEN_SECRET", "idpsecret://platform/git-hosting-token"),
 		GitHostingAPI:       env("IDP_GIT_HOSTING_API", "https://api.github.com"),
 		GitHostingSSHHost:   env("IDP_GIT_HOSTING_SSH_HOST", "github.com"),

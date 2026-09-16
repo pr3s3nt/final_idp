@@ -751,7 +751,7 @@ Nếu infrastructure provisioning (kể cả VPC, cụm Kubernetes), việc chu�
 - IDP tạo Delivery Repository ở lần deploy đầu tiên của application, theo quy ước đặt tên do platform cấu hình; nơi chứa đã tồn tại đúng tên thì được dùng lại.
 - Mỗi application có cặp khóa truy cập riêng cho nơi chứa của mình; khóa và thông tin đăng nhập hệ thống lưu trữ Git chỉ nằm trong Secret Store, không nằm trong database, log hay Deployment Record.
 - Gỡ application khỏi một environment và nơi triển khai chỉ xóa phần desired state của environment đó; Delivery Repository và khóa của application được giữ lại.
-- UC-03 sử dụng CD abstraction và không phụ thuộc trực tiếp vào Argo CD, Flux hoặc một sản phẩm CD cụ thể; việc tạo nơi chứa desired state cũng đi qua một abstraction, không phụ thuộc vào một hệ thống lưu trữ Git cụ thể.
+- UC-03 sử dụng CD abstraction và không phụ thuộc trực tiếp vào Fleet, Argo CD, Flux hoặc một sản phẩm CD cụ thể; việc tạo nơi chứa desired state cũng đi qua một abstraction, không phụ thuộc vào một hệ thống lưu trữ Git cụ thể.
 
 UC-04 – View Deployment Result
 
@@ -1102,7 +1102,7 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 - **Provisioner Adapter / Provisioner Interface** - Abstraction cho cơ chế provision infrastructure; implementation cụ thể có thể gọi Terraform/OpenTofu/module tương ứng.
 
-- **CD Integration / CD Provider Interface** - Abstraction để publish desired deployment state mà không phụ thuộc trực tiếp vào Argo CD, Flux hay implementation cụ thể.
+- **CD Integration / CD Provider Interface** - Abstraction để publish desired deployment state mà không phụ thuộc trực tiếp vào Fleet, Argo CD, Flux hay implementation cụ thể.
 
 - **Delivery Repository Provider** - Abstraction để bảo đảm nơi chứa desired state của một application tồn tại: tạo nơi chứa theo quy ước đặt tên, sinh và gắn cặp khóa của application. Không phụ thuộc vào một hệ thống lưu trữ Git cụ thể.
 
@@ -1110,7 +1110,7 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 ### Integration implementations
 
-- **Concrete CD Provider** - Implementation cụ thể của CD abstraction, ví dụ Argo CD Adapter hoặc Flux Adapter.
+- **Concrete CD Provider** - Implementation cụ thể của CD abstraction, ví dụ Fleet Adapter, Argo CD Adapter hoặc Flux Adapter.
 
 - **Concrete Git Hosting Provider** - Implementation cụ thể của Delivery Repository Provider cho một hệ thống lưu trữ Git, ví dụ GitHub Adapter; đọc thông tin đăng nhập từ Secret Store.
 
@@ -1120,7 +1120,7 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 - **score-k8s** - Sinh base Kubernetes manifest từ resolved application specification.
 
-- **CD System** - Hệ thống CD bên ngoài, ví dụ Argo CD hoặc Flux, nhận desired deployment state và đồng bộ xuống Kubernetes.
+- **CD System** - Hệ thống CD bên ngoài, ví dụ Fleet, Argo CD hoặc Flux, nhận desired deployment state và đồng bộ xuống Kubernetes.
 
 - **Kubernetes Cluster** - Nơi workload thực sự chạy. Trên cloud, cụm do IDP dựng qua Provisioner; với cụm nội bộ, cụm có sẵn và được platform khai báo trong catalog. Thông tin kết nối cụm lấy từ output của `k8s-cluster`. Cung cấp trạng thái health và dữ liệu runtime của workload.
 
@@ -1171,11 +1171,11 @@ Deployment Orchestrator và Deployment Worker chỉ điều phối. Các việc 
 
 ### Integration implementations
 
-- **Concrete CD Provider** - Implementation cụ thể để truy vấn Argo CD, Flux hoặc CD system khác.
+- **Concrete CD Provider** - Implementation cụ thể để truy vấn Fleet, Argo CD, Flux hoặc CD system khác.
 
 ### External systems
 
-- **CD System** - Hệ thống CD bên ngoài, ví dụ Argo CD hoặc Flux, cung cấp trạng thái deployment và trạng thái đồng bộ.
+- **CD System** - Hệ thống CD bên ngoài, ví dụ Fleet, Argo CD hoặc Flux, cung cấp trạng thái deployment và trạng thái đồng bộ.
 
 - **Kubernetes Cluster** - Nguồn trạng thái runtime thực tế của workload.
 

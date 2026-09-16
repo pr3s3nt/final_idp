@@ -4,6 +4,8 @@ Chuẩn bị theo `RUNBOOK.md` mục 3–4 (`serve` và `worker` đang chạy, c
 
 Kiểm tra app: `kubectl --kubeconfig <(kind get kubeconfig --name idp-internal) -n shop-app-staging port-forward svc/frontend 13000:3000`, rồi `curl -X POST localhost:13000/api/notes -d '{"text":"hi"}'` và `curl localhost:13000/api/notes`.
 
+Hệ thống CD trên cụm nội bộ mặc định là **Fleet** (`IDP_CD_PROVIDER=fleet`); cụm cài sẵn cả Argo CD, đổi biến sang `argocd` rồi khởi động lại `worker` là các deployment sau dùng Argo CD, không cần sửa gì khác. Xem trạng thái giao hàng bằng `kubectl -n fleet-local get gitrepo` hoặc `kubectl -n argocd get applications`.
+
 | # | Bước | Lệnh | Kết quả cần thấy |
 |---|---|---|---|
 | 1 | Deploy lần đầu trên cụm nội bộ, catalog v1 | `IDP_CATALOG_VERSION=1 idpctl.sh deploy shop-app 1 STAGING kind-local backend=v1,worker=v1,frontend=v1` | Plan: tầng 0 LINK k8s-cluster [kind-internal-cluster]; tầng 1 CREATE postgresql, redis; tầng 2 backend, worker; tầng 3 frontend → SUCCEEDED; note ghi/đọc được |

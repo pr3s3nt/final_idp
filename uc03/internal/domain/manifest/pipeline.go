@@ -123,8 +123,13 @@ type TargetInfo struct {
 // stable one (so selectors never change between renders), labels objects with
 // the stable workload ID and adds a readiness probe on the workload port.
 func AdaptManifestForTarget(objs []map[string]any, w *domain.Workload, wd domain.WorkloadDeployment, t TargetInfo) ([]map[string]any, error) {
+	// The marker is deliberately in the idp.dev namespace, not
+	// app.kubernetes.io/managed-by: a CD system that deploys through Helm (Fleet
+	// does) owns that well-known label and sets it to its own value, so claiming
+	// it here makes every object differ from Git forever and the delivery never
+	// reports Ready.
 	stable := map[string]any{
-		"app.kubernetes.io/name": w.Name, "app.kubernetes.io/instance": w.Name, "app.kubernetes.io/managed-by": "idp",
+		"app.kubernetes.io/name": w.Name, "app.kubernetes.io/instance": w.Name, "idp.dev/managed-by": "idp",
 		"idp.dev/workload-id": wd.WorkloadID, "idp.dev/application": t.Application, "idp.dev/environment": strings.ToLower(t.Environment),
 	}
 	selector := map[string]any{"idp.dev/workload-id": wd.WorkloadID}
@@ -173,7 +178,7 @@ func MaterializeEnvironmentConfiguration(objs []map[string]any, w *domain.Worklo
 	cm := map[string]any{
 		"apiVersion": "v1", "kind": "ConfigMap",
 		"metadata": map[string]any{"name": name, "namespace": t.Namespace, "labels": map[string]any{
-			"idp.dev/workload-id": wd.WorkloadID, "app.kubernetes.io/managed-by": "idp"}},
+			"idp.dev/workload-id": wd.WorkloadID, "idp.dev/managed-by": "idp"}},
 		"data": data,
 	}
 	annotate(objs, "idp.dev/config-hash", hmacOf(hashKey, data))
@@ -207,7 +212,7 @@ func MaterializeSecretConfiguration(objs []map[string]any, w *domain.Workload, w
 		c["env"] = env
 	}
 	annotate(objs, "idp.dev/secret-hash", hmacOf(hashKey, hashInput))
-	secret := cd.SecretObject{Name: name, Data: data, Labels: map[string]string{"idp.dev/workload-id": wd.WorkloadID, "app.kubernetes.io/managed-by": "idp"}}
+	secret := cd.SecretObject{Name: name, Data: data, Labels: map[string]string{"idp.dev/workload-id": wd.WorkloadID, "idp.dev/managed-by": "idp"}}
 	return objs, []cd.SecretObject{secret}, nil
 }
 
