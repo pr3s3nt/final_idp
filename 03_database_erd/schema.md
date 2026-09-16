@@ -297,6 +297,7 @@ Không có table `workload_output`: `Workload Output` là runtime view `TRANSIEN
 | `environment_configuration_id` | UUID | FK → `environment_configuration.environment_configuration_id`, NOT NULL | Environment Configuration được dùng làm source references. |
 | `environment` | ENUM (`STAGING`, `PRODUCTION`) | NOT NULL | Environment snapshot của deployment. |
 | `deployment_target` | VARCHAR(255) | NOT NULL | Kubernetes/deployment target đã chọn. |
+| `kind` | ENUM (`DEPLOY`, `TEARDOWN`) | NOT NULL, DEFAULT `DEPLOY` | Loại deployment: triển khai một phiên bản (UC-03) hay gỡ application khỏi environment và nơi triển khai (UC-05). Deployment loại `TEARDOWN` không có `workload_deployment` nào. |
 | `plan_fingerprint` | CHAR(64) | NOT NULL | SHA-256 fingerprint dạng hex của Infrastructure Plan đã canonicalize để phát hiện plan thay đổi khi confirm; không chứa chính plan. |
 | `plan_fingerprint_algo` | VARCHAR(32) | NOT NULL | Phiên bản thuật toán canonicalization + hashing của fingerprint, ví dụ `sha256-v1`, dùng lại khi rebuild plan. |
 | `status` | ENUM (`AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED`, `FAILED`) | NOT NULL | Lifecycle status của Deployment, do IDP tự quyết; không nhận giá trị từ CD system. |
@@ -439,6 +440,7 @@ Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, opera
 | `workload_instance.status` | `DEPLOYING`, `HEALTHY`, `FAILED`, `REMOVED` |
 | `deployment.status` | `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED`, `FAILED` |
 | `workload_deployment.inclusion_reason` | `SELECTED`, `CASCADED` |
+| `deployment.kind` | `DEPLOY`, `TEARDOWN` |
 
 ### Dự kiến, chưa chốt
 

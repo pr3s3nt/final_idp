@@ -11,7 +11,7 @@ Go implementation of UC-03 as designed in `../01_…` to `../06_traceability`, w
 | Design (VOPC UC-03) | Code |
 |---|---|
 | Web UI, Deployment API / Controller, Deployment Query API | `internal/web/server.go`, `internal/web/templates/` |
-| Deployment Orchestrator (`loadDeploymentContext`, `createDeployment`, `validateDeploymentInput`, `computePlanFingerprint`, `confirmDeployment`) + teardown | `internal/service/orchestrator.go` |
+| Deployment Orchestrator (`loadDeploymentContext`, `createDeployment`, `validateDeploymentInput`, `computePlanFingerprint`, `confirmDeployment`) + `createTeardown` (UC-05 – Remove Application from Environment) | `internal/service/orchestrator.go` |
 | Deployment Worker | `internal/service/worker.go` |
 | Deployment Query Service + Result Aggregator (UC-04 subset) | `internal/service/query.go` |
 | Deployment Graph Builder | `internal/domain/graphbuilder` |

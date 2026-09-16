@@ -12,6 +12,7 @@ state "Succeeded\n(SUCCEEDED)" as SUCCEEDED
 state "Failed\n(FAILED)" as FAILED
 
 [*] --> CREATED : createDeployment(applicationId, version, environment,\ntarget, images, context) / initialize deployment attempt
+[*] --> CREATED : createTeardown(applicationId, environment, target) /\ninitialize removal attempt (UC-05); version, catalog version and\nconfiguration are taken from the deployment running on that owner
 
 CREATED --> AWAITING_CONFIRMATION : validateDeploymentInput [valid] /\nbuildDeploymentGraph; planDeploymentWaves; resolveResourceDefinitions;\nplanInfrastructureChanges; computePlanFingerprint; persist Deployment
 CREATED --> REJECTED : validateDeploymentInput [invalid, A1] /\nreturn validation error; rollback attempt
@@ -24,6 +25,7 @@ AWAITING_CONFIRMATION --> CONFIRMED : confirmDeployment [fingerprint match; vali
 CONFIRMED --> DEPLOYING : Deployment Worker claimNextExecutionJob /\nupdateDeploymentStatus(CONFIRMED, DEPLOYING)
 
 DEPLOYING --> DEPLOYING : for each wave: reconcileInfrastructure; collectResourceOutputs;\nresolveEnvironmentConfiguration; generate, adapt and materialize manifest;\npublishDesiredDeploymentState; waitForWorkloadsHealthy;\ncollectWorkloadOutputs; propagateOutputChanges
+DEPLOYING --> DEPLOYING : for a removal (kind = TEARDOWN): for each removal wave in reverse\ndependency order: publishDesiredDeploymentState(without those workloads);\nwaitForWorkloadsRemoved; removeApplication; delete namespace;\ndestroy managed resources; unlink existing ones
 DEPLOYING --> SUCCEEDED : all waves healthy and removals done /\nsaveDeploymentRecord; updateDeploymentStatus(DEPLOYING, SUCCEEDED)
 DEPLOYING --> FAILED : failure in a wave or in the removal step [A2] /\nstop remaining work; saveDeploymentRecord(error summary)
 
@@ -34,6 +36,10 @@ note right of CREATED
   CREATED is an execution-only attempt state.
   createDeployment() persists a Deployment only after
   successful validation, directly as AWAITING_CONFIRMATION.
+  createTeardown() (UC-05) enters the same machine with
+  deployment.kind = TEARDOWN: the same confirmation, job and
+  worker states apply, but the plan holds only removal waves
+  and no workload_deployment row is created.
 end note
 
 note right of REJECTED

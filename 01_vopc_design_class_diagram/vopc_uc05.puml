@@ -1,0 +1,136 @@
+@startuml
+title VOPC - UC-05 Remove Application from Environment
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "Boundary/UI" {
+  class "Web UI" as WebUI <<boundary>> {
+    -selectedEnvironment: String
+    -selectedTarget: String
+    +showRemovalForm()
+    +showRemovalPlan()
+    +showRemovalTracking()
+  }
+  class "Deployment API / Controller" as API <<control>> {
+    -orchestrator: Orchestrator
+    +createTeardown(applicationId, environment, target)
+    +confirmDeployment(deploymentId)
+  }
+}
+
+package "Application services" {
+  class "Deployment Orchestrator" as Orchestrator <<control>> {
+    -deploymentId: String
+    +createTeardown(applicationId, environment, target)
+    +computePlanFingerprint(plan, allowedOverrides, algo)
+    +confirmDeployment(deploymentId, overrides)
+  }
+  class "Deployment Worker" as Worker <<control>> {
+    -currentJob: DeploymentExecutionJob
+    -finalPlan: Object
+  }
+}
+
+package "Domain components" {
+  class "Deployment Graph Builder" as GraphBuilder <<control>> {
+    -graph: Object
+    +buildDeploymentGraph(applicationDefinitionVersion, configuration, images, catalogVersion, context)
+  }
+  class "Infrastructure Planner" as InfraPlanner <<control>> {
+    -plan: Object
+    +planRemovals(graph, runningWorkloadInstances, currentInstances)
+  }
+  class "Infrastructure Reconciler" as InfraReconciler <<control>> {
+    -infrastructureReferences: List
+    +destroyInfrastructure(planItems)
+  }
+}
+
+package "Integration abstractions" {
+  interface "CD Integration / CD Provider Interface" as CDIntegration <<interface>> {
+    -deliveryReference: String
+    +publishDesiredDeploymentState(desiredState)
+    +removeApplication(desiredState)
+  }
+  interface "Workload Status Provider / Kubernetes Adapter" as WorkloadStatusProvider <<interface>> {
+    -target: String
+    +waitForWorkloadsRemoved(target, workloads)
+    +deleteNamespace(target, namespace)
+  }
+  interface "Provisioner Adapter / Provisioner Interface" as Provisioner <<interface>> {
+    -provisioningContext: Object
+    +destroy(planItems)
+  }
+}
+
+package "Persistence" {
+  class "Application Repository" as AppRepo <<entity>> {
+    +findVersion(applicationId, version)
+  }
+  class "Environment Configuration Repository" as ConfigRepo <<entity>> {
+    +findById(environmentConfigurationId)
+  }
+  class "Resource Definition Catalog" as CatalogRepo <<entity>> {
+    +findResourceDefinitions(catalogVersion)
+  }
+  class "Delivery Repository Registry" as DeliveryRepoRegistry <<entity>> {
+    +findDeliveryRepository(applicationId)
+  }
+  class "Resource Instance Repository" as ResourceRepo <<entity>> {
+    +findResourceInstances(applicationId, environment, requirementIds, target)
+    +updateStatus(resourceInstanceId, status)
+  }
+  class "Workload Instance Repository" as WorkloadInstanceRepo <<entity>> {
+    +findWorkloadInstances(applicationId, environment, target)
+    +updateWorkloadInstances(workloads, status, outputFingerprints)
+  }
+  class "Deployment Repository" as DeploymentRepo <<entity>> {
+    +findLastDeploymentOfOwner(applicationId, environment, target)
+    +persistDeployment(deployment, …, status)
+    +confirmDeploymentAndCreateJob(deploymentId, expectedStatus, overrides)
+    +claimNextExecutionJob()
+    +saveDeploymentRecord(deployment, …, removedComponents)
+  }
+}
+
+WebUI "1" --> "1" API
+API "1" --> "1" Orchestrator
+Orchestrator "1" --> "1" AppRepo
+Orchestrator "1" --> "1" ConfigRepo
+Orchestrator "1" --> "1" CatalogRepo
+Orchestrator "1" --> "1" DeploymentRepo
+Orchestrator "1" --> "1" ResourceRepo
+Orchestrator "1" --> "1" WorkloadInstanceRepo
+Orchestrator ..> GraphBuilder
+Orchestrator ..> InfraPlanner
+
+Worker "1" --> "1" DeploymentRepo
+Worker "1" --> "1" ResourceRepo
+Worker "1" --> "1" WorkloadInstanceRepo
+Worker ..> InfraReconciler
+Worker ..> CDIntegration
+Worker ..> WorkloadStatusProvider
+CDIntegration "1" --> "1" DeliveryRepoRegistry
+InfraReconciler ..> Provisioner
+
+note right of Orchestrator
+  UC-05 adds only createTeardown(). Confirmation, the job and
+  the worker are the same as UC-03: a removal is a Deployment
+  with kind = TEARDOWN whose plan holds removal waves only.
+end note
+
+note right of InfraPlanner
+  Removal waves run in reverse dependency order: workloads first,
+  then the resources they depended on. Managed resources are
+  destroyed, existing shared ones are only unlinked.
+end note
+
+note right of WorkloadStatusProvider
+  A workload counts as removed only once it is verified gone from
+  the cluster; only then may the resources under it be destroyed.
+end note
+
+@enduml

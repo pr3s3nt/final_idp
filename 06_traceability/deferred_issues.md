@@ -536,7 +536,7 @@ Theo vấn đề 12, catalog có phiên bản bất biến và Developer chọn 
 
 ### Câu hỏi cần chốt khi giải quyết
 
-1. Phiên bản catalog có trạng thái (vd `ACTIVE`, `DEPRECATED`, `BLOCKED`) không, và ai đổi trạng thái (platform administration nằm ngoài bốn Developer use case)?
+1. Phiên bản catalog có trạng thái (vd `ACTIVE`, `DEPRECATED`, `BLOCKED`) không, và ai đổi trạng thái (platform administration nằm ngoài năm Developer use case)?
 2. Deployment đang chạy trên phiên bản bị khóa thì deploy một phần có bị chặn không, hay chỉ chặn chọn phiên bản đó cho deployment mới?
 3. Có cần màn hình cho platform xem application nào đang dùng phiên bản nào không?
 

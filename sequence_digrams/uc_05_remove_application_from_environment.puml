@@ -1,0 +1,163 @@
+@startuml
+title UC-05 - Remove Application from Environment
+
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+
+actor Developer
+boundary "Web UI" as UI
+control "Deployment API / Controller" as API
+control "Deployment Orchestrator" as Orchestrator
+entity "Application Repository" as AppRepo
+entity "Deployment Repository" as DeploymentRepo
+entity "Environment Configuration Repository" as ConfigRepo
+entity "Resource Definition Catalog" as Catalog
+control "Deployment Graph Builder" as GraphBuilder
+control "Infrastructure Planner" as InfraPlanner
+entity "Resource Instance Repository" as ResourceRepo
+entity "Workload Instance Repository" as WorkloadRepo
+control "Deployment Worker" as Worker <<background>>
+interface "CD Integration / CD Provider Interface" as CDIntegration <<interface>>
+control "Concrete CD Provider" as CDProvider
+entity "Delivery Repository Registry" as DeliveryRepo
+boundary "CD System" as CDSystem
+interface "Workload Status Provider / Kubernetes Adapter" as WorkloadStatusProvider <<interface>>
+boundary "Kubernetes Cluster" as Kubernetes
+control "Infrastructure Reconciler" as InfraReconciler
+interface "Provisioner Adapter / Provisioner Interface" as Provisioner <<interface>>
+boundary "Terraform/OpenTofu Runner" as IaCRunner
+
+== Developer asks to remove the application from one environment ==
+
+Developer -> UI: choose Remove from Environment
+UI -> API: createTeardown(applicationId, environment, target)
+API -> Orchestrator: createTeardown(applicationId, environment, target)
+
+Orchestrator -> DeploymentRepo: checkNoDeploymentInProgress(applicationId, environment, target)
+DeploymentRepo --> Orchestrator: none in progress
+
+alt [a deployment of this application, environment and target is awaiting confirmation or running]
+  Orchestrator --> API: A1 rejected, nothing is touched
+  API --> UI: show the reason
+end
+
+Orchestrator -> DeploymentRepo: findLastDeploymentOfOwner(applicationId, environment, target)
+DeploymentRepo --> Orchestrator: the version, catalog version and configuration that are running
+
+alt [the application was never deployed here, or nothing of it is left]
+  Orchestrator --> API: A1 rejected, no deployment is created
+  API --> UI: show the reason
+end
+
+note right of Orchestrator
+  Removal is planned from what is actually running:
+  the Developer chooses no version, no catalog version
+  and no image.
+end note
+
+Orchestrator -> AppRepo: findVersion(applicationId, runningVersion)
+AppRepo --> Orchestrator: Application Definition Version
+Orchestrator -> ConfigRepo: findById(environmentConfigurationId)
+ConfigRepo --> Orchestrator: Environment Configuration
+Orchestrator -> Catalog: findResourceDefinitions(runningCatalogVersion)
+Catalog --> Orchestrator: Resource Definitions of that catalog version
+
+Orchestrator -> GraphBuilder: buildDeploymentGraph(version, configuration, catalogVersion, context)
+GraphBuilder --> Orchestrator: graph of workloads, resources, cluster and network
+
+Orchestrator -> ResourceRepo: findResourceInstances(applicationId, environment, requirementIds, target)
+ResourceRepo --> Orchestrator: Resource Instances owned here
+Orchestrator -> WorkloadRepo: findWorkloadInstances(applicationId, environment, target)
+WorkloadRepo --> Orchestrator: Workload Instances running here
+
+Orchestrator -> InfraPlanner: planRemovals(graph, runningInstances)
+InfraPlanner --> Orchestrator: removal waves in reverse dependency order:\nworkloads first, then destroy managed resources,\nunlink existing shared ones
+
+Orchestrator -> DeploymentRepo: persistDeployment(deployment of kind TEARDOWN, planFingerprint, AWAITING_CONFIRMATION)
+DeploymentRepo --> Orchestrator: deployment persisted
+Orchestrator --> API: removal plan, data-loss warnings, fingerprint
+API --> UI: show what will be removed, destroyed and unlinked
+UI --> Developer: review
+
+== Developer confirms ==
+
+Developer -> UI: choose Remove
+UI -> API: confirmDeployment(deploymentId)
+API -> Orchestrator: confirmDeployment(deploymentId)
+Orchestrator -> DeploymentRepo: in one transaction: compare-and-set status to CONFIRMED\nand create the execution job
+DeploymentRepo --> Orchestrator: confirmed, exactly one job
+Orchestrator --> API: accepted
+API --> UI: answer immediately; removal runs in the background
+
+== Deployment Worker removes, in reverse order ==
+
+Worker -> DeploymentRepo: claimNextExecutionJob()
+DeploymentRepo --> Worker: job of the teardown deployment
+Worker -> DeploymentRepo: updateDeploymentStatus(CONFIRMED, DEPLOYING)
+
+group Removal wave 0 - workloads
+  Worker -> CDIntegration: publishDesiredDeploymentState(desired state without these workloads)
+  CDIntegration -> DeliveryRepo: findDeliveryRepository(applicationId)
+  DeliveryRepo --> CDIntegration: repository, branch and key references of this application
+  CDIntegration -> CDProvider: publish(desiredState)
+  CDProvider -> CDSystem: synchronize(desiredState)
+  CDProvider --> CDIntegration: delivery reference
+  CDIntegration --> Worker: delivery reference
+  Worker -> CDIntegration: waitForDelivery(deliveryReference)
+  CDIntegration --> Worker: the CD system accepted it
+
+  Worker -> WorkloadStatusProvider: waitForWorkloadsRemoved(target, workloads)
+  WorkloadStatusProvider -> Kubernetes: watch until the workloads are gone
+  Kubernetes --> WorkloadStatusProvider: gone
+  WorkloadStatusProvider --> Worker: verified removed
+
+  note right of Worker
+    Only now is a workload marked as removed, and only
+    then may the resources it depends on be destroyed.
+  end note
+
+  Worker -> Kubernetes: delete the materialized secrets of these workloads
+  Worker -> CDIntegration: removeApplication(applicationId, environment, target)
+  CDIntegration -> CDProvider: delete the CD object of this application + environment
+  CDProvider -> CDSystem: remove it
+  CDIntegration -> CDIntegration: remove the desired state of this environment from the repository;\nthe repository and the key pair of the application are kept
+  CDIntegration --> Worker: done
+  Worker -> Kubernetes: delete the namespace of the application
+  Worker -> WorkloadRepo: updateWorkloadInstances(workloads, REMOVED)
+end
+
+group Removal waves 1..n - resources in reverse dependency order
+  loop for each resource, deepest dependent first
+    alt [the resource was created by the IDP]
+      Worker -> InfraReconciler: destroy(planItem)
+      InfraReconciler -> Provisioner: destroy(planItem)
+      Provisioner -> IaCRunner: destroyInfrastructureModules(planItem)
+      IaCRunner --> Provisioner: destroyed
+      InfraReconciler -> ResourceRepo: updateStatus(DESTROYED)
+    else [the resource already existed and is shared]
+      Worker -> ResourceRepo: updateStatus(UNLINKED)
+      note right of Worker
+        A shared resource is never destroyed, only unlinked,
+        even when this application was its only user.
+      end note
+    end
+  end
+end
+
+alt [A2 - removing, destroying or unlinking fails]
+  Worker -> DeploymentRepo: saveDeploymentRecord(error summary, wave, component)\nand updateDeploymentStatus(DEPLOYING, FAILED)
+  note right of Worker
+    Later removal waves are not executed: nothing is destroyed
+    underneath a component that is still running.
+  end note
+else [everything was removed]
+  Worker -> DeploymentRepo: in one transaction: saveDeploymentRecord(removed, destroyed, unlinked)\nand updateDeploymentStatus(DEPLOYING, SUCCEEDED)
+end
+
+note over AppRepo, ConfigRepo
+  Nothing here is deleted: the Application Definition, its versions
+  and the Environment Configuration of every environment survive,
+  so UC-03 can deploy the application again without redeclaring it.
+end note
+
+@enduml

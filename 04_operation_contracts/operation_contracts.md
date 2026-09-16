@@ -1,6 +1,6 @@
 # Step 4: Operation Contracts
 
-Tài liệu này đặc tả các system operation quan trọng của UC-01 đến UC-03 theo kiểu Larman. Tên domain object dùng đúng Step 2; tên table/column `snake_case` dùng đúng Step 3. Các nhãn trạng thái như `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED` và `FAILED` dùng đúng literal trong mục **Danh mục ENUM** của `03_database_erd/schema.md`; literal thuộc các mục hoãn (D3–D6) chỉ là giá trị dự kiến.
+Tài liệu này đặc tả các system operation quan trọng của UC-01 đến UC-03 và UC-05 theo kiểu Larman. Tên domain object dùng đúng Step 2; tên table/column `snake_case` dùng đúng Step 3. Các nhãn trạng thái như `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED` và `FAILED` dùng đúng literal trong mục **Danh mục ENUM** của `03_database_erd/schema.md`; literal thuộc các mục hoãn (D3–D6) chỉ là giá trị dự kiến.
 
 Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastructure Plan, `Resource Output`, `Workload Output`, `Resolved Configuration` và `Resolved Specification` là `TRANSIENT`; postcondition có thể tạo chúng trong execution hiện tại nhưng không tạo table/row tương ứng. Mọi postcondition bên dưới mô tả state sau khi operation hoàn tất, không mô tả trình tự gọi component. Từ contract 6 trở đi, operation do **Deployment Worker** chạy nền gọi, sau khi job triển khai đã được tạo ở contract 5. Cấu trúc chi tiết của plan (D3), việc ghi `deployment_step` (D4), việc tách trạng thái CD (D5) và phục hồi worker (D6) chưa được đặc tả ở đây.
 
@@ -252,3 +252,24 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
   - Thành phần được thêm do lan truyền phải thuộc cùng phiên bản đang chạy trên environment/target; lan truyền không vượt sang application khác. Việc output của resource dùng chung (`EXISTING`) thay đổi không tự deploy lại các application khác (mục hoãn).
   - Resource `EXISTING` (resource dùng chung, cụm nội bộ) không bao giờ được reconcile lại; nếu output của nó đổi thì chỉ các thành phần dựa trên nó được làm lại.
   - Lan truyền dừng khi không còn dấu vân tay nào thay đổi; mỗi workload được thêm tối đa một lần và mỗi resource được reconcile lại tối đa một lần cho mỗi thay đổi của thành phần nó `requires` trong một deployment.
+
+## 12. `createTeardown()`
+
+- **Operation**: `createTeardown(applicationId, environment, target)`
+- **Cross References**: UC-05 – Remove Application from Environment, từ bước Developer chọn environment và nơi triển khai đến bước hiển thị plan gỡ bỏ; A1 – Không có gì để gỡ hoặc đang có deployment khác chạy dở.
+- **Preconditions**:
+  - `application_definition.application_id = applicationId` định danh một `Application Definition` hợp lệ; `environment` là `STAGING` hoặc `PRODUCTION`.
+  - Không có row `deployment` nào của cùng `(application_id, environment, deployment_target)` ở `status = AWAITING_CONFIRMATION`, `CONFIRMED` hoặc `DEPLOYING`.
+  - Tồn tại ít nhất một deployment trước đó của đúng `(applicationId, environment, target)`, và deployment gần nhất trong số đó xác định phiên bản Application Definition, phiên bản catalog, Environment Configuration và Deployment Context sẽ dùng để dựng lại graph. Operation **không** nhận `version`, `catalogVersion`, `images` hay `context` từ Developer.
+  - Còn ít nhất một `Workload Instance` chưa ở trạng thái đã gỡ, hoặc một `Resource Instance` chưa ở trạng thái đã hủy/gỡ liên kết, thuộc đúng khóa chủ sở hữu `(application_id, environment, resource_requirement_id, deployment_target)`.
+- **Postconditions**:
+  - Một instance `Deployment` được tạo; một row `deployment` được tạo với `kind = TEARDOWN`, `status = AWAITING_CONFIRMATION`, cùng `application_definition_version_id`, `catalog_version_id`, `environment_configuration_id`, `environment`, `deployment_target`, `plan_fingerprint`, `plan_fingerprint_algo` lấy theo deployment gần nhất của cùng chủ sở hữu.
+  - **Không** có `Workload Deployment` nào được tạo: gỡ bỏ không triển khai workload nào.
+  - Một `Deployment Graph` `TRANSIENT` được dựng lại từ phiên bản và phiên bản catalog đang chạy, rồi một plan gỡ bỏ `TRANSIENT` được tạo: các tầng gỡ theo **thứ tự ngược** với thứ tự triển khai, tầng đầu là toàn bộ Workload đang chạy của chủ sở hữu, các tầng sau là Resource Instance với hành động hủy khi `Resource Definition.managementMode = MANAGED` và gỡ liên kết khi `= EXISTING`. Mỗi thành phần bị hủy mang cảnh báo mất dữ liệu.
+  - `plan_fingerprint` và `plan_fingerprint_algo` được tính và persist như với `createDeployment()`, nên `confirmDeployment()` phát hiện được plan đã đổi giữa lúc xem và lúc xác nhận.
+  - Không `Resource Instance`, `Workload Instance`, namespace, desired state hay hạ tầng nào bị thay đổi; không `Deployment Execution Job`, `Deployment Record` hay `Deployment Step` nào được tạo.
+- **Exceptions / Guarantees**:
+  - A1: nếu application chưa từng được deploy lên `(environment, target)`, nếu không còn gì để gỡ, hoặc nếu đang có deployment của cùng chủ sở hữu chờ xác nhận hay đang chạy, không aggregate `Deployment` nào tồn tại; row phát sinh trong attempt được rollback và hạ tầng không thay đổi.
+  - Việc thực thi thuộc `confirmDeployment()` (dùng chung với UC-03) và Deployment Worker; operation này chỉ lập plan.
+- **Scope boundaries**:
+  - Operation chỉ tác động tới đúng một `(application, environment, deployment target)`. Application Definition, các phiên bản, Environment Configuration của mọi environment, `Delivery Repository` và cặp khóa của application không nằm trong postcondition của bất kỳ contract nào của UC-05: chúng được giữ lại.

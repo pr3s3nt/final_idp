@@ -1,6 +1,6 @@
 # Step 1: VOPC / Design Class Diagram
 
-Thư mục này mô tả **View Of Participating Classes (VOPC)** cho bốn use case của Internal Developer Platform. `design_class_diagram.puml` là góc nhìn hợp nhất toàn hệ thống; bốn file `vopc_uc*.puml` là lát cắt theo từng use case và chỉ chứa các participating class được liệt kê cho use case tương ứng tại Bước 3.
+Thư mục này mô tả **View Of Participating Classes (VOPC)** cho năm use case của Internal Developer Platform. `design_class_diagram.puml` là góc nhìn hợp nhất toàn hệ thống; năm file `vopc_uc*.puml` là lát cắt theo từng use case và chỉ chứa các participating class được liệt kê cho use case tương ứng tại Bước 3.
 
 ## Cách đọc diagram
 
@@ -35,8 +35,8 @@ Thư mục này mô tả **View Of Participating Classes (VOPC)** cho bốn use 
 | Deployment Query API / Controller | Boundary/UI | Cung cấp read-only API cho deployment history và deployment detail. |
 | Application Service | Application services | Điều phối UC-01 để tạo/cập nhật, validate, lưu Application Definition và sinh specification. |
 | Environment Configuration Service | Application services | Điều phối UC-02 để tải requirement, gán value/reference, bảo vệ Secret, validate và lưu configuration. |
-| Deployment Orchestrator | Application services | Điều phối phần UC-03 trong request của Developer: tải form (gồm các phiên bản catalog), tạo deployment theo phiên bản Application Definition và phiên bản catalog, dựng graph, chia tầng, lập plan; khi xác nhận thì đổi trạng thái và tạo job trong một transaction rồi trả lời ngay. |
-| Deployment Worker | Application services | Tiến trình chạy nền lấy job và điều phối phần thực thi UC-03: triển khai theo tầng, chờ workload healthy, thu output, lan truyền thay đổi output, gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản, lưu Deployment Record. |
+| Deployment Orchestrator | Application services | Điều phối phần UC-03 và UC-05 trong request của Developer (UC-05 lập plan gỡ bỏ theo thứ tự ngược, không nhận phiên bản hay image): tải form (gồm các phiên bản catalog), tạo deployment theo phiên bản Application Definition và phiên bản catalog, dựng graph, chia tầng, lập plan; khi xác nhận thì đổi trạng thái và tạo job trong một transaction rồi trả lời ngay. |
+| Deployment Worker | Application services | Tiến trình chạy nền lấy job và điều phối phần thực thi của UC-03 và UC-05: triển khai theo tầng, chờ workload healthy, thu output, lan truyền thay đổi output, gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản, lưu Deployment Record. |
 | Deployment Query Service | Application services | Điều phối query path UC-04 và thu thập dữ liệu từ repository cùng status provider. |
 | Application Definition Validator | Domain components | Kiểm tra workload, resource, dependency, port, image repository và configuration requirement. |
 | Application Specification Generator | Domain components | Chuyển Application Definition đã lưu thành application specification như `score.yaml`. |
@@ -83,8 +83,9 @@ Thư mục này mô tả **View Of Participating Classes (VOPC)** cho bốn use 
 
 | File | Nội dung |
 |---|---|
-| `design_class_diagram.puml` | Consolidated design class diagram của toàn bộ UC-01 đến UC-04. |
+| `design_class_diagram.puml` | Consolidated design class diagram của toàn bộ UC-01 đến UC-05. |
 | `vopc_uc01.puml` | Participating classes cho Create / Configure Application. |
 | `vopc_uc02.puml` | Participating classes cho Configure Application Environment. |
 | `vopc_uc03.puml` | Participating classes cho Deploy Application. |
 | `vopc_uc04.puml` | Participating classes cho View Deployment Result. |
+| `vopc_uc05.puml` | Participating classes cho Remove Application from Environment. |

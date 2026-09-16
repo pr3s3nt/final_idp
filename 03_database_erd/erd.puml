@@ -225,6 +225,7 @@ package "Deployment Repository" {
     * environment_configuration_id : UUID <<FK, NOT NULL>>
     * environment : ENUM(STAGING, PRODUCTION) <<NOT NULL>>
     * deployment_target : VARCHAR(255) <<NOT NULL>>
+    * kind : ENUM(DEPLOY, TEARDOWN) <<NOT NULL>>
     * plan_fingerprint : CHAR(64) <<NOT NULL>>
     * plan_fingerprint_algo : VARCHAR(32) <<NOT NULL>>
     * status : ENUM(AWAITING_CONFIRMATION, CONFIRMED, DEPLOYING, SUCCEEDED, FAILED) <<NOT NULL>>
