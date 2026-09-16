@@ -316,7 +316,7 @@ Không có table `workload_output`: `Workload Output` là runtime view `TRANSIEN
 | `inclusion_reason` | ENUM (`SELECTED`, `CASCADED`) | NOT NULL | `SELECTED`: Developer chọn; `CASCADED`: được thêm tự động khi output của thành phần nó depends on thay đổi. |
 | `wave_number` | INT | NOT NULL, CHECK (`wave_number` >= 0) | Tầng triển khai của workload trong deployment. |
 
-Constraint bổ sung: `UNIQUE (deployment_id, workload_id)`; một Deployment phải có ít nhất một Workload Deployment (aggregate invariant, enforce ở transaction/service hoặc deferred database constraint). Workload được thêm do lan truyền output (`CASCADED`) được insert trong lúc Deployment Worker thực thi.
+Constraint bổ sung: `UNIQUE (deployment_id, workload_id)`; một Deployment **có `kind = DEPLOY`** phải có ít nhất một Workload Deployment (aggregate invariant, enforce ở transaction/service hoặc deferred database constraint). Deployment có `kind = TEARDOWN` không có Workload Deployment nào, vì nó không triển khai workload nào. Workload được thêm do lan truyền output (`CASCADED`) được insert trong lúc Deployment Worker thực thi.
 
 ### `deployment_execution_job`
 

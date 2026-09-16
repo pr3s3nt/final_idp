@@ -36,7 +36,7 @@ API -> Orchestrator: createTeardown(applicationId, environment, target)
 Orchestrator -> DeploymentRepo: checkNoDeploymentInProgress(applicationId, environment, target)
 DeploymentRepo --> Orchestrator: none in progress
 
-alt [a deployment of this application, environment and target is awaiting confirmation or running]
+alt [a deployment of this application, environment and target is already confirmed or running]
   Orchestrator --> API: A1 rejected, nothing is touched
   API --> UI: show the reason
 end
@@ -52,26 +52,32 @@ end
 note right of Orchestrator
   Removal is planned from what is actually running:
   the Developer chooses no version, no catalog version
-  and no image.
+  and no image. The catalog version is needed only to
+  resolve the definition each existing instance was
+  created from.
 end note
 
 Orchestrator -> AppRepo: findVersion(applicationId, runningVersion)
 AppRepo --> Orchestrator: Application Definition Version
-Orchestrator -> ConfigRepo: findById(environmentConfigurationId)
-ConfigRepo --> Orchestrator: Environment Configuration
 Orchestrator -> Catalog: findResourceDefinitions(runningCatalogVersion)
 Catalog --> Orchestrator: Resource Definitions of that catalog version
 
-Orchestrator -> GraphBuilder: buildDeploymentGraph(version, configuration, catalogVersion, context)
-GraphBuilder --> Orchestrator: graph of workloads, resources, cluster and network
+note right of Orchestrator
+  The Environment Configuration is not read: its id is only
+  copied onto the new row for the Deployment Record. Removal
+  works from what exists, not from what the configuration says.
+end note
+
+Orchestrator -> GraphBuilder: listDeclaredComponents(version, context)
+GraphBuilder --> Orchestrator: nodes only - the names of the workloads and\nresources of that version, with no edges and no resolution
 
 Orchestrator -> ResourceRepo: findResourceInstances(applicationId, environment, requirementIds, target)
 ResourceRepo --> Orchestrator: Resource Instances owned here
 Orchestrator -> WorkloadRepo: findWorkloadInstances(applicationId, environment, target)
 WorkloadRepo --> Orchestrator: Workload Instances running here
 
-Orchestrator -> InfraPlanner: planRemovals(graph, runningInstances)
-InfraPlanner --> Orchestrator: removal waves in reverse dependency order:\nworkloads first, then destroy managed resources,\nunlink existing shared ones
+Orchestrator -> InfraPlanner: planRemovals(nodes, runningWorkloadInstances, resourceInstances)
+InfraPlanner --> Orchestrator: removal waves: workloads first, then resources,\neach resource only once nothing still to be removed requires\nits type - so cluster and network come last
 
 Orchestrator -> DeploymentRepo: persistDeployment(deployment of kind TEARDOWN, planFingerprint, AWAITING_CONFIRMATION)
 DeploymentRepo --> Orchestrator: deployment persisted
@@ -126,8 +132,8 @@ group Removal wave 0 - workloads
   Worker -> WorkloadRepo: updateWorkloadInstances(workloads, REMOVED)
 end
 
-group Removal waves 1..n - resources in reverse dependency order
-  loop for each resource, deepest dependent first
+group Removal waves 1..n - resources, each once nothing left requires its type
+  loop for each resource in that wave
     alt [the resource was created by the IDP]
       Worker -> InfraReconciler: destroy(planItem)
       InfraReconciler -> Provisioner: destroy(planItem)

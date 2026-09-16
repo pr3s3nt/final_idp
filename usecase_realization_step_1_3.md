@@ -853,7 +853,7 @@ Primary Actor: Developer
 
 Application đã từng được deploy thành công lên đúng environment và nơi triển khai được chọn.
 
-Không có deployment nào của cùng application + environment + nơi triển khai đang chờ xác nhận hoặc đang chạy.
+Không có deployment nào của cùng application + environment + nơi triển khai **đã được xác nhận hoặc đang chạy**. Một plan chưa được xác nhận thì không giữ chỗ và không chặn yêu cầu gỡ; nó chỉ trở thành lỗi thời khi IDP dựng lại plan lúc xác nhận.
 
 ## Hậu điều kiện
 
@@ -875,11 +875,13 @@ Developer chọn environment và nơi triển khai cần gỡ.
 
 **IDP** lấy lại phiên bản Application Definition, phiên bản catalog và Environment Configuration của lần deploy gần nhất trên đúng environment và nơi triển khai đó. Developer không chọn lại các thứ này: gỡ bỏ phải dựa trên đúng thứ đang chạy.
 
-**IDP** dựng dependency/resource graph của lần deploy đó và lập plan gỡ bỏ theo **thứ tự ngược với thứ tự triển khai**:
+**IDP** liệt kê các thành phần đã khai báo trong phiên bản đó cùng mọi Resource Instance đang tồn tại của chủ sở hữu, rồi lập plan gỡ bỏ theo **thứ tự ngược với thứ tự triển khai**:
 
 Tầng gỡ đầu tiên: mọi workload của application trên environment và nơi triển khai đó.
 
-Các tầng sau: resource mà workload phụ thuộc, rồi tới cụm Kubernetes và network, mỗi thứ là **hủy** nếu do IDP tạo và **gỡ liên kết** nếu là thứ có sẵn dùng chung.
+Các tầng sau: các resource, trong đó một resource chỉ được gỡ khi **không còn resource nào chưa gỡ cần tới loại của nó**. Nhờ quy tắc này, thứ mà nhiều thứ khác dựa vào — cụm Kubernetes, network — tự nhiên nằm ở tầng cuối. Mỗi resource là **hủy** nếu do IDP tạo và **gỡ liên kết** nếu là thứ có sẵn dùng chung.
+
+Việc lập plan gỡ bỏ không cần tới giá trị cấu hình của environment: IDP gỡ những gì đang tồn tại, không phải những gì cấu hình mô tả.
 
 **IDP** hiển thị plan gỡ bỏ, trong đó nêu rõ thành phần nào bị hủy kèm **cảnh báo mất dữ liệu**, thành phần nào chỉ bị gỡ liên kết và thành phần nào không bị đụng tới.
 
@@ -905,7 +907,7 @@ Hủy từng resource do IDP tạo, gỡ liên kết từng resource có sẵn, 
 
 ### A1 – Không có gì để gỡ hoặc đang có deployment khác chạy dở
 
-**IDP** từ chối yêu cầu và không tạo deployment nào khi application chưa từng được deploy lên environment và nơi triển khai đã chọn, khi không còn workload hay resource nào của application ở đó, hoặc khi đang có một deployment của cùng application + environment + nơi triển khai chờ xác nhận hoặc đang chạy.
+**IDP** từ chối yêu cầu và không tạo deployment nào khi application chưa từng được deploy lên environment và nơi triển khai đã chọn, khi không còn workload hay resource nào của application ở đó, hoặc khi đang có một deployment của cùng application + environment + nơi triển khai đã được xác nhận hoặc đang chạy.
 
 Không có hạ tầng nào bị đụng tới trong các trường hợp này.
 

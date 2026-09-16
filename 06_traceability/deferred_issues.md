@@ -20,6 +20,8 @@ Nguồn đối chiếu: commit `88585ccdd1a7896c615ad43fbb0d0f6b62d231ef` (nhán
 | D10 | Platform khóa hoặc ngừng hỗ trợ phiên bản catalog cũ | DEFERRED | 15/09/2026 |
 | D11 | Phiên bản catalog mới đổi hẳn công thức của một resource đang chạy | DEFERRED | 15/09/2026 |
 | D12 | UC-02 lấy danh sách output từ phiên bản catalog nào | DEFERRED | 15/09/2026 |
+| D13 | Teardown đánh dấu workload đã gỡ dù chưa xác minh được cụm | DEFERRED | 16/09/2026 |
+| D14 | Teardown không dọn CD object, desired state và namespace khi plan chỉ còn resource | DEFERRED | 16/09/2026 |
 
 ## D1 — Bản nháp UC-01/UC-02 được giữ ở đâu giữa các request
 
@@ -585,3 +587,69 @@ Ví dụ: catalog v1 có output `host`, `port`, `username`, `password`; catalog 
 ### Điều kiện đóng
 
 Đặc tả UC-02, contract 3 và UC-03 A1 thống nhất nguồn danh sách output và thời điểm kiểm tra.
+
+## D13 — Teardown đánh dấu workload đã gỡ dù chưa xác minh được cụm
+
+**Tương ứng:** rà soát UC-05 sau commit `8302586`.
+
+**Quyết định:** chưa sửa code lúc này. Đặc tả UC-05 mô tả hành vi đúng (chỉ đánh dấu đã gỡ sau khi xác minh); code hiện chưa bảo đảm điều đó trong mọi trường hợp.
+
+### Vấn đề
+
+Ở bước gỡ workload, worker lấy kết nối cụm rồi chỉ báo lỗi khi đây là deployment loại triển khai:
+
+```go
+cluster, err := ex.clusterAccess(ctx)
+if err != nil && d.Kind == domain.KindDeploy {
+    return ex.fail(...)
+}
+if cluster != nil { /* publish, chờ CD, xác minh biến mất, xóa CD object, xóa namespace */ }
+```
+
+Với teardown, lỗi bị bỏ qua: cả khối xác minh bị nhảy qua vì `cluster == nil`, nhưng đoạn ngay sau đó vẫn đánh dấu mọi Workload Instance là đã gỡ, rồi các tầng sau vẫn hủy resource.
+
+Ví dụ: bản ghi kết nối cụm nội bộ đã cũ (cụm được dựng lại sau khi đăng ký), hoặc cụm tạm thời không truy cập được. Teardown vẫn báo thành công, database ghi workload đã gỡ và resource đã hủy, trong khi Deployment và Service vẫn đang chạy trong cụm. Lần deploy sau lên cùng chủ sở hữu sẽ chồng lên phần còn sót đó.
+
+Điều này mâu thuẫn với quy tắc nghiệp vụ của UC-05 và với nguyên tắc đã áp dụng cho UC-03: chỉ đánh dấu đã gỡ sau khi xác minh thành phần đã biến mất khỏi cụm.
+
+### Câu hỏi cần chốt khi giải quyết
+
+1. Có trường hợp nào được phép bỏ qua xác minh không? Trường hợp hợp lý duy nhất nhìn thấy: chính cụm nằm trong danh sách gỡ của lần này và đã ở trạng thái đã hủy hoặc đã gỡ liên kết — khi đó không còn nơi nào để xác minh.
+2. Khi không lấy được cụm ngoài trường hợp trên thì dừng hẳn theo A2, hay đánh dấu bằng một trạng thái riêng (ví dụ đã gỡ nhưng chưa xác minh) để lần sau dọn tiếp?
+3. Có cần bước dọn phần còn sót khi deploy lại lên cùng application + environment + nơi triển khai không?
+
+### Điều kiện đóng
+
+Worker chỉ đánh dấu workload đã gỡ sau khi xác minh, hoặc ngoại lệ được phép được ghi rõ trong cả code lẫn đặc tả UC-05; có test cho nhánh không lấy được kết nối cụm.
+
+## D14 — Teardown không dọn CD object, desired state và namespace khi plan chỉ còn resource
+
+**Tương ứng:** rà soát UC-05 sau commit `8302586`.
+
+**Quyết định:** chưa sửa code lúc này.
+
+### Vấn đề
+
+Việc xóa đối tượng của application khỏi CD system, xóa thư mục `<nơi triển khai>/<environment>` trong Delivery Repository và xóa namespace nằm bên trong điều kiện "tầng gỡ này có workload":
+
+```go
+if len(workloadIDs) > 0 {
+    ...
+    if d.Kind == domain.KindTeardown {
+        w.CD.RemoveApplication(...)
+        w.Kube.DeleteNamespace(...)
+    }
+}
+```
+
+Nhưng contract 12 cho phép gỡ khi chỉ còn Resource Instance, không còn workload nào — ví dụ lần teardown trước đã gỡ xong workload rồi thất bại ở bước hủy resource. Lần gỡ thứ hai sẽ hủy nốt resource nhưng **không bao giờ** xóa đối tượng CD, desired state và namespace: CD system tiếp tục theo dõi một đường dẫn rỗng, namespace ở lại trong cụm.
+
+### Câu hỏi cần chốt khi giải quyết
+
+1. Đưa ba bước dọn đó ra ngoài điều kiện, chạy đúng một lần cho mỗi teardown, kể cả khi không còn workload nào?
+2. Nếu namespace còn object không do IDP tạo thì xóa hay giữ và báo?
+3. Chạy lại teardown lần hai có được coi là cách xử lý chính thức cho lần đầu thất bại giữa chừng không? Nếu có thì nó phải dọn được mọi thứ còn sót.
+
+### Điều kiện đóng
+
+Teardown luôn xóa đối tượng CD, desired state của environment đó và namespace đúng một lần, kể cả khi plan chỉ còn resource; có kiểm chứng thật cho trường hợp teardown lần hai sau một lần thất bại.
