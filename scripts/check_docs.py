@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -21,6 +22,20 @@ ALLOWED_STATUS = {
     "evidence",
 }
 LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
+LEGACY_DIRECTORIES = (
+    "01_vopc_design_class_diagram",
+    "02_domain_model",
+    "03_database_erd",
+    "04_operation_contracts",
+    "05_state_machines",
+    "06_traceability",
+    "sequence_digrams",
+    "uc03/docs",
+)
+LEGACY_ROOT_FILES = (
+    "implementation_plan.md",
+    "usecase_realization_step_1_3.md",
+)
 
 
 def tracked_markdown() -> set[Path]:
@@ -73,6 +88,13 @@ def main() -> int:
     ids: dict[str, Path] = {}
     files = markdown_candidates()
 
+    for relative in LEGACY_DIRECTORIES:
+        if (ROOT / relative).exists():
+            errors.append(f"legacy documentation directory must not exist: {relative}")
+    for relative in LEGACY_ROOT_FILES:
+        if (ROOT / relative).exists():
+            errors.append(f"legacy root document must not exist: {relative}")
+
     for path in files:
         rel = path.relative_to(ROOT)
         text = path.read_text(encoding="utf-8")
@@ -100,13 +122,16 @@ def main() -> int:
             if not (path.parent / target_text).resolve().exists():
                 errors.append(f"{rel}:{line}: missing link target: {raw}")
 
+    require_plantuml = os.environ.get("REQUIRE_PLANTUML") == "1"
     if shutil.which("plantuml"):
         diagrams = sorted(ROOT.rglob("*.puml"))
         result = subprocess.run(["plantuml", "-checkonly", *map(str, diagrams)], cwd=ROOT)
         if result.returncode:
             errors.append("PlantUML syntax validation failed")
+    elif require_plantuml:
+        errors.append("PlantUML is required but the plantuml executable is not installed")
     else:
-        print("NOTICE: plantuml is not installed; diagram syntax check skipped")
+        print("NOTICE: plantuml is not installed; local diagram syntax check skipped (CI requires it)")
 
     if errors:
         print("Documentation validation failed:", file=sys.stderr)

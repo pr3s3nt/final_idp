@@ -85,4 +85,4 @@ Run the repository check with:
 python3 scripts/check_docs.py
 ```
 
-The script validates front matter, unique artifact IDs, internal links, portable paths, and PlantUML syntax when `plantuml` is installed. GitHub Actions runs the same documentation contract on pushes and pull requests.
+The script validates front matter, unique artifact IDs, internal links, portable paths, retired-layout absence, and PlantUML syntax when `plantuml` is installed. GitHub Actions installs PlantUML and runs with `REQUIRE_PLANTUML=1`, so diagram validation cannot be skipped in CI.

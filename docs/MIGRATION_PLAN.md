@@ -1,14 +1,14 @@
 ---
 id: DOC-MIGRATION-PLAN
 artifact: documentation-migration-plan
-status: current
-migration_stage: implementation-and-evidence-archived
+status: historical
+migration_stage: complete
 last_reviewed: 2026-09-17
 ---
 
 # Documentation migration map
 
-This document is the execution contract for completing the documentation refactor after commit `6c835d9`. It fixes the destination and authority of every legacy documentation group before files are moved. During migration, [INDEX.md](INDEX.md) remains the reader entry point.
+This document is the completed execution record for the documentation refactor begun after commit `6c835d9`. It preserves the approved destination, semantic gates, and provenance of every legacy documentation group. [INDEX.md](INDEX.md) is the current reader entry point.
 
 ## Scope and invariants
 
@@ -226,7 +226,7 @@ The audit procedure is manual and must be recorded in this table or a linked rec
 3. **DONE —** Move the traceability matrix and update all active links.
 4. **DONE —** Compare split artifacts with consolidated predecessors and archive the predecessors. Results are recorded in [`documentation-reconciliation.md`](implementation/documentation-reconciliation.md).
 5. **DONE —** Move operational documents and archive the consolidated verification and implementation plan after [semantic reconciliation](implementation/documentation-reconciliation.md).
-6. Remove empty legacy directories, normalize remaining links, and enforce final-layout checks.
+6. **DONE —** Remove empty legacy directories, normalize remaining links, and enforce final-layout checks, including mandatory PlantUML validation in CI.
 
 Each numbered item should be a separate reviewable commit unless a move and its required link updates cannot safely be separated.
 

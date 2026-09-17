@@ -13,9 +13,9 @@ The project follows UP. UC-03 and UC-05 are in a late Construction/verification 
 
 This status was reviewed on branch `uc03-impl` against commit `ab74aa2`; later changes must update this document when they change the baseline.
 
-## Documentation migration state
+## Documentation layout
 
-The AI-facing indexes and split artifacts are in place. Sequence diagrams and per-use-case VOPCs live in `docs/use-cases/UC-*`; shared design artifacts live in `docs/architecture/`; the active coverage matrix lives in `docs/traceability/matrix.md`. Legacy paths `sequence_digrams/`, numbered directories `01_*` through `06_*`, and `uc03/docs/` have been removed. Consolidated sources, the original implementation plan, and the verification log passed semantic reconciliation before archive. Operations now live under `docs/operations/uc03/`. Final layout enforcement remains in [MIGRATION_PLAN.md](MIGRATION_PLAN.md).
+The AI-facing layout is complete. Sequence diagrams and per-use-case VOPCs live in `docs/use-cases/UC-*`; shared design artifacts live in `docs/architecture/`; the active coverage matrix lives in `docs/traceability/matrix.md`; operations live under `docs/operations/uc03/`. Consolidated sources, the original implementation plan, and the verification log passed semantic reconciliation before archive. Retired paths are blocked by `scripts/check_docs.py`; the completed work is recorded in [MIGRATION_PLAN.md](MIGRATION_PLAN.md).
 
 ## Use-case baseline
 

@@ -4,7 +4,7 @@
 
 Read `docs/INDEX.md` before changing requirements, design, implementation, tests, or operational documentation.
 
-The repository is currently migrating legacy documentation paths. Before moving, renaming, archiving, or deleting documentation, follow `docs/MIGRATION_PLAN.md`; do not invent a different destination or leave compatibility copies behind.
+The documentation layout migration is complete. Do not recreate the retired numbered directories, `sequence_digrams/`, `uc03/docs/`, or loose historical root documents. The completed [migration record](docs/MIGRATION_PLAN.md) explains provenance; current destinations are indexed from `docs/INDEX.md`.
 
 For a use-case-specific task, read that use case's `docs/use-cases/UC-*/README.md` context file and only then follow its links to shared artifacts.
 
@@ -57,4 +57,4 @@ python3 scripts/check_docs.py
 git diff --check
 ```
 
-If `plantuml` is unavailable, report that the diagram syntax check was skipped.
+PlantUML is mandatory in CI through `REQUIRE_PLANTUML=1`. If it is unavailable locally, report that only the local diagram syntax check was skipped; all other checks must still pass.

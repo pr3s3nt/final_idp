@@ -232,7 +232,7 @@ Quy ước đọc matrix:
 - Sequence UC-03 tách thành phần request (trả lời ngay sau khi tạo job) và luồng Deployment Worker chạy nền theo tầng. Sequence chỉ mô tả **Main Flow**, nên các nhánh A2 dẫn tới `FAILED` không được vẽ thành `alt`; failure semantics vẫn được contract và state machine mô tả.
 - Các object `Deployment Graph`, `Resource Resolution`, Infrastructure Plan, `Resource Output`, `Workload Output`, `Resolved Configuration`, `Resolved Specification` là `TRANSIENT`, nên việc không có table tương ứng là chủ đích và không phải GAP; riêng Infrastructure Plan chỉ có fingerprint + algorithm version được persist trên `deployment`, và Resource/Workload Output chỉ có `output_fingerprint`.
 - `application_component` là identity table hiện thực ID cố định qua phiên bản, không phải domain object mới.
-- Các PlantUML diagram chưa được render để kiểm tra cú pháp vì môi trường hiện tại không có PlantUML/Java.
+- PlantUML source is validated with `-checkonly` in the documentation CI job; local validation reports an explicit notice when the executable is unavailable.
 
 ## Overall acceptance
 
