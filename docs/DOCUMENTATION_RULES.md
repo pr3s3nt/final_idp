@@ -58,6 +58,18 @@ Do not combine these roles in one new document.
 
 PlantUML is the editable source. Every important diagram must be reachable from a textual context document that explains its purpose, scope, key participants, and invariants. Generated images are optional and are not canonical without their source.
 
+## Semantic archive gate
+
+Link, metadata, and ID validation cannot prove that a split artifact preserves every current concept from a consolidated predecessor. Before moving any file marked `VERIFY_THEN_ARCHIVE` into `docs/archive/`:
+
+1. Audit the complete predecessor manually, not only a sample of known identifiers.
+2. Record a canonical destination or a historical rationale for every current-looking concept.
+3. Verify schema claims against executable migrations and behavior claims against implementation/tests when applicable.
+4. Migrate every current gap before the archive move.
+5. Leave no current concept owned only by an archived file.
+
+The active archive gates and their reconciliation checklists are defined in [MIGRATION_PLAN.md](MIGRATION_PLAN.md).
+
 ## Change completion checklist
 
 1. Update the canonical artifact.

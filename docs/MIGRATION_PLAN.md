@@ -24,6 +24,7 @@ The following invariants apply to every migration commit:
 6. Keep stable artifact IDs even when paths and titles change.
 7. Preserve `codex_review.md` untouched unless the user explicitly brings it into scope.
 8. Run `python3 scripts/check_docs.py` and `git diff --check` after every migration commit.
+9. Treat automated documentation checks as structural only; semantic coverage of a consolidated predecessor must be audited manually and recorded before archive.
 
 ## Action vocabulary
 
@@ -32,7 +33,7 @@ The following invariants apply to every migration commit:
 | `KEEP` | The path is already final and remains canonical for its declared scope. |
 | `MOVE` | Move the file to the exact target path and update all inbound links. |
 | `ARCHIVE` | Move a non-normative historical file under `docs/archive/`; it must not own current definitions. |
-| `VERIFY_THEN_ARCHIVE` | First prove the replacement preserves the relevant content, then archive the predecessor. |
+| `VERIFY_THEN_ARCHIVE` | Manually audit the complete predecessor, record where each current concept is owned, migrate every gap, and only then archive it. Link/metadata checks alone are insufficient. |
 | `REMOVE_EMPTY_DIR` | Remove the directory after all tracked artifacts have moved out. |
 | `EXCLUDE` | The item is intentionally outside this migration. |
 
@@ -52,6 +53,7 @@ After migration, authority will be located as follows:
 | Tables, columns, constraints, and literal ENUMs | `docs/architecture/database/schema.md` |
 | Operation contracts | `docs/architecture/contracts/operation-contracts.md` |
 | Lifecycle transitions | `docs/architecture/state-machines/` |
+| Secret storage and materialization design | `docs/architecture/security-and-secrets.md` |
 | Accepted decisions | `docs/decisions/ADR-*.md` |
 | Open/deferred risks and issues | `docs/backlog/D*.md` |
 | Cross-artifact coverage | `docs/traceability/matrix.md` |
@@ -138,9 +140,61 @@ When the consolidated logs move, update `source_record` in every ADR and backlog
 | `docs/verification/*.md` | Same | `KEEP` |
 | `uc03/docs/VERIFICATION.md` | `docs/archive/consolidated/uc03-verification-log.md` | `VERIFY_THEN_ARCHIVE` |
 | `uc03/docs/` | — | `REMOVE_EMPTY_DIR` |
-| `implementation_plan.md` | `docs/archive/planning/uc03-original-implementation-plan.md` | `ARCHIVE` |
+| `implementation_plan.md` | `docs/archive/planning/uc03-original-implementation-plan.md` | `VERIFY_THEN_ARCHIVE` |
 
 Before archiving the consolidated verification log, verify that all five dated snapshots preserve the corresponding sections and update each snapshot's `source_record` to the archive path.
+
+### Mandatory reconciliation for `implementation_plan.md`
+
+`implementation_plan.md` is historical as a plan, but it still contains current design and implementation facts not owned by another canonical artifact. It must not move to the archive until a manual semantic audit is complete.
+
+The following seven known gaps are mandatory checklist items, not the complete audit:
+
+| Known current concept | Canonical destination before archive | Status |
+|---|---|---|
+| Complete UC-03 A1 catalog (`A1-1` through `A1-12`) | `docs/use-cases/UC-03/specification.md` | `PENDING` |
+| `FinishDeployment` writes Deployment Record, `SUCCEEDED`, and job `COMPLETED` atomically | `docs/implementation/deviations.md`; reconcile the accepted behavior with operation contracts afterward | `PENDING` |
+| `RESOURCE_DEFINITION_CHANGED` when a running resource owner changes definition | `docs/implementation/deviations.md`; link to the relevant UC-03 validation rule if promoted to required behavior | `PENDING` |
+| Secret Store uses AES-256-GCM and `idpsecret://`; workload Secret is materialized through `secretKeyRef` | `docs/architecture/security-and-secrets.md` | `PENDING` |
+| Terraform and Git are invoked through CLI rather than `terraform-exec`/`go-git` | `docs/implementation/deviations.md` | `PENDING` |
+| `resource_instance.applied_overrides` | Final database schema at `docs/architecture/database/schema.md` | `PENDING` |
+| `deployment_step.detail` | Final database schema at `docs/architecture/database/schema.md` | `PENDING` |
+
+The two schema findings must be reconciled against the executable migrations, not copied only from prose. At the time this map was reviewed, both columns exist in `uc03/migrations/0001_schema.sql` but are absent from `03_database_erd/schema.md`.
+
+The audit must cover every item in §10 and §10.1, even if it is not one of the seven known gaps:
+
+| Plan item | Subject | Expected canonical owner(s) | Audit status |
+|---|---|---|---|
+| §10 item 1 | Target infrastructure as graph nodes and `requires` edges | UC-03 specification/realization and ADR-012 | `PENDING` |
+| §10 item 2 | TEARDOWN and `deployment.kind` | UC-05 specification/realization and database schema | `PENDING` |
+| §10 item 3 | Override baseline and input fingerprint | UC-03 realization and database schema | `PENDING` |
+| §10 item 4 | A1-12 overlapping-deployment rejection | UC-03 specification | `PENDING` |
+| §10 item 5 | Atomic `FinishDeployment` | Implementation deviations, then operation contract if accepted as design | `PENDING` |
+| §10 item 6 | Full typed-plan fingerprint and pre-side-effect recheck | UC-03 specification/realization | `PENDING` |
+| §10 item 7 | Verify workload disappearance before removal/destruction | UC-05 specification and D13 | `PENDING` |
+| §10 item 8 | Partial unique constraint for active Workload Instance | Database schema | `PENDING` |
+| §10 item 9 | Applied portions of D4/D5/D6/D8 | ADR/backlog status, contracts, state machines, and schema as applicable | `PENDING` |
+| §10 item 10 | `deployment_step.detail` | Database schema | `PENDING` |
+| §10.1 item 11 | Transitive closure of resource `requires` | UC-03 specification/realization | `PENDING` |
+| §10.1 item 12 | Platform-node output does not trigger workload cascade | UC-03 specification/realization | `PENDING` |
+| §10.1 item 13 | Logical image registry and target-specific mapping | Implementation deviations or shared integration architecture | `PENDING` |
+| §10.1 item 14 | Encrypted Secret Store and Secret materialization | Security/Secret architecture | `PENDING` |
+| §10.1 item 15 | Added step, kind, platform requirement, `requires`, fingerprints, detail, and uniqueness fields | Decompose and verify against each canonical owner; do not treat this row as one concept | `PENDING` |
+| §10.1 item 16 | Terraform/Git CLI and Kubernetes `client-go` choices | Implementation deviations | `PENDING` |
+| §10.1 item 17 | Separate resource and workload namespaces on kind | Implementation deviations or deployment architecture | `PENDING` |
+| §10.1 item 18 | `RESOURCE_DEFINITION_CHANGED` | Implementation deviations and UC-03 validation behavior if normative | `PENDING` |
+| §10.1 item 19 | UC-02 importer validation behavior | Implementation deviations and UC-02 delivery-state context | `PENDING` |
+| §10.1 item 20 | Step creation timing and failed-step transition to `SKIPPED` | Implementation deviations; reconcile with D04 and operation contracts | `PENDING` |
+
+The audit procedure is manual and must be recorded in this table or a linked reconciliation record:
+
+1. Read all of §10 and §10.1, plus the complete A1 catalog elsewhere in the plan.
+2. Search current non-archive documentation for every identifier, field, error, protocol, and behavioral rule.
+3. Classify each item as already canonical, missing current content, or genuinely historical.
+4. Move missing current content to its declared canonical owner and verify it against code/migrations where applicable.
+5. Replace `PENDING` with `COVERED` plus a link, or `HISTORICAL` plus a rationale.
+6. Archive `implementation_plan.md` only when no checklist or audit row remains `PENDING`.
 
 ## Mapping E — Root, process, and tooling
 
@@ -178,6 +232,7 @@ The migration is complete only when:
 - every use case owns its specification, realization, sequence source, VOPC source, and context map;
 - every current concept has exactly one canonical owner;
 - archived files are clearly historical and no current definition depends on them;
+- no current concept exists only in `docs/archive/`, and every `VERIFY_THEN_ARCHIVE` move has a recorded, complete semantic reconciliation with no pending item;
 - all internal links resolve and no workstation-specific paths exist;
 - PlantUML validation is installed and required in CI rather than skipped;
 - the final-layout rules are enforced by `scripts/check_docs.py`;
