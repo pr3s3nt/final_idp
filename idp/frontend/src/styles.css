@@ -1,2 +1,78 @@
-body { font-family: system-ui, sans-serif; margin: 0; }
-.page { max-width: 72rem; margin: 0 auto; padding: 1rem; }
+:root {
+  --bg: #f6f7f9;
+  --fg: #1d2330;
+  --muted: #5b6472;
+  --line: #d5dae3;
+  --card: #fff;
+  --accent: #2f5bd3;
+  --bad: #b42318;
+  --bad-bg: #fff5f4;
+  --ok: #1f7a4d;
+  --ok-bg: #eef8f2;
+  --info-bg: #eef3ff;
+  --focus: #1b46b8;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--fg); }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.topbar { background: var(--fg); padding: 10px 20px; display: flex; gap: 20px; flex-wrap: wrap; }
+.topbar a { color: #fff; text-decoration: none; font-weight: 600; }
+.topbar a[aria-current='page'] { text-decoration: underline; }
+
+.page { max-width: 72rem; margin: 0 auto; padding: 20px; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+h1 { font-size: 22px; margin: 4px 0; }
+h2 { font-size: 17px; margin: 0 0 10px; }
+h3 { font-size: 15px; margin: 0; }
+.muted { color: var(--muted); }
+.hint { color: var(--muted); font-size: 12px; margin: 2px 0 0; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin-bottom: 16px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
+.badge { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: var(--info-bg); }
+
+.banner { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; background: var(--card); }
+.banner h1, .banner h2 { font-size: 16px; margin: 0 0 6px; }
+.banner ul { margin: 6px 0 0; padding-left: 20px; }
+.banner-error { border-color: #f2b8b5; background: var(--bad-bg); }
+.banner-success { border-color: #a9dcbf; background: var(--ok-bg); }
+.banner-info { border-color: #b8c8f2; background: var(--info-bg); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 8px 16px; }
+.field { display: flex; flex-direction: column; min-width: 0; }
+.field.wide { grid-column: 1 / -1; }
+label { font-weight: 600; margin-bottom: 2px; }
+input[type='text'], textarea, select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; background: #fff; width: 100%; }
+[aria-invalid='true'] { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+.field-errors { color: var(--bad); margin: 2px 0 0; padding-left: 18px; font-size: 13px; }
+.checkbox { display: flex; gap: 6px; align-items: center; font-weight: 400; margin: 0; align-self: center; }
+
+.items, .sublist ul { list-style: none; margin: 0 0 10px; padding: 0; }
+.item { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; }
+.item-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.sublist { border: 1px dashed var(--line); border-radius: 6px; margin: 10px 0 0; padding: 8px 12px; min-width: 0; }
+.sublist legend { font-weight: 600; padding: 0 4px; }
+.row { display: flex; gap: 8px 12px; align-items: flex-end; flex-wrap: wrap; }
+.row .field { flex: 1 1 12rem; }
+.row > .field-errors { flex-basis: 100%; }
+.arrow { color: var(--muted); padding-bottom: 8px; }
+
+button, .button { font: inherit; font-weight: 600; border-radius: 6px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff; text-decoration: none; display: inline-block; }
+button.secondary { background: #fff; color: var(--accent); }
+button.danger { color: var(--bad); border-color: var(--bad); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+button.link { background: none; border: 0; padding: 0; color: var(--bad); text-decoration: underline; font-weight: 400; text-align: left; }
+
+.actions { position: sticky; bottom: 0; display: flex; gap: 10px; justify-content: flex-end; align-items: center; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; }
+.actions [role='status'] { margin-right: auto; }
+
+@media (max-width: 40rem) {
+  .page { padding: 12px; }
+  .actions { position: static; }
+  .arrow { padding-bottom: 0; }
+}

@@ -33,3 +33,15 @@ npm run build       # production bundle in dist/
 `IDP_API_ORIGIN` to use another backend address. After `npm run build`, the Go
 server (`idp serve`) serves `dist/` under `/ui/`; see the
 [runbook](../../docs/operations/uc03/RUNBOOK.md).
+
+## Layout
+
+| Path | Role |
+|---|---|
+| `src/api/` | JSON DTO types and the API client (list, load for edit, Save) |
+| `src/draft/model.ts`, `reducer.ts` | `ApplicationDefinitionDraft` in the browser and its local edit actions |
+| `src/draft/storage.ts` | `sessionStorage` adapter with schema version and shape checks |
+| `src/draft/validation.ts` | Client-side UC-01 rules for fast feedback; the backend re-validates |
+| `src/pages/` | Application list and editor pages |
+| `src/components/` | Editor sections, fields and validation summary |
+| `src/router.ts` | Minimal History API router for `/ui/` paths |
