@@ -4,9 +4,15 @@
 
 Read `docs/INDEX.md` before changing requirements, design, implementation, tests, or operational documentation.
 
-The documentation layout migration is complete. Do not recreate the retired numbered directories, `sequence_digrams/`, `uc03/docs/`, or loose historical root documents. The completed [migration record](docs/MIGRATION_PLAN.md) explains provenance; current destinations are indexed from `docs/INDEX.md`.
+The documentation layout migration is complete. Do not recreate the retired numbered directories, `sequence_digrams/`, `uc03/docs/`, the former root `uc03/` code directory, or loose historical root documents. The completed [migration record](docs/MIGRATION_PLAN.md) explains provenance; current destinations are indexed from `docs/INDEX.md`.
 
 For a use-case-specific task, read that use case's `docs/use-cases/UC-*/README.md` context file and only then follow its links to shared artifacts.
+
+## Code boundaries
+
+- `idp/backend/` contains the current Go backend, including the server-rendered UI templates embedded in the backend binary.
+- `idp/frontend/` is reserved for a future independently built IDP frontend. Do not move the embedded templates there without also changing the build and delivery design.
+- `demo-apps/` contains workloads deployed by the IDP for demos and verification. Its `frontend` command is a demo workload, not the IDP user interface.
 
 ## Sources of truth
 

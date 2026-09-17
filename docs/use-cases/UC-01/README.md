@@ -31,4 +31,4 @@ Designed. The current Go implementation imports Application Definitions as fixtu
 
 ## Implementation entry point
 
-Fixture/import support is under [`uc03/internal/fixtures`](../../../uc03/internal/fixtures/); it is not a substitute for the complete use case.
+Fixture/import support is under [`idp/backend/internal/fixtures`](../../../idp/backend/internal/fixtures/); it is not a substitute for the complete use case.

@@ -17,7 +17,7 @@ Implemented and end-to-end verified on an existing internal kind cluster and on 
 2. [Use Case Realization](realization.md)
 3. [Sequence diagram](sequence.puml)
 4. [VOPC](vopc.puml)
-5. [UC-03 implementation map](../../../uc03/README.md)
+5. [UC-03 implementation map](../../../idp/backend/README.md)
 6. [Verification index](../../verification/README.md)
 
 ## Shared artifacts
@@ -45,8 +45,8 @@ The highest-impact UC-03 items are [D3](../../backlog/D03-typed-infrastructure-p
 
 | Concern | Code |
 |---|---|
-| Request orchestration and confirmation | [`orchestrator.go`](../../../uc03/internal/service/orchestrator.go) |
-| Background execution | [`worker.go`](../../../uc03/internal/service/worker.go) |
-| Graph, wave, and infrastructure planning | [`uc03/internal/domain`](../../../uc03/internal/domain/) |
-| Persistence | [`uc03/internal/persistence`](../../../uc03/internal/persistence/) |
-| External integrations | [`uc03/internal/integration`](../../../uc03/internal/integration/) |
+| Request orchestration and confirmation | [`orchestrator.go`](../../../idp/backend/internal/service/orchestrator.go) |
+| Background execution | [`worker.go`](../../../idp/backend/internal/service/worker.go) |
+| Graph, wave, and infrastructure planning | [`idp/backend/internal/domain`](../../../idp/backend/internal/domain/) |
+| Persistence | [`idp/backend/internal/persistence`](../../../idp/backend/internal/persistence/) |
+| External integrations | [`idp/backend/internal/integration`](../../../idp/backend/internal/integration/) |

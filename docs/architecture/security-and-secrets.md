@@ -23,6 +23,6 @@ The target namespace owns the materialized Kubernetes Secret. Cleanup follows wo
 
 ## Implementation anchors
 
-- Encrypted store: `uc03/internal/integration/secretstore/secretstore.go`
-- Manifest references and HMAC: `uc03/internal/domain/manifest/pipeline.go`
-- Kubernetes write path: the selected CD/Kubernetes adapter invoked by `uc03/internal/service/worker.go`
+- Encrypted store: `idp/backend/internal/integration/secretstore/secretstore.go`
+- Manifest references and HMAC: `idp/backend/internal/domain/manifest/pipeline.go`
+- Kubernetes write path: the selected CD/Kubernetes adapter invoked by `idp/backend/internal/service/worker.go`

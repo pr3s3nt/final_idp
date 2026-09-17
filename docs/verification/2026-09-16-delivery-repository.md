@@ -21,6 +21,6 @@ Chạy trên cụm nội bộ `idp-internal` (kind), target `kind-local`, catalo
 
 Kiểm tra secret: manifest đẩy lên hai repo chỉ tham chiếu `secretKeyRef` (`DB_PASSWORD`, `API_KEY`), không có giá trị secret nào trong Git. Token và khóa chỉ nằm trong Secret Store; database chỉ giữ secret reference.
 
-Việc đã làm cùng lượt: khóa Secret Store được xoay và chuyển vào `uc03/.env` (0600, gitignore) vì khóa cũ chỉ tồn tại trong shell của phiên trước; bốn secret cũ được tạo lại với đúng reference cũ nên không phải import lại fixtures.
+Việc đã làm cùng lượt: khóa Secret Store được xoay và chuyển vào `idp/backend/.env` (0600, gitignore) vì khóa cũ chỉ tồn tại trong shell của phiên trước; bốn secret cũ được tạo lại với đúng reference cũ nên không phải import lại fixtures.
 
 Còn lại (chưa dọn, không có code nào dùng tới): repo dùng chung `pr3s3nt/final-idp-gitops` và secret `idp-gitops-repo` trong namespace `argocd` của cụm `idp-internal`.

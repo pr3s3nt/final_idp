@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.score-k8s
+bin
+var
+docs
+prerequisites
+scripts
+**/.terraform
+**/.terraform.lock.hcl
+**/*.tfplan
+**/*.tfstate
+**/*.tfstate.*

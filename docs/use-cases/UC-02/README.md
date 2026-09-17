@@ -32,5 +32,5 @@ Designed. The current Go implementation imports Environment Configuration data a
 
 ## Implementation entry points
 
-- Fixture/import support: [`uc03/internal/fixtures`](../../../uc03/internal/fixtures/)
-- Configuration persistence used by deployment: [`environment_configuration_repository.go`](../../../uc03/internal/persistence/environment_configuration_repository.go)
+- Fixture/import support: [`idp/backend/internal/fixtures`](../../../idp/backend/internal/fixtures/)
+- Configuration persistence used by deployment: [`environment_configuration_repository.go`](../../../idp/backend/internal/persistence/environment_configuration_repository.go)

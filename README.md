@@ -7,7 +7,9 @@ This repository applies the Unified Process (UP): development is use-case-driven
 - [Documentation index](docs/INDEX.md) — authoritative map for humans and AI agents.
 - [Current project state](docs/CURRENT_STATE.md) — implemented scope, lifecycle position, and known limitations.
 - [Glossary](docs/GLOSSARY.md) — canonical project terminology.
-- [UC-03 implementation](uc03/README.md) — code layout and design-to-code map.
+- [IDP source code](idp/README.md) — backend/frontend boundaries and source entry points.
+- [Backend implementation](idp/backend/README.md) — UC-03/UC-05 design-to-code map.
+- [Demo applications](demo-apps/README.md) — workloads used by demos and end-to-end verification.
 - [Runbook](docs/operations/uc03/RUNBOOK.md) — build, run, test, and troubleshooting instructions.
 
 ## Documentation model

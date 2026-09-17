@@ -35,4 +35,4 @@ source_record: ../archive/consolidated/design-decisions-log.md
 
 **Sẽ ảnh hưởng:** [đặc tả và realization UC-03](../use-cases/UC-03/README.md), sequence UC-03, VOPC UC-03 + design class diagram + README, domain model + domain objects + persistence classification, ERD, operation contract 8, traceability.
 
-**Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** toàn bộ danh sách trên. Code trong `uc03/` chưa sửa theo quyết định này.
+**Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** toàn bộ danh sách trên. Code trong `idp/backend/` chưa sửa theo quyết định này.

@@ -25,6 +25,6 @@ Designed and partially implemented. The current code provides the query/status p
 
 ## Implementation entry points
 
-- Query service: [`query.go`](../../../uc03/internal/service/query.go)
-- Persistence queries: [`deployment_queries.go`](../../../uc03/internal/persistence/deployment_queries.go)
-- Web/API layer: [`uc03/internal/web`](../../../uc03/internal/web/)
+- Query service: [`query.go`](../../../idp/backend/internal/service/query.go)
+- Persistence queries: [`deployment_queries.go`](../../../idp/backend/internal/persistence/deployment_queries.go)
+- Web/API layer: [`idp/backend/internal/web`](../../../idp/backend/internal/web/)

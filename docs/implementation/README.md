@@ -9,7 +9,7 @@ last_reviewed: 2026-09-17
 
 ## Current implementation
 
-The Go implementation is under [`uc03/`](../../uc03/). Its local [README](../../uc03/README.md) maps design components to packages. Runtime setup and operations are documented in the [runbook](../operations/uc03/RUNBOOK.md).
+The Go implementation is under [`idp/backend/`](../../idp/backend/). Its local [README](../../idp/backend/README.md) maps design components to packages. Runtime setup and operations are documented in the [runbook](../operations/uc03/RUNBOOK.md).
 
 ## Design-to-code navigation
 

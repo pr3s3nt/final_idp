@@ -7,7 +7,7 @@ last_reviewed: 2026-09-17
 
 # RUNBOOK – UC-03 Deploy Application
 
-Mọi lệnh chạy trong thư mục `uc03/`.
+Mọi lệnh chạy trong thư mục `idp/backend/`.
 
 ## 1. Yêu cầu máy
 
@@ -55,7 +55,7 @@ docker exec idp-uc03-db psql -U idp -d idp -c "CREATE DATABASE idp_test"
 docker run -d --name idp-uc03-registry --restart unless-stopped -p 127.0.0.1:5055:5000 registry:2
 docker network connect kind idp-uc03-registry   # tạo mạng bằng `docker network create kind` nếu chưa có
 
-# Khóa Secret Store: giữ trong uc03/.env (0600, đã gitignore) để không mất giữa các phiên
+# Khóa Secret Store: giữ trong idp/backend/.env (0600, đã gitignore) để không mất giữa các phiên
 umask 077; printf 'IDP_SECRET_KEY=%s\n' "$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" > .env
 set -a; . ./.env; set +a
 

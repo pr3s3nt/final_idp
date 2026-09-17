@@ -69,8 +69,8 @@ The entire plan was reviewed, including §10, §10.1, the complete A1 list, late
 
 | Plan area | Current owner or classification | Result |
 |---|---|---|
-| §1–§4 original context, assumptions, and proposed package layout | Archived source; current navigation is the [implementation index](README.md) and [`uc03/README.md`](../../uc03/README.md) | `HISTORICAL` |
-| §5 component/package map | [`code-map.md`](code-map.md) and [`uc03/README.md`](../../uc03/README.md) | `COVERED` |
+| §1–§4 original context, assumptions, and proposed package layout | Archived source; current navigation is the [implementation index](README.md) and [`idp/backend/README.md`](../../idp/backend/README.md) | `HISTORICAL` |
+| §5 component/package map | [`code-map.md`](code-map.md) and [`idp/backend/README.md`](../../idp/backend/README.md) | `COVERED` |
 | §6 M1–M24 and business rules | [UC-03](../use-cases/UC-03/specification.md), [UC-05](../use-cases/UC-05/specification.md), their realizations, contracts, and schema | `COVERED` |
 | Complete A1-1 through A1-12 catalog | [UC-03 A1](../use-cases/UC-03/specification.md#a1--deployment-input-hoặc-dependency-không-hợp-lệ) | `COVERED` |
 | §7–§9 staged execution plan and environment setup | Historical sequencing; current commands and prerequisites are in the [runbook](../operations/uc03/RUNBOOK.md) | `HISTORICAL` / `COVERED` |

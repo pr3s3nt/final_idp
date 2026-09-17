@@ -30,4 +30,4 @@ Implemented and end-to-end verified on `kind-local` and AWS. Two teardown edge c
 
 ## Implementation entry points
 
-UC-05 deliberately reuses the UC-03 orchestrator, worker, plan, persistence, and integration layers. Start with [`orchestrator.go`](../../../uc03/internal/service/orchestrator.go), [`worker.go`](../../../uc03/internal/service/worker.go), and [`plan.go`](../../../uc03/internal/domain/plan.go).
+UC-05 deliberately reuses the UC-03 orchestrator, worker, plan, persistence, and integration layers. Start with [`orchestrator.go`](../../../idp/backend/internal/service/orchestrator.go), [`worker.go`](../../../idp/backend/internal/service/worker.go), and [`plan.go`](../../../idp/backend/internal/domain/plan.go).
