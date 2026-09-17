@@ -129,7 +129,7 @@ Dùng chung trong cùng app + environment đã có sẵn trong thiết kế: nhi
 
 ## Vấn đề 4 — UC-04 gọi hệ thống bên ngoài mà không kiểm tra điều kiện
 
-**Vấn đề:** khi Developer mở bất kỳ deployment nào, sequence UC-04 (`uc_04_view_deployment_result.puml:38-53`) luôn gọi đủ `getInfrastructureStatus`, `getCDStatus`, `getWorkloadStatus`, `getDeploymentEndpoints` mà không kiểm tra deployment đã tới bước tương ứng chưa. Hệ quả:
+**Vấn đề:** khi Developer mở bất kỳ deployment nào, sequence UC-04 (`docs/use-cases/UC-04/sequence.puml:38-53`) luôn gọi đủ `getInfrastructureStatus`, `getCDStatus`, `getWorkloadStatus`, `getDeploymentEndpoints` mà không kiểm tra deployment đã tới bước tương ứng chưa. Hệ quả:
 
 - Deployment thất bại trước khi gửi sang CD vẫn bị gọi `getCDStatus(NULL)` vì `delivery_reference` rỗng.
 - **Hiển thị "Healthy" giả:** Kubernetes trả lời về workload đang chạy trên cluster, không phải của deployment đang xem. Deployment #42 thất bại trước khi deploy vẫn hiện "backend Healthy" — thực ra là bản của #41 đang chạy. Mở lại một deployment cũ thì bị gán health của bản mới hơn.
@@ -298,7 +298,7 @@ Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã worklo
 
 ## Vấn đề 10 — Toàn bộ việc triển khai chạy trong request `confirmDeployment`
 
-**Vấn đề:** trong `sequence_digrams/uc_03_deploy_application.puml`, sau khi nhận `confirmDeployment`, toàn bộ chuỗi `reconcileInfrastructure` → `collectResourceOutputs` → `resolveEnvironmentConfiguration` → sinh/adapt/materialize manifest → `publishDesiredDeploymentState` → `saveDeploymentRecord` chạy trong cùng request; trình duyệt chờ tới khi tất cả xong mới nhận "Deployment created". Hệ quả:
+**Vấn đề:** trong `docs/use-cases/UC-03/sequence.puml`, sau khi nhận `confirmDeployment`, toàn bộ chuỗi `reconcileInfrastructure` → `collectResourceOutputs` → `resolveEnvironmentConfiguration` → sinh/adapt/materialize manifest → `publishDesiredDeploymentState` → `saveDeploymentRecord` chạy trong cùng request; trình duyệt chờ tới khi tất cả xong mới nhận "Deployment created". Hệ quả:
 
 - **Request quá lâu bị cắt:** tạo database có thể mất 10–20 phút, trong khi trình duyệt/load balancer/API gateway thường cắt kết nối sau khoảng 30–60 giây; UI báo lỗi dù việc có thể vẫn chạy hoặc đã dừng giữa chừng.
 - **Server khởi động lại giữa chừng thì không ai làm tiếp:** việc chạy trong bộ nhớ của request, deployment kẹt ở `CONFIRMED` hoặc nửa chừng, không ai tiếp tục hay đánh dấu thất bại.
@@ -460,4 +460,4 @@ Trong khi đó code đã chạy thao tác này nhiều tháng: `POST /api/teardo
 5. **Thứ tự là ngược lại**: workload trước, rồi tới resource mà chúng phụ thuộc. Workload chỉ được đánh dấu đã gỡ sau khi xác minh nó biến mất khỏi cụm; resource chỉ bị hủy sau đó. Resource dùng chung, có sẵn chỉ bị gỡ liên kết, không bao giờ bị hủy.
 6. **Không thêm class nào** vào VOPC: UC-05 dùng lại đúng các thành phần của UC-03.
 
-**Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** đặc tả UC-05 trong `usecase_realization_step_1_3.md` (kèm Bước 1, 2, 3), `sequence_digrams/uc_05_remove_application_from_environment.puml`, `01_vopc_design_class_diagram/vopc_uc05.puml`, cột `deployment.kind` trong ERD, operation contract 12 `createTeardown()`, nhánh mới trong state machine deployment, traceability. Code trong `uc03/` đã có sẵn thao tác này nên lần này thiết kế đuổi theo code, ngược với các vấn đề trước.
+**Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** đặc tả UC-05 trong `usecase_realization_step_1_3.md` (kèm Bước 1, 2, 3), `docs/use-cases/UC-05/sequence.puml`, `docs/use-cases/UC-05/vopc.puml`, cột `deployment.kind` trong ERD, operation contract 12 `createTeardown()`, nhánh mới trong state machine deployment, traceability. Code trong `uc03/` đã có sẵn thao tác này nên lần này thiết kế đuổi theo code, ngược với các vấn đề trước.

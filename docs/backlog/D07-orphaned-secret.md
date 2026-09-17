@@ -18,7 +18,7 @@ source_record: ../../06_traceability/deferred_issues.md
 
 ### Vấn đề
 
-Trong `sequence_digrams/uc_02_configure_application_environment.puml`, secret được ghi vào Secret Store **ngay lúc Developer nhập**, còn reference chỉ được lưu vào DB **khi bấm Save**:
+Trong `docs/use-cases/UC-02/sequence.puml`, secret được ghi vào Secret Store **ngay lúc Developer nhập**, còn reference chỉ được lưu vào DB **khi bấm Save**:
 
 ```text
 Developer nhập DB_PASSWORD

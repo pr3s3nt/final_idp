@@ -11,7 +11,7 @@ source_record: ../../06_traceability/design_decisions.md
 
 **Current status (2026-09-17):** accepted and implemented. Crash recovery beyond the current safety behavior remains tracked in [D06](../backlog/D06-worker-recovery.md).
 
-**Vấn đề:** trong `sequence_digrams/uc_03_deploy_application.puml`, sau khi nhận `confirmDeployment`, toàn bộ chuỗi `reconcileInfrastructure` → `collectResourceOutputs` → `resolveEnvironmentConfiguration` → sinh/adapt/materialize manifest → `publishDesiredDeploymentState` → `saveDeploymentRecord` chạy trong cùng request; trình duyệt chờ tới khi tất cả xong mới nhận "Deployment created". Hệ quả:
+**Vấn đề:** trong `docs/use-cases/UC-03/sequence.puml`, sau khi nhận `confirmDeployment`, toàn bộ chuỗi `reconcileInfrastructure` → `collectResourceOutputs` → `resolveEnvironmentConfiguration` → sinh/adapt/materialize manifest → `publishDesiredDeploymentState` → `saveDeploymentRecord` chạy trong cùng request; trình duyệt chờ tới khi tất cả xong mới nhận "Deployment created". Hệ quả:
 
 - **Request quá lâu bị cắt:** tạo database có thể mất 10–20 phút, trong khi trình duyệt/load balancer/API gateway thường cắt kết nối sau khoảng 30–60 giây; UI báo lỗi dù việc có thể vẫn chạy hoặc đã dừng giữa chừng.
 - **Server khởi động lại giữa chừng thì không ai làm tiếp:** việc chạy trong bộ nhớ của request, deployment kẹt ở `CONFIRMED` hoặc nửa chừng, không ai tiếp tục hay đánh dấu thất bại.

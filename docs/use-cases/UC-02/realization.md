@@ -68,7 +68,7 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 ## Detailed design artifacts
 
-- [Sequence diagram](../../../sequence_digrams/uc_02_configure_application_environment.puml)
-- [VOPC](../../../01_vopc_design_class_diagram/vopc_uc02.puml)
+- [Sequence diagram](sequence.puml)
+- [VOPC](vopc.puml)
 - [Operation contracts](../../../04_operation_contracts/operation_contracts.md)
 - [Traceability matrix](../../../06_traceability/traceability_matrix.md)

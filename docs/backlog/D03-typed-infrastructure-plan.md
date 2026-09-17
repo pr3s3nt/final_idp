@@ -20,8 +20,8 @@ Plan được nhắc ở nhiều nơi nhưng không nơi nào định nghĩa nó
 
 | Nơi | Plan được mô tả thế nào |
 |---|---|
-| `sequence_digrams/uc_03_deploy_application.puml` | Chỉ là dòng chữ `Infrastructure plan (create/update/reuse)` |
-| `01_vopc_design_class_diagram/vopc_uc03.puml`, `design_class_diagram.puml` | `Infrastructure Planner` có `-plan: Object`, `-allowedOverrides: Map` |
+| `docs/use-cases/UC-03/sequence.puml` | Chỉ là dòng chữ `Infrastructure plan (create/update/reuse)` |
+| `docs/use-cases/UC-03/vopc.puml`, `design_class_diagram.puml` | `Infrastructure Planner` có `-plan: Object`, `-allowedOverrides: Map` |
 | `04_operation_contracts/operation_contracts.md` (Contract 4, 5) | Một đoạn văn liệt kê "những thứ đưa vào fingerprint" |
 | `03_database_erd/schema.md` | Chỉ có cột `plan_fingerprint`, `plan_fingerprint_algo` |
 | `02_domain_model/domain_model.puml` | Không có class; chỉ có ghi chú "Infrastructure Plan remains TRANSIENT" |

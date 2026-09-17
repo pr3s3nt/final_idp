@@ -15,8 +15,8 @@ Designed and partially implemented. The current code provides the query/status p
 
 1. [Specification](specification.md)
 2. [Use Case Realization](realization.md)
-3. [Sequence diagram](../../../sequence_digrams/uc_04_view_deployment_result.puml)
-4. [VOPC](../../../01_vopc_design_class_diagram/vopc_uc04.puml)
+3. [Sequence diagram](sequence.puml)
+4. [VOPC](vopc.puml)
 
 ## Open issues
 

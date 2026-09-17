@@ -15,9 +15,10 @@ Implemented and end-to-end verified on an existing internal kind cluster and on 
 
 1. [Specification](specification.md)
 2. [Use Case Realization](realization.md)
-3. [Sequence diagram](../../../sequence_digrams/uc_03_deploy_application.puml)
-4. [UC-03 implementation map](../../../uc03/README.md)
-5. [Verification index](../../verification/README.md)
+3. [Sequence diagram](sequence.puml)
+4. [VOPC](vopc.puml)
+5. [UC-03 implementation map](../../../uc03/README.md)
+6. [Verification index](../../verification/README.md)
 
 ## Shared artifacts
 

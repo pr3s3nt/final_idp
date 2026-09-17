@@ -80,7 +80,7 @@ UC-04 không dùng Deployment Orchestrator để thực hiện hành động. UC
 
 ## Detailed design artifacts
 
-- [Sequence diagram](../../../sequence_digrams/uc_04_view_deployment_result.puml)
-- [VOPC](../../../01_vopc_design_class_diagram/vopc_uc04.puml)
+- [Sequence diagram](sequence.puml)
+- [VOPC](vopc.puml)
 - [Operation contracts](../../../04_operation_contracts/operation_contracts.md)
 - [Traceability matrix](../../../06_traceability/traceability_matrix.md)

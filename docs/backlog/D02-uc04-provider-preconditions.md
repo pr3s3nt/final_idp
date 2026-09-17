@@ -14,7 +14,7 @@ source_record: ../../06_traceability/deferred_issues.md
 
 ### Vấn đề
 
-UC-04 hiển thị kết quả một deployment bằng hai nguồn: dữ liệu đã lưu trong DB (Deployment Record, step, image) và dữ liệu hỏi trực tiếp hệ thống bên ngoài (hạ tầng, CD, Kubernetes). Trong `sequence_digrams/uc_04_view_deployment_result.puml:38-53`, khi mở **bất kỳ** deployment nào, IDP luôn gọi đủ bốn lời gọi, không kiểm tra deployment đó đã tới bước tương ứng hay chưa:
+UC-04 hiển thị kết quả một deployment bằng hai nguồn: dữ liệu đã lưu trong DB (Deployment Record, step, image) và dữ liệu hỏi trực tiếp hệ thống bên ngoài (hạ tầng, CD, Kubernetes). Trong `docs/use-cases/UC-04/sequence.puml:38-53`, khi mở **bất kỳ** deployment nào, IDP luôn gọi đủ bốn lời gọi, không kiểm tra deployment đó đã tới bước tương ứng hay chưa:
 
 - `getInfrastructureStatus(infrastructureReferences)`
 - `getCDStatus(deliveryReference)`

@@ -7,7 +7,7 @@ last_reviewed: 2026-09-17
 
 # Step 1: VOPC / Design Class Diagram
 
-Thư mục này mô tả **View Of Participating Classes (VOPC)** cho năm use case của Internal Developer Platform. `design_class_diagram.puml` là góc nhìn hợp nhất toàn hệ thống; năm file `vopc_uc*.puml` là lát cắt theo từng use case và chỉ chứa các participating class được liệt kê cho use case tương ứng tại Bước 3.
+Tài liệu này mô tả **View Of Participating Classes (VOPC)** cho năm use case của Internal Developer Platform. `design_class_diagram.puml` là góc nhìn hợp nhất toàn hệ thống; VOPC của từng use case nằm cạnh specification và realization trong `docs/use-cases/UC-*/vopc.puml`.
 
 ## Cách đọc diagram
 
@@ -91,8 +91,8 @@ Thư mục này mô tả **View Of Participating Classes (VOPC)** cho năm use c
 | File | Nội dung |
 |---|---|
 | `design_class_diagram.puml` | Consolidated design class diagram của toàn bộ UC-01 đến UC-05. |
-| `vopc_uc01.puml` | Participating classes cho Create / Configure Application. |
-| `vopc_uc02.puml` | Participating classes cho Configure Application Environment. |
-| `vopc_uc03.puml` | Participating classes cho Deploy Application. |
-| `vopc_uc04.puml` | Participating classes cho View Deployment Result. |
-| `vopc_uc05.puml` | Participating classes cho Remove Application from Environment. |
+| [`docs/use-cases/UC-01/vopc.puml`](../docs/use-cases/UC-01/vopc.puml) | Participating classes cho Create / Configure Application. |
+| [`docs/use-cases/UC-02/vopc.puml`](../docs/use-cases/UC-02/vopc.puml) | Participating classes cho Configure Application Environment. |
+| [`docs/use-cases/UC-03/vopc.puml`](../docs/use-cases/UC-03/vopc.puml) | Participating classes cho Deploy Application. |
+| [`docs/use-cases/UC-04/vopc.puml`](../docs/use-cases/UC-04/vopc.puml) | Participating classes cho View Deployment Result. |
+| [`docs/use-cases/UC-05/vopc.puml`](../docs/use-cases/UC-05/vopc.puml) | Participating classes cho Remove Application from Environment. |

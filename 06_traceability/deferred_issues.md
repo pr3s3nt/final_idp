@@ -43,9 +43,9 @@ Nguồn đối chiếu: commit `88585ccdd1a7896c615ad43fbb0d0f6b62d231ef` (nhán
 
 Trong UC-01 và UC-02, Developer chỉnh sửa qua nhiều bước (thêm resource, workload, configuration requirement, dependency, gán value/output…) rồi mới Save. Thiết kế hiện tại đặt bản nháp làm thuộc tính của application service ở backend, và các operation chỉnh sửa chỉ nhận `applicationId`:
 
-- `01_vopc_design_class_diagram/vopc_uc01.puml:29` — `Application Service` có `-applicationDraft: Object`.
-- `01_vopc_design_class_diagram/vopc_uc02.puml:30` — `Environment Configuration Service` có `-configurationDraft: Object`.
-- `sequence_digrams/uc_01_create_configure_application.puml:21,28,48` — Service trả về "draft" nhưng không nói draft được lưu và khôi phục thế nào giữa các request.
+- `docs/use-cases/UC-01/vopc.puml:29` — `Application Service` có `-applicationDraft: Object`.
+- `docs/use-cases/UC-02/vopc.puml:30` — `Environment Configuration Service` có `-configurationDraft: Object`.
+- `docs/use-cases/UC-01/sequence.puml:21,28,48` — Service trả về "draft" nhưng không nói draft được lưu và khôi phục thế nào giữa các request.
 - `06_traceability/traceability_matrix.md` (các dòng UC-01/UC-02) — ghi "draft; write deferred" nhưng không có bảng hay nơi lưu draft.
 
 Hệ quả nếu giữ nguyên:
@@ -63,7 +63,7 @@ Hệ quả nếu giữ nguyên:
 - Persistence classification xếp draft là `CLIENT-OWNED DTO`, không có backend draft store.
 - UC-02: secret nhập trực tiếp được gửi plaintext đúng một lần qua `stageSecret`, UI chỉ giữ opaque reference (liên quan issue #11).
 
-Xem: `git show 88585cc -- 01_vopc_design_class_diagram/vopc_uc01.puml 01_vopc_design_class_diagram/vopc_uc02.puml sequence_digrams/uc_01_create_configure_application.puml`.
+Xem các đường dẫn tồn tại tại commit đó: `git show 88585cc -- 01_vopc_design_class_diagram/vopc_uc01.puml 01_vopc_design_class_diagram/vopc_uc02.puml sequence_digrams/uc_01_create_configure_application.puml`.
 
 ### Câu hỏi cần chốt khi giải quyết
 
@@ -83,7 +83,7 @@ Sequence, VOPC, domain/persistence classification, operation contracts và trace
 
 ### Vấn đề
 
-UC-04 hiển thị kết quả một deployment bằng hai nguồn: dữ liệu đã lưu trong DB (Deployment Record, step, image) và dữ liệu hỏi trực tiếp hệ thống bên ngoài (hạ tầng, CD, Kubernetes). Trong `sequence_digrams/uc_04_view_deployment_result.puml:38-53`, khi mở **bất kỳ** deployment nào, IDP luôn gọi đủ bốn lời gọi, không kiểm tra deployment đó đã tới bước tương ứng hay chưa:
+UC-04 hiển thị kết quả một deployment bằng hai nguồn: dữ liệu đã lưu trong DB (Deployment Record, step, image) và dữ liệu hỏi trực tiếp hệ thống bên ngoài (hạ tầng, CD, Kubernetes). Trong `docs/use-cases/UC-04/sequence.puml:38-53`, khi mở **bất kỳ** deployment nào, IDP luôn gọi đủ bốn lời gọi, không kiểm tra deployment đó đã tới bước tương ứng hay chưa:
 
 - `getInfrastructureStatus(infrastructureReferences)`
 - `getCDStatus(deliveryReference)`
@@ -150,8 +150,8 @@ Plan được nhắc ở nhiều nơi nhưng không nơi nào định nghĩa nó
 
 | Nơi | Plan được mô tả thế nào |
 |---|---|
-| `sequence_digrams/uc_03_deploy_application.puml` | Chỉ là dòng chữ `Infrastructure plan (create/update/reuse)` |
-| `01_vopc_design_class_diagram/vopc_uc03.puml`, `design_class_diagram.puml` | `Infrastructure Planner` có `-plan: Object`, `-allowedOverrides: Map` |
+| `docs/use-cases/UC-03/sequence.puml` | Chỉ là dòng chữ `Infrastructure plan (create/update/reuse)` |
+| `docs/use-cases/UC-03/vopc.puml`, `design_class_diagram.puml` | `Infrastructure Planner` có `-plan: Object`, `-allowedOverrides: Map` |
 | `04_operation_contracts/operation_contracts.md` (Contract 4, 5) | Một đoạn văn liệt kê "những thứ đưa vào fingerprint" |
 | `03_database_erd/schema.md` | Chỉ có cột `plan_fingerprint`, `plan_fingerprint_algo` |
 | `02_domain_model/domain_model.puml` | Không có class; chỉ có ghi chú "Infrastructure Plan remains TRANSIENT" |
@@ -240,7 +240,7 @@ Domain model có class cho plan và các thành phần của nó; VOPC không c�
 
 UC-04 hiển thị tiến trình một deployment bằng các dấu kiểm **Infrastructure Ready**, **Configuration Resolved**, **Manifest Generated**, **CD Synced**, **Application Ready**. Theo `05_state_machines/README.md`, mỗi dấu kiểm là một dòng riêng trong bảng `deployment_step`, và UC-04 đọc bảng này qua `getDeploymentProgress()`. Nhưng thiết kế không nói rõ thành phần nào ghi các dòng đó và ghi vào lúc nào:
 
-1. **Chỉ ghi một lần ở cuối.** Trong `sequence_digrams/uc_03_deploy_application.puml`, `deployment_step` chỉ được ghi trong `saveDeploymentRecord(...)` ở bước cuối cùng, sau khi đã gửi desired state sang CD (Contract 9). Trong lúc chạy, IDP chỉ đổi `deployment.status`.
+1. **Chỉ ghi một lần ở cuối.** Trong `docs/use-cases/UC-03/sequence.puml`, `deployment_step` chỉ được ghi trong `saveDeploymentRecord(...)` ở bước cuối cùng, sau khi đã gửi desired state sang CD (Contract 9). Trong lúc chạy, IDP chỉ đổi `deployment.status`.
 2. **Hai dấu kiểm cuối không ai ghi.** `CD Synced` và `Application Ready` chỉ xảy ra sau khi gửi sang CD, tức sau cả `saveDeploymentRecord`. `05_state_machines/README.md` ghi rõ "Không có operation contract sau `saveDeploymentRecord`", còn UC-04 chỉ đọc, không được ghi.
 
 Hệ quả:
@@ -432,7 +432,7 @@ Sequence của Deployment Worker thể hiện được kịch bản "worker ch�
 
 ### Vấn đề
 
-Trong `sequence_digrams/uc_02_configure_application_environment.puml`, secret được ghi vào Secret Store **ngay lúc Developer nhập**, còn reference chỉ được lưu vào DB **khi bấm Save**:
+Trong `docs/use-cases/UC-02/sequence.puml`, secret được ghi vào Secret Store **ngay lúc Developer nhập**, còn reference chỉ được lưu vào DB **khi bấm Save**:
 
 ```text
 Developer nhập DB_PASSWORD

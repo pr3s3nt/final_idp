@@ -15,7 +15,7 @@ This status was reviewed on branch `uc03-impl` against commit `ab74aa2`; later c
 
 ## Documentation migration state
 
-The AI-facing indexes and split artifacts are in place. Physical migration of legacy paths has not started. The exact source-to-destination mapping is approved in [MIGRATION_PLAN.md](MIGRATION_PLAN.md); until it completes, numbered design directories and consolidated historical files remain present but non-canonical where explicitly marked.
+The AI-facing indexes and split artifacts are in place. Physical migration has started: sequence diagrams and per-use-case VOPCs now live in their final `docs/use-cases/UC-*` context packages, and the legacy `sequence_digrams/` path has been removed. Shared architecture still remains in numbered design directories, while consolidated historical files remain present but non-canonical where explicitly marked. The remaining source-to-destination mapping is defined in [MIGRATION_PLAN.md](MIGRATION_PLAN.md).
 
 ## Use-case baseline
 

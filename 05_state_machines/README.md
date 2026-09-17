@@ -64,7 +64,7 @@ Mỗi workload (ID cố định) + environment + deployment target có đúng m�
 
 ## Traceability
 
-- Thứ tự Deployment bám main flow của `sequence_digrams/uc_03_deploy_application.puml`: create/validate/chia tầng/plan → confirm (tạo job, trả lời ngay) → Deployment Worker lấy job → với mỗi tầng: reconcile infrastructure → collect Resource Output → resolve configuration → generate/adapt/materialize manifest → publish CD state → chờ healthy → collect Workload Output → lan truyền thay đổi output → gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản → lưu record.
+- Thứ tự Deployment bám main flow của `docs/use-cases/UC-03/sequence.puml`: create/validate/chia tầng/plan → confirm (tạo job, trả lời ngay) → Deployment Worker lấy job → với mỗi tầng: reconcile infrastructure → collect Resource Output → resolve configuration → generate/adapt/materialize manifest → publish CD state → chờ healthy → collect Workload Output → lan truyền thay đổi output → gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản → lưu record.
 - Các `deployment_step` bám UC-04 theo tầng và thành phần; chúng không phải chuỗi `deployment.status`. Tập bước và writer thuộc D4.
 - Failure semantics bám UC-03 A1/A2 và postconditions của `createDeployment`, `confirmDeployment`, `reconcileInfrastructure`, `resolveEnvironmentConfiguration`, `publishDesiredDeploymentState`, `collectWorkloadOutputs`, `propagateOutputChanges`, `saveDeploymentRecord`.
 - Persistent status nằm ở `deployment.status`, `resource_instance.status`, `workload_instance.status`, cùng `deployment_record.status` (D5), `deployment_step.status` (D4) và `deployment_execution_job.status` (D6); resolved outputs/config/specification vẫn là transient như Domain Model và ERD đã quy định.

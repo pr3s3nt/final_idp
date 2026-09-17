@@ -15,8 +15,8 @@ Designed. The current Go implementation imports Application Definitions as fixtu
 
 1. [Specification](specification.md)
 2. [Use Case Realization](realization.md)
-3. [Sequence diagram](../../../sequence_digrams/uc_01_create_configure_application.puml)
-4. [VOPC](../../../01_vopc_design_class_diagram/vopc_uc01.puml)
+3. [Sequence diagram](sequence.puml)
+4. [VOPC](vopc.puml)
 
 ## Shared artifacts
 

@@ -15,8 +15,9 @@ Implemented and end-to-end verified on `kind-local` and AWS. Two teardown edge c
 
 1. [Specification](specification.md)
 2. [Use Case Realization](realization.md)
-3. [Sequence diagram](../../../sequence_digrams/uc_05_remove_application_from_environment.puml)
-4. [Verification index](../../verification/README.md)
+3. [Sequence diagram](sequence.puml)
+4. [VOPC](vopc.puml)
+5. [Verification index](../../verification/README.md)
 
 ## Important decision
 

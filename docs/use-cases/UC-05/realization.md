@@ -80,7 +80,7 @@ UC-05 không thêm class mới nào so với UC-03: nó dùng lại đúng các 
 
 ## Detailed design artifacts
 
-- [Sequence diagram](../../../sequence_digrams/uc_05_remove_application_from_environment.puml)
-- [VOPC](../../../01_vopc_design_class_diagram/vopc_uc05.puml)
+- [Sequence diagram](sequence.puml)
+- [VOPC](vopc.puml)
 - [Operation contracts](../../../04_operation_contracts/operation_contracts.md)
 - [Traceability matrix](../../../06_traceability/traceability_matrix.md)

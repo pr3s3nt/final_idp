@@ -11,7 +11,7 @@ source_record: ../../06_traceability/design_decisions.md
 
 **Current interpretation:** the decision was to defer this concern. Current work is tracked in [D02](../backlog/D02-uc04-provider-preconditions.md).
 
-**Vấn đề:** khi Developer mở bất kỳ deployment nào, sequence UC-04 (`uc_04_view_deployment_result.puml:38-53`) luôn gọi đủ `getInfrastructureStatus`, `getCDStatus`, `getWorkloadStatus`, `getDeploymentEndpoints` mà không kiểm tra deployment đã tới bước tương ứng chưa. Hệ quả:
+**Vấn đề:** khi Developer mở bất kỳ deployment nào, sequence UC-04 (`docs/use-cases/UC-04/sequence.puml:38-53`) luôn gọi đủ `getInfrastructureStatus`, `getCDStatus`, `getWorkloadStatus`, `getDeploymentEndpoints` mà không kiểm tra deployment đã tới bước tương ứng chưa. Hệ quả:
 
 - Deployment thất bại trước khi gửi sang CD vẫn bị gọi `getCDStatus(NULL)` vì `delivery_reference` rỗng.
 - **Hiển thị "Healthy" giả:** Kubernetes trả lời về workload đang chạy trên cluster, không phải của deployment đang xem. Deployment #42 thất bại trước khi deploy vẫn hiện "backend Healthy" — thực ra là bản của #41 đang chạy. Mở lại một deployment cũ thì bị gán health của bản mới hơn.

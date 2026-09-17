@@ -64,7 +64,7 @@ UC-01 chưa cần Deployment Orchestrator, Resource Definition Resolver, Infrast
 
 ## Detailed design artifacts
 
-- [Sequence diagram](../../../sequence_digrams/uc_01_create_configure_application.puml)
-- [VOPC](../../../01_vopc_design_class_diagram/vopc_uc01.puml)
+- [Sequence diagram](sequence.puml)
+- [VOPC](vopc.puml)
 - [Operation contracts](../../../04_operation_contracts/operation_contracts.md)
 - [Traceability matrix](../../../06_traceability/traceability_matrix.md)

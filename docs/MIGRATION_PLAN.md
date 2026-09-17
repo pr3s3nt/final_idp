@@ -2,7 +2,7 @@
 id: DOC-MIGRATION-PLAN
 artifact: documentation-migration-plan
 status: current
-migration_stage: mapping-approved
+migration_stage: use-case-diagrams-moved
 last_reviewed: 2026-09-17
 ---
 
@@ -63,6 +63,8 @@ After migration, authority will be located as follows:
 | Historical consolidated artifacts | `docs/archive/` |
 
 ## Mapping A — Use-case context packages
+
+**Status:** completed on 2026-09-17. The source paths below are retained in the map as migration provenance; the five sequence diagrams and five VOPCs now exist only at their final paths.
 
 The specification, realization, and context README files created in `6c835d9` remain at their current paths. Sequence and VOPC sources move beside them.
 
@@ -215,7 +217,7 @@ The audit procedure is manual and must be recorded in this table or a linked rec
 
 ## Execution order
 
-1. Move sequence and VOPC sources into the five use-case context packages.
+1. **DONE —** Move sequence and VOPC sources into the five use-case context packages.
 2. Move shared architecture artifacts under `docs/architecture/`.
 3. Move the traceability matrix and update all active links.
 4. Compare split artifacts with consolidated predecessors and archive the predecessors.

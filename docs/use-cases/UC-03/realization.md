@@ -159,7 +159,7 @@ Deployment Orchestrator và Deployment Worker chỉ điều phối. Các việc 
 
 ## Detailed design artifacts
 
-- [Sequence diagram](../../../sequence_digrams/uc_03_deploy_application.puml)
-- [VOPC](../../../01_vopc_design_class_diagram/vopc_uc03.puml)
+- [Sequence diagram](sequence.puml)
+- [VOPC](vopc.puml)
 - [Operation contracts](../../../04_operation_contracts/operation_contracts.md)
 - [Traceability matrix](../../../06_traceability/traceability_matrix.md)
