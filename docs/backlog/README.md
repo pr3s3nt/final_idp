@@ -9,6 +9,8 @@ last_reviewed: 2026-09-17
 
 This index is the authoritative list of known unresolved design work. Detailed analysis is split by issue; the removed consolidated predecessor and its semantic reconciliation are recorded in the [documentation reconciliation](../implementation/documentation-reconciliation.md).
 
+For smaller project tasks that need to be remembered but are not yet scheduled, use the [project task backlog](PROJECT_TASKS.md). It is a work queue rather than a source of requirements or design decisions.
+
 | ID | Summary | Impact | Main scope | Status |
 |---|---|---|---|---|
 | [D01](D01-draft-lifetime.md) | Draft lifetime across requests | Medium | UC-01, UC-02 | Deferred |
