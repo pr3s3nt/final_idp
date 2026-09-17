@@ -25,6 +25,7 @@ func (e Environment) Valid() bool { return e == Staging || e == Production }
 type ApplicationVersion struct {
 	ApplicationID   string
 	ApplicationName string
+	Description     string
 	VersionID       string
 	VersionNumber   int
 	Workloads       []Workload

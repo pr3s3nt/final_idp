@@ -33,6 +33,19 @@ const (
 	CodeNotFound                 = "NOT_FOUND"
 	CodeNothingToTeardown        = "NOTHING_TO_TEARDOWN"
 	CodePlanChangedBeforeExecute = "PLAN_CHANGED_BEFORE_EXECUTION"
+
+	// UC-01 Save (A1 invalid definition, A2 stale draft).
+	CodeDraftConflict          = "DRAFT_CONFLICT"
+	CodeMissingRequiredField   = "MISSING_REQUIRED_FIELD"
+	CodeInvalidName            = "INVALID_NAME"
+	CodeDuplicateName          = "DUPLICATE_NAME"
+	CodeInvalidImageRepository = "INVALID_IMAGE_REPOSITORY"
+	CodeInvalidPort            = "INVALID_PORT"
+	CodeNoWorkload             = "NO_WORKLOAD"
+	CodeInvalidComponentID     = "INVALID_COMPONENT_ID"
+	CodeInvalidDependency      = "INVALID_DEPENDENCY"
+	CodeDuplicateDependency    = "DUPLICATE_DEPENDENCY"
+	CodeApplicationNameTaken   = "APPLICATION_NAME_TAKEN"
 )
 
 // ValidationError is an A1 rejection. It carries every problem found so the
@@ -44,6 +57,9 @@ type ValidationError struct {
 type Problem struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	// Field optionally names the input the problem belongs to, for example
+	// workloads.<id>.name, so an editor can show it next to that input.
+	Field string `json:"field,omitempty"`
 }
 
 func (e *ValidationError) Error() string {
@@ -64,6 +80,11 @@ func (e *ValidationError) OrNil() error {
 		return nil
 	}
 	return e
+}
+
+// AddField records a problem that belongs to one input field.
+func (e *ValidationError) AddField(field, code, format string, args ...any) {
+	e.Problems = append(e.Problems, Problem{Code: code, Message: fmt.Sprintf(format, args...), Field: field})
 }
 
 func Reject(code, format string, args ...any) error {

@@ -9,6 +9,8 @@ last_reviewed: 2026-09-17
 
 | Design concern | Implementation entry point |
 |---|---|
+| UC-01 Application API, Service and draft validation | [`idp/backend/internal/web/applications.go`](../../idp/backend/internal/web/applications.go), [`internal/service/application.go`](../../idp/backend/internal/service/application.go), [`appvalidator`](../../idp/backend/internal/domain/appvalidator/) |
+| UC-01 versioned save (compare-and-write) and specification | [`application_save.go`](../../idp/backend/internal/persistence/application_save.go), [`appspec`](../../idp/backend/internal/domain/appspec/), [`specification_repository.go`](../../idp/backend/internal/persistence/specification_repository.go) |
 | Deployment request and confirmation | [`idp/backend/internal/service/orchestrator.go`](../../idp/backend/internal/service/orchestrator.go) |
 | Background execution and teardown | [`idp/backend/internal/service/worker.go`](../../idp/backend/internal/service/worker.go) |
 | Query path | [`idp/backend/internal/service/query.go`](../../idp/backend/internal/service/query.go) |

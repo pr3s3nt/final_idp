@@ -77,10 +77,10 @@ func (r *ApplicationRepository) ListVersions(ctx context.Context, applicationID 
 func (r *ApplicationRepository) FindVersion(ctx context.Context, applicationID, version string) (*domain.ApplicationVersion, error) {
 	v := &domain.ApplicationVersion{}
 	err := r.DB.Pool.QueryRow(ctx, `
-		SELECT a.application_id, a.name, v.application_definition_version_id, v.version_number
+		SELECT a.application_id, a.name, coalesce(a.description, ''), v.application_definition_version_id, v.version_number
 		FROM application_definition_version v JOIN application_definition a USING (application_id)
 		WHERE a.application_id = $1 AND (v.application_definition_version_id::text = $2 OR v.version_number::text = $2)`,
-		applicationID, version).Scan(&v.ApplicationID, &v.ApplicationName, &v.VersionID, &v.VersionNumber)
+		applicationID, version).Scan(&v.ApplicationID, &v.ApplicationName, &v.Description, &v.VersionID, &v.VersionNumber)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.Reject(domain.CodeNotFound, "application definition version %q not found", version)
 	}

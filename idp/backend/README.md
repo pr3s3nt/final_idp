@@ -7,7 +7,7 @@ last_reviewed: 2026-09-17
 
 # IDP backend
 
-Go backend implementation of UC-03 and UC-05. Start from the repository [documentation index](../../docs/INDEX.md); current decisions and deviations are indexed under [`docs/decisions`](../../docs/decisions/README.md) and [`docs/implementation`](../../docs/implementation/README.md). The original implementation plan is archived and non-normative.
+Go backend implementation of UC-03 and UC-05, and the JSON API of UC-01. Start from the repository [documentation index](../../docs/INDEX.md); current decisions and deviations are indexed under [`docs/decisions`](../../docs/decisions/README.md) and [`docs/implementation`](../../docs/implementation/README.md). The original implementation plan is archived and non-normative.
 
 - How to run: [`docs/operations/uc03/RUNBOOK.md`](../../docs/operations/uc03/RUNBOOK.md)
 - Demo script: [`docs/operations/uc03/DEMO.md`](../../docs/operations/uc03/DEMO.md)
@@ -15,6 +15,16 @@ Go backend implementation of UC-03 and UC-05. Start from the repository [documen
 - What was actually verified (kind and AWS): [verification index](../../docs/verification/README.md)
 
 ## Design component → code
+
+| Design (VOPC UC-01) | Code |
+|---|---|
+| Web UI | React app in [`idp/frontend`](../frontend/README.md), served under `/ui/` by `internal/web/frontend.go` |
+| Application API / Controller (`updateApplication`, `saveApplicationDefinition`) | `internal/web/applications.go` |
+| Application Service | `internal/service/application.go` |
+| Application Definition Validator | `internal/domain/appvalidator` |
+| Application Specification Generator | `internal/domain/appspec` |
+| Application Repository (`saveNewVersionIfBaseMatches`, `findLatestVersion`) | `internal/persistence/application_save.go` |
+| Specification Repository | `internal/persistence/specification_repository.go` |
 
 | Design (VOPC UC-03) | Code |
 |---|---|
@@ -49,6 +59,7 @@ prerequisites/           internal kind cluster (EXISTING k8s-cluster), image bui
 scripts/idpctl.sh        API client used by the demo
 ```
 
-The current HTML UI remains in `internal/web/templates/` because it is embedded
-in and served by the Go backend. The repository-level `idp/frontend/` directory
-is reserved for a future independently built frontend.
+The server-rendered HTML UI for UC-03 to UC-05 remains in
+`internal/web/templates/` because it is embedded in and served by the Go
+backend. The UC-01 editor is the React app in `idp/frontend/`
+([ADR-017](../../docs/decisions/ADR-017-react-web-frontend.md)).

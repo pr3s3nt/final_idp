@@ -26,6 +26,8 @@ type Server struct {
 	Orch     *service.Orchestrator
 	Query    *service.QueryService
 	Registry imageregistry.Checker
+	// Apps serves the UC-01 Application Definition API.
+	Apps ApplicationDefinitions
 	// FrontendDir is the built React bundle served under /ui/ (ADR-017).
 	FrontendDir string
 	tmpl        *template.Template
@@ -65,6 +67,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/deployments/{id}", s.apiDetail)
 	mux.HandleFunc("POST /api/deployments/{id}/confirm", s.apiConfirm)
 	mux.HandleFunc("POST /api/teardowns", s.apiTeardown)
+	// UC-01 Application Definition API (ADR-017)
+	mux.HandleFunc("GET /api/application-definitions", s.apiListApplicationDefinitions)
+	mux.HandleFunc("GET /api/application-definitions/{applicationId}", s.apiGetApplicationDefinition)
+	mux.HandleFunc("POST /api/application-definitions", s.apiCreateApplicationDefinition)
+	mux.HandleFunc("POST /api/application-definitions/{applicationId}/versions", s.apiSaveApplicationDefinitionVersion)
 	// Web UI
 	mux.HandleFunc("GET /{$}", s.pageApplications)
 	mux.HandleFunc("GET /apps/{app}/deploy", s.pageForm)
@@ -106,7 +113,8 @@ func writeError(w http.ResponseWriter, err error) {
 		switch {
 		case domain.HasCode(err, domain.CodeNotFound):
 			status = http.StatusNotFound
-		case domain.HasCode(err, domain.CodeAlreadyConfirmed), domain.HasCode(err, domain.CodeDeploymentInProgress):
+		case domain.HasCode(err, domain.CodeAlreadyConfirmed), domain.HasCode(err, domain.CodeDeploymentInProgress),
+			domain.HasCode(err, domain.CodeDraftConflict):
 			status = http.StatusConflict
 		}
 		writeJSON(w, status, map[string]any{"problems": v.Problems})
