@@ -51,6 +51,14 @@ staging production
 
 **IDP** hiển thị Environment Variable và Secret đã được khai báo cho từng workload trong UC-01.
 
+Web UI tạo một `EnvironmentConfigurationDraft` từ phiên bản Application
+Definition mới nhất và configuration hiện hành. Draft mang
+`baseApplicationDefinitionVersion` cùng `baseConfigurationRevision` nếu
+configuration đã tồn tại.
+
+Draft thuộc browser tab hiện tại. Các phần không nhạy cảm được phục hồi sau
+refresh trong cùng tab; plaintext Secret không được giữ để phục hồi.
+
 Với mỗi Environment Variable, Developer chọn nguồn giá trị.
 
 ### Environment Value
@@ -105,7 +113,10 @@ Hoặc chọn output nhạy cảm của resource mà workload depends on.
 
 Developer chọn Save Configuration.
 
-**IDP** kiểm tra và lưu Environment Configuration.
+Web UI gửi toàn bộ draft cùng hai giá trị concurrency base. **IDP** kiểm tra và
+lưu Environment Configuration nếu Application Definition và configuration
+hiện hành chưa thay đổi từ lúc draft được tải. Save thành công hoặc Discard xóa
+draft phía browser.
 
 ## Luồng ngoại lệ
 
@@ -122,6 +133,12 @@ Output được chọn không tồn tại.
 Workload output không hợp lệ.
 
 Output thuộc resource hoặc workload mà workload chứa biến không depends on.
+
+### A2 – Draft đã cũ
+
+Nếu phiên bản Application Definition mới nhất hoặc revision của Environment
+Configuration đã thay đổi so với draft, **IDP** không ghi dữ liệu và yêu cầu
+Developer tải lại rồi review/reapply thay đổi. **IDP** không tự động merge.
 
 ## Dữ liệu chính
 
@@ -166,5 +183,14 @@ Workload chỉ được tham chiếu output của resource hoặc workload mà n
 Resource Output và Workload Output chỉ lưu reference; giá trị thực tế được resolve trong quá trình deployment.
 
 Giá trị Secret không được hiển thị lại dưới dạng plaintext.
+
+Draft chỉ thuộc browser tab hiện tại. Phần không nhạy cảm được phục hồi sau
+refresh trong cùng tab; Save hoặc Discard xóa draft, còn đóng tab/session có
+thể làm mất draft. Plaintext Secret không được giữ để phục hồi và giá trị Secret
+không được hiển thị lại. D07 quyết định vòng đời, compensation và cleanup của
+staged Secret.
+
+Save dùng optimistic concurrency với `baseApplicationDefinitionVersion` và
+`baseConfigurationRevision`.
 
 Thay đổi Environment Configuration không tự động làm thay đổi deployment đang chạy.

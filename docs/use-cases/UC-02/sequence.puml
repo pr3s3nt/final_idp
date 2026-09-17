@@ -6,6 +6,7 @@ hide footbox
 
 actor Developer
 boundary "Web UI" as UI
+database "Browser\nsessionStorage" as DraftStore
 control "Environment Configuration\nAPI / Controller" as API
 control "Environment Configuration Service" as Service
 entity "Application Query /\nApplication Repository" as AppRepo
@@ -15,26 +16,17 @@ control "Environment Configuration Validator" as Validator
 collections "Secret Store /\nSecret Management Adapter" as SecretStore
 entity "Environment Configuration Repository" as ConfigRepo
 
+note over UI, DraftStore
+  EnvironmentConfigurationDraft is a CLIENT-OWNED DTO.
+  sessionStorage contains only non-sensitive values and opaque
+  references; plaintext Secret is never written there.
+end note
+
 note over API, SecretStore
   requestResourceOutputs(), requestWorkloadOutputs(),
   listValidOutputs(), listValidSensitiveOutputs(), and storeSecret()
   are internal query/integration messages, not UC system operations.
-end note
-
-note over UI, AppRepo
-  Every application has exactly two environments: STAGING and PRODUCTION.
-  Configuration is not versioned: it is validated against the latest
-  Application Definition version on save and re-validated against the
-  deployed version in UC-03. References use stable component IDs.
-  For each variable or secret, the UI only offers resources and workloads
-  that the owning workload depends on.
-end note
-
-note right of SecretStore
-  Secret values are stored securely.
-  Only a Secret reference is returned and persisted
-  in Environment Configuration; plaintext is not
-  stored in Environment Configuration Repository.
+  Secret staging/cleanup remains governed by D07.
 end note
 
 Developer -> UI: Open application Configuration page
@@ -42,16 +34,18 @@ Developer -> UI: Select environment (staging or production)
 UI -> API: selectEnvironment(applicationId, environment)
 API -> Service: selectEnvironment(applicationId, environment)
 Service -> AppRepo: loadConfigurationRequirements(applicationId)
-AppRepo --> Service: Workloads, variables, secrets and dependencies\nof the latest Application Definition version
-Service --> API: Configuration requirements
+AppRepo --> Service: Latest Application Definition version,\nworkloads, variables, secrets and dependencies
+Service -> ConfigRepo: find(applicationId, environment)
+ConfigRepo --> Service: Current configuration and opaque revision, or none
+Service --> API: Requirements and configuration with\nbaseApplicationDefinitionVersion + baseConfigurationRevision
 API --> UI: Display variables and secrets by workload
+UI -> DraftStore: restore matching draft or\nsave initialized non-sensitive draft
 
 loop For each Environment Variable
     Developer -> UI: Select value source
     alt Direct value
         Developer -> UI: Enter value
-        UI -> API: setDirectConfigurationValue(variable, value)
-        API -> Service: setDirectConfigurationValue(variable, value)
+        UI -> UI: setDirectConfigurationValue(configurationDraft, variable, value)
     else Resource Output
         Developer -> UI: Select a resource that the workload depends on
         UI -> API: requestResourceOutputs(resource)
@@ -61,8 +55,7 @@ loop For each Environment Variable
         Service --> API: Valid resource outputs
         API --> UI: Display valid resource outputs
         Developer -> UI: Select resource output
-        UI -> API: bindResourceOutput(variable, resource, output)
-        API -> Service: bindResourceOutput(variable, resource, output)
+        UI -> UI: bindResourceOutput(configurationDraft, variable, resource, output)
     else Workload Output
         Developer -> UI: Select a workload that the workload depends on
         UI -> API: requestWorkloadOutputs(workload)
@@ -72,9 +65,9 @@ loop For each Environment Variable
         Service --> API: Valid workload outputs
         API --> UI: Display valid workload outputs
         Developer -> UI: Select workload output
-        UI -> API: bindWorkloadOutput(variable, workload, output)
-        API -> Service: bindWorkloadOutput(variable, workload, output)
+        UI -> UI: bindWorkloadOutput(configurationDraft, variable, workload, output)
     end
+    UI -> DraftStore: save(nonSensitiveConfigurationDraft)
 end
 
 loop For each Secret
@@ -84,9 +77,11 @@ loop For each Secret
         UI -> API: setDirectConfigurationValue(secret, secretValue)
         API -> Service: setDirectConfigurationValue(secret, secretValue)
         Service -> SecretStore: storeSecret(applicationId, environment, secretValue)
-        SecretStore --> Service: Secret reference
+        SecretStore --> Service: Opaque Secret reference
+        Service --> API: Opaque Secret reference
+        API --> UI: Replace plaintext with opaque reference
     else Sensitive Resource Output
-        Developer -> UI: Select a resource that the workload depends on\nand its sensitive output
+        Developer -> UI: Select a depended-on resource\nand its sensitive output
         UI -> API: requestResourceOutputs(resource)
         API -> Service: requestResourceOutputs(resource)
         Service -> ResourceCatalog: listValidSensitiveOutputs(resource)
@@ -94,25 +89,37 @@ loop For each Secret
         Service --> API: Valid sensitive outputs
         API --> UI: Display valid sensitive outputs
         Developer -> UI: Select sensitive output
-        UI -> API: bindResourceOutput(secret, resource, output)
-        API -> Service: bindResourceOutput(secret, resource, output)
+        UI -> UI: bindResourceOutput(configurationDraft, secret, resource, output)
     end
+    UI -> DraftStore: save(draft with opaque references only)
 end
 
 Developer -> UI: Select Save Configuration
-UI -> API: saveEnvironmentConfiguration(configuration)
-API -> Service: saveEnvironmentConfiguration(configuration)
-Service -> Validator: validateEnvironmentConfiguration(configuration)
-note right of Validator
-  Checks required values and valid outputs, and that every
-  referenced output belongs to a resource or workload that the
-  owning workload depends on in the latest Application Definition version.
-end note
+UI -> API: saveEnvironmentConfiguration(completeDraft, bases)
+API -> Service: saveEnvironmentConfiguration(completeDraft, bases)
+Service -> AppRepo: findLatestVersion(applicationId)
+AppRepo --> Service: Current latest Application Definition version
+Service -> ConfigRepo: findRevision(applicationId, environment)
+ConfigRepo --> Service: Current configuration revision or none
+Service -> Validator: validateEnvironmentConfiguration(completeDraft)
 Validator --> Service: Validation successful
-Service -> ConfigRepo: save(configuration with value references)
-ConfigRepo --> Service: Environment Configuration saved
-Service --> API: Configuration saved
-API --> UI: Show save confirmation
-UI --> Developer: Environment Configuration saved
+Service -> ConfigRepo: saveIfBasesMatch(completeDraft, bases)
+note right of ConfigRepo
+  Both base comparisons and the durable write are one
+  atomic transaction/CAS; two writers cannot both win.
+end note
+
+alt Repository returns DRAFT_CONFLICT
+    ConfigRepo --> Service: DRAFT_CONFLICT (no write)
+    Service --> API: DRAFT_CONFLICT (no write)
+    API --> UI: Require reload and review/reapply\nkeep browser draft
+    UI --> Developer: Show concurrent edit conflict
+else Repository commits configuration
+    ConfigRepo --> Service: Environment Configuration saved
+    Service --> API: Configuration saved
+    API --> UI: Show save confirmation
+    UI -> DraftStore: remove(configurationDraft)
+    UI --> Developer: Environment Configuration saved
+end
 
 @enduml

@@ -10,41 +10,41 @@ last_reviewed: 2026-09-17
 
 ## Responsibility
 
-Chịu trách nhiệm khai báo cấu trúc logic của application: workload, resource requirement, dependency và các Environment Variable/Secret mà workload cần. Mỗi lần lưu, ghi Application Definition thành một phiên bản mới (không ghi đè phiên bản cũ, các thành phần giữ ID cố định qua phiên bản) và sinh/cập nhật application specification. Không deploy và không làm thay đổi environment nào.
+Chịu trách nhiệm khai báo cấu trúc logic của application: workload, resource requirement, dependency và các Environment Variable/Secret mà workload cần. Web UI sở hữu `ApplicationDefinitionDraft` trong browser tab và lưu phần không nhạy cảm vào `sessionStorage`; Application Service không giữ draft giữa các request. Mỗi lần lưu, Web UI gửi toàn bộ draft cùng `baseVersion`; backend kiểm tra optimistic concurrency, ghi Application Definition thành một phiên bản mới (không ghi đè phiên bản cũ, các thành phần giữ ID cố định qua phiên bản) và sinh/cập nhật application specification. Không deploy và không làm thay đổi environment nào.
 
 ## System operations
 
-- **createApplication()** - Tạo một Application Definition mới.
+- **createApplication()** - Web UI khởi tạo một `ApplicationDefinitionDraft` mới trong browser, chưa ghi backend.
 
-- **updateApplication()** - Cập nhật thông tin application đã tồn tại.
+- **updateApplication()** - Tải phiên bản Application Definition mới nhất để Web UI tạo draft chỉnh sửa với `baseVersion`.
 
-- **addResourceRequirement()** - Thêm resource logic mà application cần, ví dụ PostgreSQL hoặc Redis.
+- **addResourceRequirement()** - Web UI thêm resource logic vào client-owned draft, ví dụ PostgreSQL hoặc Redis.
 
-- **addWorkload()** - Thêm workload và các thông tin như type, image repository, port.
+- **addWorkload()** - Web UI thêm workload và các thông tin như type, image repository, port vào draft.
 
-- **defineConfigurationRequirement()** - Khai báo Environment Variable và Secret mà workload cần.
+- **defineConfigurationRequirement()** - Web UI khai báo Environment Variable và Secret mà workload cần trong draft.
 
-- **defineDependency()** - Khai báo quan hệ depends on giữa workload và resource/workload khác.
+- **defineDependency()** - Web UI khai báo quan hệ depends on giữa workload và resource/workload khác trong draft.
 
 - **validateApplicationDefinition()** - Kiểm tra tính hợp lệ của workload, resource, dependency và configuration requirement.
 
-- **saveApplicationDefinition()** - Lưu Application Definition thành một phiên bản mới; phiên bản cũ giữ nguyên, các thành phần giữ ID cố định qua phiên bản.
+- **saveApplicationDefinition()** - Nhận toàn bộ draft, kiểm tra `baseVersion`, rồi lưu Application Definition thành một phiên bản mới; stale draft bị từ chối không ghi dữ liệu, phiên bản cũ giữ nguyên và các thành phần giữ ID cố định qua phiên bản.
 
 - **generateApplicationSpecification()** - Sinh hoặc cập nhật application specification, ví dụ score.yaml, từ Application Definition đã lưu.
 
-Ở mức Use Case Realization, không tách nhỏ hơn thành các operation như addEnvironmentVariable(), addSecret() hoặc validatePort() để tránh làm sequence diagram quá vụn.
+Các operation chỉnh field/component là interaction operation của Web UI và không tạo API round-trip. Ở mức Use Case Realization, không tách nhỏ hơn thành các operation như addEnvironmentVariable(), addSecret() hoặc validatePort() để tránh làm sequence diagram quá vụn.
 
 ## Participating components
 
 ### Boundary/UI
 
-- **Web UI** - Cho Developer khai báo application, workload, resource, dependency và configuration requirement.
+- **Web UI** - Sở hữu `ApplicationDefinitionDraft`, cho Developer khai báo application, workload, resource, dependency và configuration requirement, serialize/restore phần không nhạy cảm trong `sessionStorage`, rồi gửi toàn bộ draft khi Save.
 
-- **Application API / Controller** - Nhận request từ UI, validate ở mức request và điều phối sang application service.
+- **Application API / Controller** - Tải phiên bản mới nhất cho edit; khi Save, nhận toàn bộ draft, validate ở mức request và điều phối sang application service. Không cung cấp endpoint cho từng field/component edit.
 
 ### Application services
 
-- **Application Service** - Chịu trách nhiệm xử lý use case tạo/cập nhật Application Definition.
+- **Application Service** - Stateless giữa các edit request; kiểm tra `baseVersion`, validate và xử lý việc lưu Application Definition.
 
 ### Domain components
 
@@ -58,7 +58,7 @@ Chịu trách nhiệm khai báo cấu trúc logic của application: workload, r
 
 - **Specification Repository / Config Repo Service** - Lưu application specification đã sinh nếu hệ thống cần persist hoặc version hóa artifact này.
 
-Luồng trách nhiệm: Web UI → API/Controller → Application Service → Validator → Repository + Specification Generator.
+Luồng trách nhiệm khi edit: Web UI + browser `sessionStorage`. Luồng load/save: Web UI → API/Controller → Application Service → Validator → Repository + Specification Generator.
 
 UC-01 chưa cần Deployment Orchestrator, Resource Definition Resolver, Infrastructure Reconciler, CD Integration hoặc Kubernetes Cluster vì use case chỉ dừng ở việc định nghĩa application và sinh specification, chưa deploy.
 

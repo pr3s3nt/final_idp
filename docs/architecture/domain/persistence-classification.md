@@ -7,7 +7,20 @@ last_reviewed: 2026-09-17
 
 # Step 2: Persistence Classification
 
-Phân loại dưới đây bao phủ toàn bộ domain object trong [`domain-model.puml`](domain-model.puml). Với các object thuộc application lifecycle, `PERSISTENT` nghĩa là state cần tồn tại qua nhiều request/deployment execution và được quản lý bởi đúng một trong sáu repository boundary đã thống nhất (năm repository ban đầu cộng **Workload Instance Repository** được bổ sung cho việc triển khai theo tầng). `Catalog Version` và `Resource Definition` cũng là dữ liệu bền vững, nhưng là reference data thuộc catalog do platform quản lý và nằm ngoài phạm vi sáu repository này; UC-03 đọc chúng qua **Resource Definition Catalog**. `TRANSIENT` nghĩa là object chỉ được dựng/resolve trong một deployment execution và không được lưu như một domain record độc lập.
+Phân loại dưới đây bao phủ toàn bộ domain object trong [`domain-model.puml`](domain-model.puml). Với các object thuộc application lifecycle, `PERSISTENT` nghĩa là state cần tồn tại qua nhiều request/deployment execution và được quản lý bởi đúng một trong sáu repository boundary đã thống nhất (năm repository ban đầu cộng **Workload Instance Repository** được bổ sung cho việc triển khai theo tầng). `Catalog Version` và `Resource Definition` cũng là dữ liệu bền vững, nhưng là reference data thuộc catalog do platform quản lý và nằm ngoài phạm vi sáu repository này; UC-03 đọc chúng qua **Resource Definition Catalog**. `TRANSIENT` nghĩa là object chỉ được dựng/resolve trong một deployment execution và không được lưu như một domain record độc lập. `CLIENT-OWNED DTO` là dữ liệu presentation tạm do browser tab sở hữu; nó không phải domain object và không có backend repository/table.
+
+## Client-owned draft DTOs
+
+| DTO | Classification | Owner/storage | Reason |
+|---|---|---|---|
+| `ApplicationDefinitionDraft` | CLIENT-OWNED DTO | Web UI; non-sensitive content in browser `sessionStorage` | Giữ toàn bộ draft UC-01 và `baseVersion`; field/component edits chạy cục bộ, Save gửi toàn bộ DTO. Không có backend draft store. |
+| `EnvironmentConfigurationDraft` | CLIENT-OWNED DTO | Web UI; non-sensitive content and opaque Secret references in browser `sessionStorage` | Giữ binding UC-02, `baseApplicationDefinitionVersion` và `baseConfigurationRevision`. Plaintext Secret không được serialize; D07 quản lý staging/cleanup. |
+
+Save hoặc Discard xóa DTO khỏi `sessionStorage`; đóng browser tab/session có thể
+làm mất draft. Backend chỉ nhận complete DTO khi Save và dùng các base field để
+optimistic concurrency check.
+
+## Domain objects
 
 | Domain Object | Persistent/Transient | Repository (nếu persistent) | Lý do |
 |---|---|---|---|

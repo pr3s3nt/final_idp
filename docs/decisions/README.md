@@ -11,7 +11,7 @@ The split ADRs below are the AI-friendly decision index. The removed chronologic
 
 | ID | Decision | Outcome |
 |---|---|---|
-| [ADR-001](ADR-001-draft-lifetime-deferred.md) | Draft lifetime across UC-01/UC-02 requests | Deferred |
+| [ADR-001](ADR-001-draft-lifetime-deferred.md) | Draft lifetime across UC-01/UC-02 requests | Superseded by ADR-016 |
 | [ADR-002](ADR-002-workload-output-ordering.md) | Dependency-ordered output propagation | Accepted |
 | [ADR-003](ADR-003-resource-instance-ownership.md) | Resource Instance ownership and reuse | Accepted |
 | [ADR-004](ADR-004-uc04-provider-preconditions-deferred.md) | UC-04 provider preconditions | Deferred |
@@ -26,5 +26,6 @@ The split ADRs below are the AI-friendly decision index. The removed chronologic
 | [ADR-013](ADR-013-per-application-delivery-repository.md) | Per-application Delivery Repository | Accepted |
 | [ADR-014](ADR-014-fleet-default-cd-provider.md) | Fleet as default CD provider | Accepted |
 | [ADR-015](ADR-015-separate-remove-use-case.md) | Separate UC-05 removal use case | Accepted |
+| [ADR-016](ADR-016-client-owned-drafts.md) | Browser-owned UC-01/UC-02 drafts with optimistic concurrency | Accepted |
 
 An ADR with a deferred outcome records that deferral was accepted; the unresolved technical work remains canonical in the corresponding backlog item.

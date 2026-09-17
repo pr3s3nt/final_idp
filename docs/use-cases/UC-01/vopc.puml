@@ -8,32 +8,41 @@ hide empty members
 
 package "Boundary/UI" {
   class "Web UI" as WebUI <<boundary>> {
-    -currentApplicationId: String
+    -applicationDraft: ApplicationDefinitionDraft
+    +createApplication(name, description)
+    +addResourceRequirement(draft, resources)
+    +addWorkload(draft, workloads)
+    +defineConfigurationRequirement(draft, requirements)
+    +defineDependency(draft, dependencies)
     +showApplicationEditor()
     +showApplicationOverview()
+    +discardDraft()
+  }
+  class "Application Definition Draft" as ApplicationDraft <<client-owned DTO>> {
+    +applicationId: String?
+    +baseVersion: Integer?
+    +name: String
+    +description: String
+    +workloads: List
+    +resources: List
+    +dependencies: List
+  }
+  class "Browser sessionStorage" as DraftStore <<client storage>> {
+    +load(draftKey)
+    +save(draftKey, nonSensitiveDraft)
+    +remove(draftKey)
   }
   class "Application API / Controller" as ApplicationAPI <<control>> {
     -applicationService: ApplicationService
-    +createApplication(name, description)
     +updateApplication(applicationId)
-    +addResourceRequirement(applicationId, resources)
-    +addWorkload(applicationId, workloads)
-    +defineConfigurationRequirement(applicationId, requirements)
-    +defineDependency(applicationId, dependencies)
-    +saveApplicationDefinition(applicationDefinition)
+    +saveApplicationDefinition(completeDraft, baseVersion)
   }
 }
 
 package "Application services" {
   class "Application Service" as ApplicationService <<control>> {
-    -applicationDraft: Object
-    +createApplication(name, description)
     +updateApplication(applicationId)
-    +addResourceRequirement(applicationId, resources)
-    +addWorkload(applicationId, workloads)
-    +defineConfigurationRequirement(applicationId, requirements)
-    +defineDependency(applicationId, dependencies)
-    +saveApplicationDefinition(applicationDefinition)
+    +saveApplicationDefinition(completeDraft, baseVersion)
   }
 }
 
@@ -52,7 +61,7 @@ package "Persistence" {
   class "Application Repository" as AppRepo <<entity>> {
     -applicationDefinitionVersions: Collection
     +findLatestVersion(applicationId)
-    +saveNewVersion(applicationDefinition)
+    +saveNewVersionIfBaseMatches(applicationDefinition, baseVersion)
   }
   class "Specification Repository / Config Repo Service" as SpecRepo <<entity>> {
     -applicationSpecifications: Collection
@@ -60,12 +69,27 @@ package "Persistence" {
   }
 }
 
-WebUI "1" --> "1" ApplicationAPI
+WebUI "1" *-- "0..1" ApplicationDraft
+WebUI "1" --> "1" DraftStore
+WebUI "1" --> "1" ApplicationAPI : load/save only
 ApplicationAPI "1" --> "1" ApplicationService
 ApplicationService ..> Validator
 ApplicationService "1" --> "1" AppRepo
 ApplicationService ..> SpecGenerator
 ApplicationService "1" --> "1" SpecRepo
+
+note right of ApplicationDraft
+  CLIENT-OWNED DTO, not a domain object.
+  baseVersion enables optimistic concurrency.
+  Save/Discard clears sessionStorage; closing
+  the browser tab may discard unsaved changes.
+end note
+
+note right of ApplicationService
+  Stateless between edit requests.
+  No applicationDraft field and no endpoint
+  for individual field/component edits.
+end note
 
 note right of AppRepo
   Every save creates a new immutable Application Definition version.

@@ -13,12 +13,13 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
 
 ## 1. `saveApplicationDefinition()`
 
-- **Operation**: `saveApplicationDefinition(applicationDefinition)`
-- **Cross References**: UC-01 – Create / Configure Application, luồng chính và A1 – Dữ liệu không hợp lệ.
+- **Operation**: `saveApplicationDefinition(applicationDefinitionDraft, baseVersion)`
+- **Cross References**: UC-01 – Create / Configure Application, luồng chính, A1 – Dữ liệu không hợp lệ và A2 – Draft đã cũ.
 - **Preconditions**:
+  - `applicationDefinitionDraft` là complete client-owned DTO; backend không giữ hoặc khôi phục draft từ request trước.
   - Developer đã đăng nhập và có quyền tạo hoặc chỉnh sửa Application Definition được truyền vào.
-  - Nếu là update, một instance `Application Definition` với `applicationId` tương ứng đã tồn tại trong `application_definition` và có ít nhất một `Application Definition Version`; nếu là create, `applicationId` chưa định danh một row khác và `name` chưa được dùng bởi Application Definition khác.
-  - `applicationDefinition` có ít nhất một `Workload`. Trong nội dung submit, `Workload.name` và `Resource Requirement.name` không trùng; mỗi `Workload.imageRepository` hợp lệ; mỗi `Workload.port`, nếu có, nằm trong khoảng `1..65535`.
+  - Nếu là update, một instance `Application Definition` với `applicationId` tương ứng đã tồn tại trong `application_definition`, có ít nhất một `Application Definition Version`, và draft mang `baseVersion` đã dùng để bắt đầu edit; nếu là create, `baseVersion` rỗng, `applicationId` chưa định danh một row khác và `name` chưa được dùng bởi Application Definition khác.
+  - `applicationDefinitionDraft` có ít nhất một `Workload`. Trong nội dung submit, `Workload.name` và `Resource Requirement.name` không trùng; mỗi `Workload.imageRepository` hợp lệ; mỗi `Workload.port`, nếu có, nằm trong khoảng `1..65535`.
   - Thành phần đã có ở phiên bản trước mang đúng ID cố định của nó (kể cả khi đổi tên); thành phần mới chưa có ID hoặc mang ID chưa được dùng trong application.
   - Mỗi `Environment Variable Definition` và `Secret Definition` thuộc đúng một Workload trong nội dung submit; tên definition là duy nhất trong Workload tương ứng.
   - Mỗi `Dependency` có một source là Workload trong nội dung submit và đúng một target là `Workload` hoặc `Resource Requirement` trong nội dung submit; dependency logic không bị trùng và toàn bộ quan hệ `depends on` không tạo thành vòng.
@@ -34,6 +35,8 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
   - Việc tạo/cập nhật `Application Specification` không thuộc state change trực tiếp của contract này; đó là postcondition của `generateApplicationSpecification()` kế tiếp trong luồng UC-01.
 - **Exceptions / Guarantees**:
   - A1: nếu validation thất bại do tên trùng, image repository/port không hợp lệ, dependency tham chiếu sai hoặc tạo thành vòng, không row `application_definition_version`, `application_component` hay row thành phần nào được insert, và `application_definition` giữ nguyên.
+  - A2: nếu version mới nhất khác `baseVersion`, trả `DRAFT_CONFLICT`; không row nào bị insert/update/delete và backend không tự động merge draft.
+  - So sánh `baseVersion` và ghi phiên bản mới nằm trong cùng transaction/CAS; hai Save cùng base không thể cùng thành công.
   - Việc tạo phiên bản là atomic: không tồn tại phiên bản chỉ lưu một phần Workload, definition hoặc Dependency.
 
 ## 2. `generateApplicationSpecification()`
@@ -56,11 +59,13 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
 
 ## 3. `saveEnvironmentConfiguration()`
 
-- **Operation**: `saveEnvironmentConfiguration(configuration)`
-- **Cross References**: UC-02 – Configure Application Environment, luồng chính và A1 – Configuration không hợp lệ.
+- **Operation**: `saveEnvironmentConfiguration(configurationDraft, baseApplicationDefinitionVersion, baseConfigurationRevision)`
+- **Cross References**: UC-02 – Configure Application Environment, luồng chính, A1 – Configuration không hợp lệ và A2 – Draft đã cũ.
 - **Preconditions**:
-  - Một `Application Definition` với `configuration.applicationId` đã tồn tại trong `application_definition`; phiên bản mới nhất của nó có ít nhất một `Environment Variable Definition` hoặc `Secret Definition` cần cấu hình.
-  - `configuration.environment` là `STAGING` hoặc `PRODUCTION`; nếu update, một `Environment Configuration` cho cặp `(applicationId, environment)` đã tồn tại, phù hợp `UNIQUE (application_id, environment)`.
+  - `configurationDraft` là complete client-owned DTO; backend không giữ draft giữa các request, và DTO không chứa plaintext Secret.
+  - Một `Application Definition` với `configurationDraft.applicationId` đã tồn tại trong `application_definition`; phiên bản mới nhất của nó có ít nhất một `Environment Variable Definition` hoặc `Secret Definition` cần cấu hình.
+  - Draft mang `baseApplicationDefinitionVersion` đã dùng để tải requirements.
+  - `configurationDraft.environment` là `STAGING` hoặc `PRODUCTION`; nếu update, một `Environment Configuration` cho cặp `(applicationId, environment)` đã tồn tại, phù hợp `UNIQUE (application_id, environment)`, và draft mang opaque `baseConfigurationRevision` đã dùng để bắt đầu edit; nếu create, `baseConfigurationRevision` rỗng và configuration chưa tồn tại.
   - Toàn bộ kiểm tra dưới đây dùng **phiên bản Application Definition mới nhất**; mọi tham chiếu dùng ID cố định trong `application_component`.
   - Mỗi `Environment Variable` tham chiếu một `Environment Variable Definition` và Workload sở hữu definition đó trong phiên bản mới nhất; mỗi definition bắt buộc có đúng một `Configuration Value`.
   - `Direct Configuration Value` chỉ được dùng cho Environment Variable thông thường. Mỗi `Resource Output Reference` tham chiếu một `Resource Requirement` trong phiên bản mới nhất và một output có trong `Resource Definition.exposedOutputs`; mỗi `Workload Output Reference` tham chiếu một Workload trong phiên bản mới nhất và một output có trong `Workload.exposedOutputs`.
@@ -78,6 +83,8 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
   - Không `Deployment`, `Workload Deployment`, `Deployment Record` hoặc `Resource Instance` nào bị tạo, xóa hay sửa; thay đổi configuration không tự động deploy application đang chạy.
 - **Exceptions / Guarantees**:
   - A1: nếu thiếu giá trị bắt buộc, resource/workload không tồn tại trong phiên bản mới nhất, output không được expose, hoặc output thuộc thành phần mà workload sở hữu biến không depends on, toàn bộ state trong `environment_configuration`, `environment_variable`, `configuration_value` và `secret` giữ nguyên như trước operation.
+  - A2: nếu phiên bản Application Definition hoặc Environment Configuration revision khác base tương ứng, trả `DRAFT_CONFLICT`; không row nào bị insert/update/delete và backend không tự động merge draft.
+  - Hai base comparison và ghi Environment Configuration nằm trong cùng transaction/CAS; hai Save cùng base không thể cùng thành công.
   - Plaintext Secret không xuất hiện trong `Environment Configuration Repository`, `Deployment Repository` hoặc log của contract; chỉ opaque `secret_ref` hoặc sensitive Resource Output Reference được persist.
 
 ## 4. `createDeployment()`

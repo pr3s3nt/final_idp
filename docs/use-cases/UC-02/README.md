@@ -26,9 +26,12 @@ Designed. The current Go implementation imports Environment Configuration data a
 
 ## Open issues
 
-- [D1 — Draft lifetime across requests](../../backlog/D01-draft-lifetime.md)
 - [D7 — Orphaned secret after save failure](../../backlog/D07-orphaned-secret.md)
 - [D12 — Catalog version used to list outputs](../../backlog/D12-uc02-catalog-version.md)
+
+## Resolved decisions
+
+- [ADR-016 — Browser-owned drafts](../../decisions/ADR-016-client-owned-drafts.md)
 
 ## Implementation entry points
 

@@ -6,6 +6,7 @@ hide footbox
 
 actor Developer
 boundary "Web UI" as UI
+database "Browser\nsessionStorage" as DraftStore
 control "Application API / Controller" as API
 control "Application Service" as Service
 control "Application Definition Validator" as Validator
@@ -13,64 +14,73 @@ entity "Application Repository" as AppRepo
 control "Application Specification Generator" as SpecGenerator
 entity "Specification Repository /\nConfig Repo Service" as SpecRepo
 
+note over UI, DraftStore
+  ApplicationDefinitionDraft is a CLIENT-OWNED DTO.
+  Non-sensitive content is scoped to the browser tab.
+  Refresh may restore it; Save or Discard clears it.
+end note
+
 Developer -> UI: Select Create Application\nor open an existing application
 
 alt Create a new application
-    UI -> API: createApplication(name, description)
-    API -> Service: createApplication(name, description)
-    Service --> API: Application draft
-    API --> UI: Display application editor
+    UI -> UI: createApplication(name, description)\ninitialize draft with no baseVersion
+    UI -> DraftStore: save(applicationDraft)
 else Update an existing application
     UI -> API: updateApplication(applicationId)
     API -> Service: updateApplication(applicationId)
     Service -> AppRepo: findLatestVersion(applicationId)
     AppRepo --> Service: Latest Application Definition version\n(components with stable IDs)
-    Service --> API: Editable Application Definition draft\nbased on the latest version
+    Service --> API: Editable DTO with baseVersion
     API --> UI: Display application editor
+    UI -> DraftStore: restore matching draft or\nsave initialized draft
 end
 
-Developer -> UI: Add resource requirements
-UI -> API: addResourceRequirement(applicationId, resources)
-API -> Service: addResourceRequirement(applicationId, resources)
-
-Developer -> UI: Add workloads\n(type, image repository, port)
-UI -> API: addWorkload(applicationId, workloads)
-API -> Service: addWorkload(applicationId, workloads)
-
-Developer -> UI: Define environment variables and secrets\nfor each workload
-UI -> API: defineConfigurationRequirement(applicationId, requirements)
-API -> Service: defineConfigurationRequirement(applicationId, requirements)
-
-Developer -> UI: Define dependencies
-UI -> API: defineDependency(applicationId, dependencies)
-API -> Service: defineDependency(applicationId, dependencies)
-
-Service --> API: Updated Application Definition draft
-API --> UI: Display topology and configuration summary
-UI --> Developer: Show application overview
+group Client-owned draft edits (no backend round-trip)
+    Developer -> UI: Add resource requirements
+    UI -> UI: addResourceRequirement(applicationDraft, resources)
+    Developer -> UI: Add workloads\n(type, image repository, port)
+    UI -> UI: addWorkload(applicationDraft, workloads)
+    Developer -> UI: Define environment variables and secrets\nfor each workload
+    UI -> UI: defineConfigurationRequirement(applicationDraft, requirements)
+    Developer -> UI: Define dependencies
+    UI -> UI: defineDependency(applicationDraft, dependencies)
+    UI -> DraftStore: save(nonSensitiveApplicationDraft)
+    UI --> Developer: Show topology and configuration summary
+end
 
 Developer -> UI: Select Save Application
-UI -> API: saveApplicationDefinition(applicationDefinition)
-API -> Service: saveApplicationDefinition(applicationDefinition)
-Service -> Validator: validateApplicationDefinition(applicationDefinition)
+UI -> API: saveApplicationDefinition(completeDraft, baseVersion)
+API -> Service: saveApplicationDefinition(completeDraft, baseVersion)
+Service -> Validator: validateApplicationDefinition(completeDraft)
 Validator --> Service: Validation successful
-Service -> AppRepo: saveNewVersion(applicationDefinition)
-AppRepo --> Service: New Application Definition version saved
+Service -> AppRepo: saveNewVersionIfBaseMatches(completeDraft, baseVersion)
 note right of AppRepo
-  Every save creates a new immutable version.
-  Existing versions are never updated or deleted.
-  Workloads, resources, environment variable definitions
-  and secret definitions keep stable IDs across versions:
-  renaming keeps the ID; removing a component only means
-  the new version no longer contains it.
-  No environment changes until the version is deployed (UC-03).
+  Base comparison and durable write are one atomic
+  transaction/CAS; two writers cannot both win.
 end note
-Service -> SpecGenerator: generateApplicationSpecification(applicationDefinitionVersion)
-SpecGenerator --> Service: Application specification (for example, score.yaml)
-Service -> SpecRepo: save(applicationSpecification)
-SpecRepo --> Service: Specification saved
-Service --> API: Application version saved
-API --> UI: Show save confirmation
-UI --> Developer: New Application Definition version and specification saved
+
+alt Repository returns DRAFT_CONFLICT
+    AppRepo --> Service: DRAFT_CONFLICT (no write)
+    Service --> API: DRAFT_CONFLICT (no write)
+    API --> UI: Require reload and review/reapply\nkeep browser draft
+    UI --> Developer: Show concurrent edit conflict
+else Repository commits new version
+    AppRepo --> Service: New Application Definition version saved
+    note right of AppRepo
+      Every save creates a new immutable version.
+      Existing versions are never updated or deleted.
+      Workloads, resources, environment variable definitions
+      and secret definitions keep stable IDs across versions.
+      No environment changes until the version is deployed (UC-03).
+    end note
+    Service -> SpecGenerator: generateApplicationSpecification(applicationDefinitionVersion)
+    SpecGenerator --> Service: Application specification (for example, score.yaml)
+    Service -> SpecRepo: save(applicationSpecification)
+    SpecRepo --> Service: Specification saved
+    Service --> API: Application version saved
+    API --> UI: Show save confirmation
+    UI -> DraftStore: remove(applicationDraft)
+    UI --> Developer: New Application Definition version and specification saved
+end
 
 @enduml

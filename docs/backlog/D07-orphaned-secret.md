@@ -51,12 +51,15 @@ Hậu quả:
 
 ### Liên quan
 
-- **D1:** câu hỏi "secret nằm ở đâu trong lúc Developer chưa bấm Save" là một phần của câu hỏi bản nháp được giữ ở đâu.
+- **ADR-016 / D01 resolved:** browser sở hữu `EnvironmentConfigurationDraft`,
+  `sessionStorage` không được chứa plaintext Secret và chỉ có thể giữ opaque
+  reference sau staging. D07 vẫn phải quyết định staged Secret được tạo, hết
+  hạn, promote và cleanup như thế nào.
 - **Vấn đề 5 (đã chốt):** cấu hình UC-02 chưa có phiên bản; khi đổi secret, bản cũ không còn được cấu hình nào trỏ tới.
 
 ### Hướng có thể cân nhắc (chưa chốt)
 
-**A. Chỉ ghi vào Secret Store lúc bấm Save:** validate xong mới ghi secret, rồi lưu reference vào DB; lưu DB lỗi thì xóa ngay secret vừa ghi; lưu thành công mà secret bị thay thì xóa bản cũ. Đơn giản, loại được gần hết các tình huống; nhưng secret nằm trong form tới lúc Save (dính D1), và nếu server chết đúng giữa "ghi Secret Store" và "lưu DB" thì vẫn có thể sót.
+**A. Chỉ ghi vào Secret Store lúc bấm Save:** validate xong mới ghi secret, rồi lưu reference vào DB; lưu DB lỗi thì xóa ngay secret vừa ghi; lưu thành công mà secret bị thay thì xóa bản cũ. Đơn giản, loại được gần hết các tình huống; nhưng plaintext secret phải ở browser memory tới lúc Save (không được vào `sessionStorage` theo ADR-016), và nếu server chết đúng giữa "ghi Secret Store" và "lưu DB" thì vẫn có thể sót.
 
 **B. Lưu tạm có hạn dùng** (hướng của `88585cc`): lúc nhập, secret vào Secret Store dưới dạng tạm, tự hết hạn; Save thành công thì chuyển thành chính thức; không Save thì tự biến mất. Secret rời trình duyệt ngay, không có rác lâu dài; nhưng phức tạp hơn (tạm/chính thức/thu hồi/hết hạn) và có kẽ hở khi DB đã lưu mà chưa kịp chuyển thành chính thức thì bản tạm hết hạn.
 
@@ -68,7 +71,7 @@ Hậu quả:
 
 1. Chọn hướng nào (A, B, C hoặc kết hợp)?
 2. Khi đổi secret: xóa bản cũ ngay sau khi lưu thành công, hay giữ lại một thời gian để có thể quay lại?
-3. Có giải quyết cùng lúc với D1 (bản nháp) không?
+3. Cách staging/cleanup được chọn tích hợp với client-owned draft của ADR-016 như thế nào mà không ghi plaintext Secret vào `sessionStorage`?
 
 ### Điều kiện đóng
 

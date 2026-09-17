@@ -8,33 +8,45 @@ hide empty members
 
 package "Boundary/UI" {
   class "Web UI" as WebUI <<boundary>> {
-    -selectedEnvironment: String
+    -configurationDraft: EnvironmentConfigurationDraft
+    +selectEnvironment(applicationId, environment)
+    +setDirectConfigurationValue(draft, item, value)
+    +bindResourceOutput(draft, item, resource, output)
+    +bindWorkloadOutput(draft, variable, workload, output)
     +showConfigurationRequirements()
     +showValidResourceOutputs()
     +showValidWorkloadOutputs()
+    +discardDraft()
+  }
+  class "Environment Configuration Draft" as ConfigurationDraft <<client-owned DTO>> {
+    +applicationId: String
+    +environment: String
+    +baseApplicationDefinitionVersion: Integer
+    +baseConfigurationRevision: String?
+    +bindings: List
+  }
+  class "Browser sessionStorage" as DraftStore <<client storage>> {
+    +load(draftKey)
+    +save(draftKey, nonSensitiveDraft)
+    +remove(draftKey)
   }
   class "Environment Configuration API / Controller" as API <<control>> {
     -configurationService: ConfigurationService
     +selectEnvironment(applicationId, environment)
-    +setDirectConfigurationValue(item, value)
+    +setDirectConfigurationValue(secret, secretValue)
     +requestResourceOutputs(resource)
     +requestWorkloadOutputs(workload)
-    +bindResourceOutput(item, resource, output)
-    +bindWorkloadOutput(variable, workload, output)
-    +saveEnvironmentConfiguration(configuration)
+    +saveEnvironmentConfiguration(completeDraft, bases)
   }
 }
 
 package "Application services" {
   class "Environment Configuration Service" as ConfigurationService <<control>> {
-    -configurationDraft: Object
     +selectEnvironment(applicationId, environment)
-    +setDirectConfigurationValue(item, value)
+    +setDirectConfigurationValue(secret, secretValue)
     +requestResourceOutputs(resource)
     +requestWorkloadOutputs(workload)
-    +bindResourceOutput(item, resource, output)
-    +bindWorkloadOutput(variable, workload, output)
-    +saveEnvironmentConfiguration(configuration)
+    +saveEnvironmentConfiguration(completeDraft, bases)
   }
 }
 
@@ -65,14 +77,19 @@ package "Persistence" {
   class "Application Query / Application Repository" as AppQuery <<entity>> {
     -applicationDefinitions: Collection
     +loadConfigurationRequirements(applicationId)
+    +findLatestVersion(applicationId)
   }
   class "Environment Configuration Repository" as ConfigRepo <<entity>> {
     -environmentConfigurations: Collection
-    +save(configurationWithValueReferences)
+    +find(applicationId, environment)
+    +findRevision(applicationId, environment)
+    +saveIfBasesMatch(configurationWithValueReferences, bases)
   }
 }
 
-WebUI "1" --> "1" API
+WebUI "1" *-- "0..1" ConfigurationDraft
+WebUI "1" --> "1" DraftStore
+WebUI "1" --> "1" API : load/query/stage/save only
 API "1" --> "1" ConfigurationService
 ConfigurationService "1" --> "1" AppQuery
 ConfigurationService ..> ResourceCatalog
@@ -81,9 +98,17 @@ ConfigurationService ..> Validator
 ConfigurationService ..> SecretStore
 ConfigurationService "1" --> "1" ConfigRepo
 
-note right of SecretStore
-  Concrete secret backend is not selected
-  in UC-02.
+note right of ConfigurationDraft
+  CLIENT-OWNED DTO, not a domain object.
+  sessionStorage excludes plaintext Secret.
+  The two base values enable optimistic concurrency.
+end note
+
+note right of ConfigurationService
+  Stateless between edit requests.
+  Normal field/binding edits do not call the API.
+  Secure Secret staging remains a server operation;
+  its cleanup lifecycle is deferred to D07.
 end note
 
 note right of Validator

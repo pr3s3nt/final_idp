@@ -13,7 +13,6 @@ For smaller project tasks that need to be remembered but are not yet scheduled, 
 
 | ID | Summary | Impact | Main scope | Status |
 |---|---|---|---|---|
-| [D01](D01-draft-lifetime.md) | Draft lifetime across requests | Medium | UC-01, UC-02 | Deferred |
 | [D02](D02-uc04-provider-preconditions.md) | UC-04 external-provider preconditions | Medium | UC-04 | Deferred |
 | [D03](D03-typed-infrastructure-plan.md) | Typed Infrastructure Plan | Medium | UC-03 | Deferred |
 | [D04](D04-deployment-progress-ownership.md) | Progress-marker ownership | Medium | UC-03, UC-04 | Deferred |
@@ -27,5 +26,11 @@ For smaller project tasks that need to be remembered but are not yet scheduled, 
 | [D12](D12-uc02-catalog-version.md) | Catalog Version used by UC-02 | Medium | UC-02, UC-03 | Deferred |
 | [D13](D13-teardown-removal-verification.md) | Verify removal before terminal status | High | UC-05 | Deferred |
 | [D14](D14-teardown-delivery-cleanup.md) | Clean delivery objects in resource-only teardown | High | UC-05 | Deferred |
+
+## Resolved issues
+
+| ID | Summary | Main scope | Resolution |
+|---|---|---|---|
+| [D01](D01-draft-lifetime.md) | Draft lifetime across requests | UC-01, UC-02 | [ADR-016](../decisions/ADR-016-client-owned-drafts.md) |
 
 Impact values are navigation aids, not a formal delivery commitment. Assign a target iteration before starting work rather than silently changing a deferred item.

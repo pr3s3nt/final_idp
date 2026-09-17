@@ -1,16 +1,19 @@
 ---
 id: ADR-001
 artifact: architecture-decision-record
-status: current
+status: superseded
 outcome: deferred
 last_reviewed: 2026-09-17
 source_record: "git:f58765e:docs/archive/consolidated/design-decisions-log.md"
+superseded_by: ADR-016
 ---
 
 # ADR-001 — Bản nháp UC-01/UC-02
 
-**Current interpretation:** the decision was to defer this concern. Current work is tracked in [D01](../backlog/D01-draft-lifetime.md).
+**Current interpretation:** quyết định hoãn này đã được
+[ADR-016](ADR-016-client-owned-drafts.md) supersede. D01 được giữ lại làm
+lịch sử của vấn đề và hướng giải quyết.
 
 **Quyết định:** chưa giải quyết ở MVP.
 
-**Chi tiết:** xem [D01](../backlog/D01-draft-lifetime.md).
+**Chi tiết lịch sử:** xem [D01](../backlog/D01-draft-lifetime.md).
