@@ -38,7 +38,7 @@ Các operation chỉnh field/component là interaction operation của Web UI v�
 
 ### Boundary/UI
 
-- **Web UI** - Sở hữu `ApplicationDefinitionDraft`, cho Developer khai báo application, workload, resource, dependency và configuration requirement, serialize/restore phần không nhạy cảm trong `sessionStorage`, rồi gửi toàn bộ draft khi Save.
+- **Web UI** - React web application theo [ADR-017](../../decisions/ADR-017-react-web-frontend.md). Sở hữu `ApplicationDefinitionDraft`, cho Developer khai báo application, workload, resource, dependency và configuration requirement, serialize/restore phần không nhạy cảm trong `sessionStorage`, rồi gửi toàn bộ draft khi Save.
 
 - **Application API / Controller** - Tải phiên bản mới nhất cho edit; khi Save, nhận toàn bộ draft, validate ở mức request và điều phối sang application service. Không cung cấp endpoint cho từng field/component edit.
 

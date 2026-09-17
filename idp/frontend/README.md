@@ -7,10 +7,29 @@ last_reviewed: 2026-09-17
 
 # IDP frontend
 
-This directory is reserved for a future independently built IDP frontend.
+React + TypeScript web frontend built with Vite. The technology, API
+integration, build and delivery approach are decided in
+[ADR-017](../../docs/decisions/ADR-017-react-web-frontend.md). It currently
+implements the [UC-01](../../docs/use-cases/UC-01/README.md) editor.
 
-The current user interface is server-rendered by the Go backend. Its templates
-remain under [`../backend/internal/web/templates/`](../backend/internal/web/templates/)
-so that Go can embed them in the backend binary. Do not move the demo workload
-in `demo-apps/cmd/frontend` here; that program represents an application
-deployed by the IDP, not the IDP user interface.
+The server-rendered pages for UC-03 to UC-05 stay in
+[`../backend/internal/web/templates/`](../backend/internal/web/templates/).
+Do not move the demo workload in `demo-apps/cmd/frontend` here; that program is
+an application deployed by the IDP, not the IDP user interface.
+
+## Commands
+
+Run every command in this directory. Node.js 24 and npm 11 were used.
+
+```bash
+npm ci              # install exact dependencies from package-lock.json
+npm run dev         # Vite dev server on http://127.0.0.1:5173/ui/, proxies /api to the Go backend
+npm run lint        # ESLint and TypeScript type check
+npm test            # Vitest component and unit tests (jsdom)
+npm run build       # production bundle in dist/
+```
+
+`npm run dev` proxies `/api` to `http://127.0.0.1:8088`. Set
+`IDP_API_ORIGIN` to use another backend address. After `npm run build`, the Go
+server (`idp serve`) serves `dist/` under `/ui/`; see the
+[runbook](../../docs/operations/uc03/RUNBOOK.md).

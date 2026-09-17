@@ -15,6 +15,14 @@ The Secret Store implementation keeps each value in an encrypted file using AES-
 
 Callers persist only opaque references of the form `idpsecret://<id>`. Plaintext secret values, Git hosting tokens, delivery-repository private keys, and cluster credentials must not be written to the IDP database, Delivery Repository, Deployment Record, deployment-step detail, or application logs. `IDP_SECRET_KEY` must be supplied to every process that reads the same store and is not written by the Secret Store itself.
 
+## Browser storage
+
+UC-01 declares Secret names only; it has no input for a Secret value. Browser
+`sessionStorage` holds only non-sensitive draft content, as decided in
+[ADR-016](../decisions/ADR-016-client-owned-drafts.md) and
+[ADR-017](../decisions/ADR-017-react-web-frontend.md). Tokens, credentials and
+plaintext Secret values are never written to browser storage.
+
 ## Workload materialization
 
 During deployment, Secret Materializer resolves authorized references in memory and creates or updates a Kubernetes `Secret` through the Kubernetes API. Generated workload manifests refer to that object through `secretKeyRef`; plaintext never enters Git desired state. A keyed HMAC of the materialized secret inputs is placed in the pod-template annotation so secret changes trigger rollout without exposing the value.

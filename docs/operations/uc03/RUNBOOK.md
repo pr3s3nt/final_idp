@@ -40,6 +40,7 @@ Internet cần tới: registry.terraform.io, argoproj.github.io và rancher.gith
 | `IDP_AWS_ECR_REGISTRY` | import | registry ECR của account, điền vào `eks-cluster.image_registry_mirror`. Phải đặt **trước** `import-fixtures`: phiên bản catalog đã tạo không sửa được |
 | `IDP_HEALTH_TIMEOUT` | không | thời gian chờ sync/rollout, mặc định 6m |
 | `IDP_LISTEN` | không | mặc định `127.0.0.1:8088` |
+| `IDP_FRONTEND_DIR` | không | thư mục bundle React (UC-01) được phục vụ dưới `/ui/`, mặc định `../frontend/dist` |
 
 Mỗi application có một delivery repository riêng: IDP tạo repo theo `IDP_DELIVERY_REPO_PATTERN` ở lần deploy đầu tiên của application, sinh một cặp khóa chỉ dùng cho application đó (khóa ghi cho IDP, khóa đọc cho hệ thống CD — Fleet hoặc Argo CD tùy `IDP_CD_PROVIDER`) và lưu cả hai vào Secret Store. Database chỉ giữ secret reference. Gỡ application khỏi một environment chỉ xóa thư mục của environment đó, repo và cặp khóa được giữ lại.
 
@@ -91,6 +92,21 @@ Catalog có phiên bản (`fixtures/catalog/v<N>.yaml`, bất biến). Muốn s�
 ./bin/idp worker   # Deployment Worker (một tiến trình)
 ```
 
+### Web frontend (UC-01)
+
+Editor UC-01 là ứng dụng React trong `idp/frontend/` ([ADR-017](../../decisions/ADR-017-react-web-frontend.md)). Các trang Go của UC-03 đến UC-05 không cần bước này.
+
+```bash
+# Build một lần; `idp serve` phục vụ bundle tại http://127.0.0.1:8088/ui/applications
+(cd ../frontend && npm ci && npm run build)
+./bin/idp serve
+
+# Hoặc khi phát triển giao diện: Vite tại http://127.0.0.1:5173/ui/applications, proxy /api sang `idp serve`
+(cd ../frontend && npm run dev)
+```
+
+Chưa build thì `/ui/` trả 404 kèm hướng dẫn; các trang khác vẫn chạy.
+
 ### Chạy bằng Docker
 
 Image chứa sẵn `terraform`, `score-k8s`, AWS CLI, Git và OpenSSH; cùng một image chạy được server, worker và các lệnh quản trị:
@@ -110,7 +126,7 @@ docker run --rm --network host -v idp-data:/data \
   final-idp:local worker
 ```
 
-Server là lệnh mặc định và lắng nghe `0.0.0.0:8088`. Worker dùng cùng volume `/data` để chia sẻ Secret Store, checkout delivery repository, Terraform state và provider cache. Khi chạy target AWS, truyền thêm AWS credentials theo cơ chế chuẩn của AWS CLI/SDK.
+Server là lệnh mặc định và lắng nghe `0.0.0.0:8088`. Image chưa chứa bundle React: muốn dùng `/ui/` thì build `idp/frontend`, mount `dist/` vào container và đặt `IDP_FRONTEND_DIR`. Worker dùng cùng volume `/data` để chia sẻ Secret Store, checkout delivery repository, Terraform state và provider cache. Khi chạy target AWS, truyền thêm AWS credentials theo cơ chế chuẩn của AWS CLI/SDK.
 
 Theo dõi: UI trang `/deployments/<id>`, hoặc `scripts/idpctl.sh show <id>`; log Terraform ở `var/terraform/workspaces/<resource-instance-id>/terraform.log`.
 
@@ -119,6 +135,7 @@ Theo dõi: UI trang `/deployments/<id>`, hoặc `scripts/idpctl.sh show <id>`; l
 ```bash
 go test ./...                                   # unit, gồm pipeline với score-k8s thật
 go test -tags integration ./internal/service/   # Postgres thật (idp_test), adapter hạ tầng giả lập
+(cd ../frontend && npm run lint && npm test && npm run build)             # web frontend UC-01
 ```
 
 ## 6. Sự cố thường gặp

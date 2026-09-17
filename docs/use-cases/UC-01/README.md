@@ -31,6 +31,7 @@ Designed. The current Go implementation imports Application Definitions as fixtu
 ## Resolved decisions
 
 - [ADR-016 — Browser-owned drafts](../../decisions/ADR-016-client-owned-drafts.md)
+- [ADR-017 — React web frontend](../../decisions/ADR-017-react-web-frontend.md)
 
 ## Implementation entry point
 

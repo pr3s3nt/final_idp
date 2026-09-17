@@ -161,8 +161,8 @@ unstated assumption into a requirement or design decision.
 
 | Area | Role | Boundary rule |
 |---|---|---|
-| `idp/backend/` | Current IDP backend | Contains the Go service, embedded HTML UI, migrations, fixtures, infrastructure modules, and operational tools |
-| `idp/frontend/` | Reserved for a future independent IDP frontend | It does not currently contain a standalone frontend; do not place demo applications here |
+| `idp/backend/` | Current IDP backend | Contains the Go service, JSON API, embedded HTML UI for UC-03 to UC-05, migrations, fixtures, infrastructure modules, and operational tools |
+| `idp/frontend/` | React + TypeScript web frontend (ADR-017) | Contains the UC-01 editor built with Vite and served under `/ui/`; do not place demo applications here |
 | `demo-apps/` | Workloads deployed by the IDP for demos and verification | These applications are not IDP product source code |
 | `docs/` | Requirements, design, implementation guidance, operations, and evidence | It does not contain runtime product source code |
 | `scripts/` | Repository-level validation and maintenance tools | Keep it distinct from `idp/backend/scripts/`, which contains backend operational tools |
@@ -184,15 +184,15 @@ Mandatory rules:
 3. Do not introduce imports that make the backend depend on `demo-apps/` or
    vice versa. They have different purposes and lifecycles.
 
-4. The current UI templates live in:
+4. The server-rendered UI templates live in:
 
    ```text
    idp/backend/internal/web/templates/
    ```
 
    They are embedded in the Go binary and served by the backend. Do not move
-   them to `idp/frontend/` without changing the frontend build, packaging, and
-   delivery design.
+   them to `idp/frontend/` without a decision that changes their build,
+   packaging, and delivery design.
 
 5. `demo-apps/cmd/frontend/` is a sample workload deployed by the IDP. It is not
    the IDP administrative UI.
@@ -211,9 +211,10 @@ Mandatory rules:
    go test ./...
    ```
 
-8. Do not create source code in `idp/frontend/` merely to populate the
-   directory. Initialize an independent frontend only after its technology,
-   backend integration, build, and deployment approach are defined.
+8. `idp/frontend/` follows
+   [ADR-017](docs/decisions/ADR-017-react-web-frontend.md). Run its commands
+   from that directory; do not commit `node_modules/`, `dist/`, or coverage
+   output.
 
 `idp/` contains the IDP product; `demo-apps/` contains workloads used to verify
 the product. A sample application's name does not make it part of the IDP UI.
@@ -357,6 +358,7 @@ only on test results.
 | Documentation | `python3 scripts/check_docs.py` and `git diff --check` |
 | Go backend | Run `go test ./...` and `go build ./...` in `idp/backend/` |
 | Demo applications | Run `go test ./...` and `go build ./...` in `demo-apps/` |
+| Web frontend | Run `npm run lint`, `npm test`, and `npm run build` in `idp/frontend/` |
 | Shell scripts | Run `bash -n` on changed scripts |
 | Terraform modules | Run formatting checks and `terraform validate` for affected modules when the environment permits |
 | Migration or data access | Check schema, migration, repositories, and relevant database tests |
