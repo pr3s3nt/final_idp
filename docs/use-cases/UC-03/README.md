@@ -26,7 +26,7 @@ Implemented and end-to-end verified on an existing internal kind cluster and on 
 - [Database schema](../../architecture/database/schema.md)
 - [Operation contracts](../../architecture/contracts/operation-contracts.md)
 - [Deployment state machine](../../architecture/state-machines/deployment.puml)
-- [Traceability matrix](../../../06_traceability/traceability_matrix.md)
+- [Traceability matrix](../../traceability/matrix.md)
 
 ## Important decisions
 

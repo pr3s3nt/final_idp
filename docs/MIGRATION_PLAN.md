@@ -2,7 +2,7 @@
 id: DOC-MIGRATION-PLAN
 artifact: documentation-migration-plan
 status: current
-migration_stage: shared-architecture-moved
+migration_stage: traceability-matrix-moved
 last_reviewed: 2026-09-17
 ---
 
@@ -119,6 +119,8 @@ The database schema continues to be the sole owner of physical schema and litera
 
 ## Mapping C — Traceability, decisions, and backlog
 
+**Status:** traceability matrix move completed on 2026-09-17. Consolidated decision and deferred-issue logs remain pending semantic reconciliation and archive.
+
 | Current path | Final path | Action |
 |---|---|---|
 | `06_traceability/traceability_matrix.md` | `docs/traceability/matrix.md` | `MOVE` |
@@ -221,7 +223,7 @@ The audit procedure is manual and must be recorded in this table or a linked rec
 
 1. **DONE —** Move sequence and VOPC sources into the five use-case context packages.
 2. **DONE —** Move shared architecture artifacts under `docs/architecture/`.
-3. Move the traceability matrix and update all active links.
+3. **DONE —** Move the traceability matrix and update all active links.
 4. Compare split artifacts with consolidated predecessors and archive the predecessors.
 5. Move operational documents and archive the consolidated verification and implementation plan.
 6. Remove empty legacy directories, normalize remaining links, and enforce final-layout checks.

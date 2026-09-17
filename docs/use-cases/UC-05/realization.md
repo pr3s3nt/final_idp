@@ -83,4 +83,4 @@ UC-05 không thêm class mới nào so với UC-03: nó dùng lại đúng các 
 - [Sequence diagram](sequence.puml)
 - [VOPC](vopc.puml)
 - [Operation contracts](../../architecture/contracts/operation-contracts.md)
-- [Traceability matrix](../../../06_traceability/traceability_matrix.md)
+- [Traceability matrix](../../traceability/matrix.md)

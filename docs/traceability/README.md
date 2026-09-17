@@ -7,7 +7,7 @@ last_reviewed: 2026-09-17
 
 # Traceability index
 
-The detailed cross-artifact coverage matrix remains at [`06_traceability/traceability_matrix.md`](../../06_traceability/traceability_matrix.md).
+The detailed cross-artifact coverage matrix is [matrix.md](matrix.md).
 
 ## Required chain
 

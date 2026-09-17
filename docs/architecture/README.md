@@ -19,7 +19,7 @@ Shared models are canonical here; use-case packages link to them rather than dup
 | Database tables, constraints, and ENUMs | [Database schema](database/schema.md) | [ERD](database/erd.puml) |
 | Operation pre/postconditions | [Operation contracts](contracts/operation-contracts.md) | — |
 | Lifecycle behavior | [State-machine guide](state-machines/README.md) | [`state-machines/`](state-machines/) |
-| Cross-artifact coverage | [Traceability matrix](../../06_traceability/traceability_matrix.md) | — |
+| Cross-artifact coverage | [Traceability matrix](../traceability/matrix.md) | — |
 
 ## Canonical ownership
 

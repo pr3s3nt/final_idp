@@ -19,7 +19,7 @@ Trong UC-01 và UC-02, Developer chỉnh sửa qua nhiều bước (thêm resour
 - `docs/use-cases/UC-01/vopc.puml:29` — `Application Service` có `-applicationDraft: Object`.
 - `docs/use-cases/UC-02/vopc.puml:30` — `Environment Configuration Service` có `-configurationDraft: Object`.
 - `docs/use-cases/UC-01/sequence.puml:21,28,48` — Service trả về "draft" nhưng không nói draft được lưu và khôi phục thế nào giữa các request.
-- `06_traceability/traceability_matrix.md` (các dòng UC-01/UC-02) — ghi "draft; write deferred" nhưng không có bảng hay nơi lưu draft.
+- `docs/traceability/matrix.md` (các dòng UC-01/UC-02) — ghi "draft; write deferred" nhưng không có bảng hay nơi lưu draft.
 
 Hệ quả nếu giữ nguyên:
 

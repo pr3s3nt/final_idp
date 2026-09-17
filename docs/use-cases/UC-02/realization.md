@@ -71,4 +71,4 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 - [Sequence diagram](sequence.puml)
 - [VOPC](vopc.puml)
 - [Operation contracts](../../architecture/contracts/operation-contracts.md)
-- [Traceability matrix](../../../06_traceability/traceability_matrix.md)
+- [Traceability matrix](../../traceability/matrix.md)

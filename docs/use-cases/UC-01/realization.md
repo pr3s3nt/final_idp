@@ -67,4 +67,4 @@ UC-01 chưa cần Deployment Orchestrator, Resource Definition Resolver, Infrast
 - [Sequence diagram](sequence.puml)
 - [VOPC](vopc.puml)
 - [Operation contracts](../../architecture/contracts/operation-contracts.md)
-- [Traceability matrix](../../../06_traceability/traceability_matrix.md)
+- [Traceability matrix](../../traceability/matrix.md)
