@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: accepted
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-015 — Tách Remove Application thành UC-05
@@ -26,4 +26,4 @@ Trong khi đó code đã chạy thao tác này nhiều tháng: `POST /api/teardo
 5. **Thứ tự là ngược lại**: workload trước, rồi tới resource mà chúng phụ thuộc. Workload chỉ được đánh dấu đã gỡ sau khi xác minh nó biến mất khỏi cụm; resource chỉ bị hủy sau đó. Resource dùng chung, có sẵn chỉ bị gỡ liên kết, không bao giờ bị hủy.
 6. **Không thêm class nào** vào VOPC: UC-05 dùng lại đúng các thành phần của UC-03.
 
-**Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** đặc tả UC-05 trong `usecase_realization_step_1_3.md` (kèm Bước 1, 2, 3), `docs/use-cases/UC-05/sequence.puml`, `docs/use-cases/UC-05/vopc.puml`, cột `deployment.kind` trong ERD, operation contract 12 `createTeardown()`, nhánh mới trong state machine deployment, traceability. Code trong `uc03/` đã có sẵn thao tác này nên lần này thiết kế đuổi theo code, ngược với các vấn đề trước.
+**Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** [đặc tả và realization UC-05](../use-cases/UC-05/README.md), `docs/use-cases/UC-05/sequence.puml`, `docs/use-cases/UC-05/vopc.puml`, cột `deployment.kind` trong ERD, operation contract 12 `createTeardown()`, nhánh mới trong state machine deployment, traceability. Code trong `uc03/` đã có sẵn thao tác này nên lần này thiết kế đuổi theo code, ngược với các vấn đề trước.

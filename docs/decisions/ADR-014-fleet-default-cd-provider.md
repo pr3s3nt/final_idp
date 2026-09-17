@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: accepted
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-014 — Fleet là CD provider mặc định
@@ -33,7 +33,7 @@ source_record: ../../06_traceability/design_decisions.md
 | Sức khỏe | `status.health.status` | condition `Ready` + `status.summary` |
 | Xóa resource khi file biến mất | `syncPolicy.automated.prune` | `keepResources` (mặc định tắt nên có xóa) |
 
-**Sẽ ảnh hưởng:** chỉ các dòng ví dụ trong `usecase_realization_step_1_3.md`, `docs/architecture/design-classes.md`, `06_traceability/deferred_issues.md`; phần còn lại là code và tài liệu vận hành.
+**Sẽ ảnh hưởng:** chỉ các dòng ví dụ trong [các use case](../use-cases/README.md), [`design-classes.md`](../architecture/design-classes.md) và [backlog](../backlog/README.md); phần còn lại là code và tài liệu vận hành.
 
 **Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** tài liệu và code đều xong, kiểm chứng thật trên cụm nội bộ (`uc03/docs/VERIFICATION.md` §6). Hai application chạy hai CD system khác nhau trên cùng một cụm.
 

@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: deferred
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-011 — Xử lý Secret bị orphan khi lưu lỗi
@@ -15,7 +15,7 @@ source_record: ../../06_traceability/design_decisions.md
 
 **Quyết định:** chưa giải quyết lúc này, để lại xử lý sau.
 
-**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D7 — gồm bảng các tình huống sinh secret orphan, ba hướng có thể cân nhắc (ghi lúc Save kèm xóa bù; lưu tạm có hạn dùng; dọn rác định kỳ) và câu hỏi cần chốt.
+**Chi tiết:** xem [D07](../backlog/D07-orphaned-secret.md) — gồm bảng các tình huống sinh secret orphan, ba hướng có thể cân nhắc (ghi lúc Save kèm xóa bù; lưu tạm có hạn dùng; dọn rác định kỳ) và câu hỏi cần chốt.
 
 **Lưu ý:** vấn đề này gắn với D1 (bản nháp — secret nằm ở đâu trước khi Save); nên cân nhắc giải quyết cùng lúc. Khi sửa tài liệu cho các vấn đề đã chốt, giữ nguyên luồng lưu secret hiện tại của UC-02.
 

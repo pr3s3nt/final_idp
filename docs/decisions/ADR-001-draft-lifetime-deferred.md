@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: deferred
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-001 — Bản nháp UC-01/UC-02
@@ -13,4 +13,4 @@ source_record: ../../06_traceability/design_decisions.md
 
 **Quyết định:** chưa giải quyết ở MVP.
 
-**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D1.
+**Chi tiết:** xem [D01](../backlog/D01-draft-lifetime.md).

@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: deferred
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-008 — Tách lifecycle status và delivery status
@@ -19,7 +19,7 @@ source_record: ../../06_traceability/design_decisions.md
 
 **Quyết định:** chưa giải quyết lúc này, để lại xử lý sau.
 
-**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D5 — gồm hướng đã đề xuất (status chỉ là lifecycle của IDP; bỏ `deployment_record.status`; trạng thái CD lưu riêng với tập giá trị trung lập) và câu hỏi cần chốt.
+**Chi tiết:** xem [D05](../backlog/D05-lifecycle-vs-delivery-status.md) — gồm hướng đã đề xuất (status chỉ là lifecycle của IDP; bỏ `deployment_record.status`; trạng thái CD lưu riêng với tập giá trị trung lập) và câu hỏi cần chốt.
 
 **Lưu ý khi sửa tài liệu:** vấn đề 2 đã chốt `deployment.status` là `AWAITING_CONFIRMATION → CONFIRMED → DEPLOYING → SUCCEEDED | FAILED` do IDP tự quyết; khi sửa tài liệu không được mô tả status nhận giá trị từ CD. Liên quan D4 (bước `CD_SYNCED`) và D2 (trạng thái CD ở UC-04).
 

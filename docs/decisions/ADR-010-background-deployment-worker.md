@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: accepted
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-010 — Thực thi deployment bằng background worker
@@ -37,7 +37,7 @@ source_record: ../../06_traceability/design_decisions.md
 
 **Sẽ ảnh hưởng:**
 
-- `usecase_realization_step_1_3.md`:
+- [`docs/use-cases/`](../use-cases/README.md):
   - Đặc tả UC-03: sau khi Developer chọn Deploy, IDP xác nhận và trả lời ngay; việc triển khai chạy nền và được theo dõi ở UC-04.
   - Bước 1 UC-03: trách nhiệm tách thành nhận việc (xác nhận, tạo job) và làm việc (Deployment Worker thực thi).
   - Bước 2 UC-03: `confirmDeployment()` chỉ đổi status và tạo job; các operation thực thi do Deployment Worker chạy.

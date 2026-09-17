@@ -2,11 +2,11 @@
 id: LEGACY-DEFERRED-ISSUE-LOG
 artifact: consolidated-deferred-issue-log
 status: historical
-current_index: ../docs/backlog/README.md
+current_index: ../../backlog/README.md
 last_reviewed: 2026-09-17
 ---
 
-> **Historical consolidated record.** Use the split [backlog index](../docs/backlog/README.md) for current issue navigation and status. This file is retained for provenance.
+> **Historical consolidated record.** Use the split [backlog index](../../backlog/README.md) for current issue navigation and status. The completed comparison is recorded in [`documentation-reconciliation.md`](../../implementation/documentation-reconciliation.md). This file is retained for provenance.
 
 # Các vấn đề thiết kế hoãn sau MVP
 

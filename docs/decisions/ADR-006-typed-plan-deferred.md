@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: deferred
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-006 — Typed Infrastructure Plan
@@ -15,7 +15,7 @@ source_record: ../../06_traceability/design_decisions.md
 
 **Quyết định:** xem xét sau. Vấn đề chỉ gây hại khi dữ liệu đầu vào của plan bị thay đổi giữa lúc lập plan và lúc xác nhận (ví dụ người khác sửa cấu hình hoặc định nghĩa trong lúc đó); chưa cần lo ở giai đoạn hiện tại.
 
-**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D3 — gồm bảng các nơi nhắc tới plan, các tình huống gây hại, hướng đã đề xuất (Deployment Plan có cấu trúc theo tầng) và câu hỏi cần chốt.
+**Chi tiết:** xem [D03](../backlog/D03-typed-infrastructure-plan.md) — gồm bảng các nơi nhắc tới plan, các tình huống gây hại, hướng đã đề xuất (Deployment Plan có cấu trúc theo tầng) và câu hỏi cần chốt.
 
 **Lưu ý khi sửa tài liệu:** use case và sequence UC-03 vẫn mô tả nội dung plan ở mức khái niệm (tầng, action create/update/reuse/remove/destroy, override được phép) để thể hiện quyết định của vấn đề 2, 3, 5; chỉ phần cấu trúc chi tiết và cách tính fingerprint là để sau.
 

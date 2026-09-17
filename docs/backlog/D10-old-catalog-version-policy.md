@@ -3,7 +3,7 @@ id: D10
 artifact: deferred-issue
 status: deferred
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/deferred_issues.md
+source_record: ../archive/consolidated/deferred-issues-log.md
 ---
 
 # D10 — Chính sách với Catalog Version cũ

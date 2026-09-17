@@ -7,7 +7,7 @@ last_reviewed: 2026-09-17
 
 # Architecture Decision Records
 
-The split ADRs below are the AI-friendly decision index. The original chronological record remains at [`06_traceability/design_decisions.md`](../../06_traceability/design_decisions.md) for provenance.
+The split ADRs below are the AI-friendly decision index. The original chronological record is archived as [`design-decisions-log.md`](../archive/consolidated/design-decisions-log.md) for provenance.
 
 | ID | Decision | Outcome |
 |---|---|---|

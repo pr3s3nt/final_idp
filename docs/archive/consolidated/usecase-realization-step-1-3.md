@@ -2,11 +2,11 @@
 id: LEGACY-USE-CASE-REALIZATION-1-3
 artifact: consolidated-use-case-and-realization
 status: superseded
-superseded_by: docs/use-cases/README.md
+superseded_by: ../../use-cases/README.md
 last_reviewed: 2026-09-17
 ---
 
-> **Superseded consolidated artifact.** Current specifications and Use Case Realizations are split under [`docs/use-cases/`](docs/use-cases/README.md). This file is retained temporarily for provenance and must not be used as the source of truth.
+> **Superseded consolidated artifact.** Current specifications and Use Case Realizations are split under [`docs/use-cases/`](../../use-cases/README.md). The completed semantic comparison is recorded in [`documentation-reconciliation.md`](../../implementation/documentation-reconciliation.md); this copy is retained only for provenance.
 
 # Usecase
 UC-01 – Create / Configure Application

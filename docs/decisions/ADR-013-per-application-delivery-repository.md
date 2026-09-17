@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: accepted
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-013 — Delivery Repository riêng cho từng application
@@ -33,6 +33,6 @@ source_record: ../../06_traceability/design_decisions.md
 - Contract 8 mô tả việc bảo đảm repo của application tồn tại trước khi publish; A2 thêm trường hợp tạo repo thất bại.
 - Đặc tả UC-03 thêm quy tắc: desired state của mỗi application nằm ở repo riêng, application này không ghi được vào repo của application khác.
 
-**Sẽ ảnh hưởng:** `usecase_realization_step_1_3.md` (đặc tả UC-03, Bước 1–3), sequence UC-03, VOPC UC-03 + design class diagram + README, domain model + domain objects + persistence classification, ERD, operation contract 8, traceability.
+**Sẽ ảnh hưởng:** [đặc tả và realization UC-03](../use-cases/UC-03/README.md), sequence UC-03, VOPC UC-03 + design class diagram + README, domain model + domain objects + persistence classification, ERD, operation contract 8, traceability.
 
 **Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** toàn bộ danh sách trên. Code trong `uc03/` chưa sửa theo quyết định này.

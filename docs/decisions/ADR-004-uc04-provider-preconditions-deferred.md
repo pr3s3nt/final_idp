@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: deferred
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-004 — Điều kiện gọi provider trong UC-04
@@ -19,7 +19,7 @@ source_record: ../../06_traceability/design_decisions.md
 
 **Quyết định:** chưa giải quyết lúc này, để lại xử lý sau.
 
-**Chi tiết:** xem `06_traceability/deferred_issues.md`, mục D2 — gồm các kịch bản lỗi, hướng giải quyết đã đề xuất (kết quả lấy từ DB; trạng thái trực tiếp chỉ hỏi khi đủ điều kiện) và các câu hỏi cần chốt.
+**Chi tiết:** xem [D02](../backlog/D02-uc04-provider-preconditions.md) — gồm các kịch bản lỗi, hướng giải quyết đã đề xuất (kết quả lấy từ DB; trạng thái trực tiếp chỉ hỏi khi đủ điều kiện) và các câu hỏi cần chốt.
 
 **Lưu ý khi giải quyết sau:** tận dụng hai quyết định của vấn đề 2 — `deployment_step` theo tầng/thành phần (kết quả của deployment đã có trong DB) và Workload Instance (biết deployment đang xem còn là bản đang chạy hay không). Khi sửa sequence UC-04 trong lượt sửa chung cho vấn đề 2, không được làm lỗi này nặng thêm.
 

@@ -7,7 +7,7 @@ last_reviewed: 2026-09-17
 
 # Deferred risks and design issues
 
-This index is the authoritative list of known unresolved design work. Detailed analysis is split by issue; the original consolidated record remains at [`06_traceability/deferred_issues.md`](../../06_traceability/deferred_issues.md) for provenance.
+This index is the authoritative list of known unresolved design work. Detailed analysis is split by issue; the original consolidated record is archived as [`deferred-issues-log.md`](../archive/consolidated/deferred-issues-log.md) for provenance.
 
 | ID | Summary | Impact | Main scope | Status |
 |---|---|---|---|---|

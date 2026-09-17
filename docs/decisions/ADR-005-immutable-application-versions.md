@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: accepted
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-005 — Phiên bản Application Definition bất biến
@@ -55,7 +55,7 @@ Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã worklo
 
 **Sẽ ảnh hưởng:**
 
-- `usecase_realization_step_1_3.md`:
+- [`docs/use-cases/`](../use-cases/README.md):
   - Đặc tả UC-01: Save tạo phiên bản mới; A1 chỉ còn lỗi nội bộ phiên bản; quy tắc nghiệp vụ về phiên bản.
   - Đặc tả UC-02: environment cố định `staging`, `production`.
   - Đặc tả UC-03: chọn phiên bản để deploy, promote từ staging lên production; plan có hành động gỡ/hủy; A1 thêm lỗi cấu hình environment không khớp phiên bản; đổi phiên bản phải deploy toàn bộ.

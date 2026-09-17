@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: accepted
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-002 — Workload Output và triển khai theo thứ tự phụ thuộc
@@ -33,7 +33,7 @@ source_record: ../../06_traceability/design_decisions.md
 
 **Đã áp dụng (lượt sửa chung, nhánh `refine_design`):**
 
-- `usecase_realization_step_1_3.md`: đặc tả UC-01 đến UC-04 và Bước 1–3.
+- [`docs/use-cases/`](../use-cases/README.md): đặc tả UC-01 đến UC-04 và các Use Case Realization.
 - Sequence diagram: `uc_02`, `uc_03` (luồng request và luồng Deployment Worker theo tầng), `uc_04`.
 - VOPC: `docs/use-cases/UC-02/vopc.puml`, `docs/use-cases/UC-03/vopc.puml`, `docs/use-cases/UC-04/vopc.puml`, `docs/architecture/design-class-diagram.puml`, `docs/architecture/design-classes.md` (Deployment Wave Planner, Workload Output Collector, Workload Instance Repository).
 - Domain model: Workload Instance, Workload Output, Deployment Graph có phạm vi/tầng, Workload Deployment có `inclusionReason`/`waveNumber`.

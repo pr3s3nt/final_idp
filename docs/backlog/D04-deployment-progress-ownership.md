@@ -3,7 +3,7 @@ id: D04
 artifact: deferred-issue
 status: deferred
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/deferred_issues.md
+source_record: ../archive/consolidated/deferred-issues-log.md
 ---
 
 # D04 — Quyền sở hữu các bước tiến trình deployment

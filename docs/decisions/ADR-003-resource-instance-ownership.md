@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: accepted
 last_reviewed: 2026-09-17
-source_record: ../../06_traceability/design_decisions.md
+source_record: ../archive/consolidated/design-decisions-log.md
 ---
 
 # ADR-003 — Phạm vi sở hữu và tái sử dụng Resource Instance
@@ -43,7 +43,7 @@ Dùng chung trong cùng app + environment đã có sẵn trong thiết kế: nhi
 
 **Sẽ ảnh hưởng (danh sách ban đầu):**
 
-- `usecase_realization_step_1_3.md`:
+- [`docs/use-cases/`](../use-cases/README.md):
   - Đặc tả UC-03: quy tắc nghiệp vụ về tìm resource để dùng lại theo chủ sở hữu và dùng chung khai báo ở Resource Definition.
   - Bước 2 UC-03: mô tả `resolveResourceDefinitions()`, `planInfrastructureChanges()`, `reconcileInfrastructure()` (tìm theo đủ bộ chủ sở hữu; resource loại `EXISTING` chỉ đọc output).
   - Bước 3 UC-03: Resource Definition Resolver, Infrastructure Planner, Infrastructure Reconciler, Resource Instance Repository.

@@ -15,7 +15,7 @@ This status was reviewed on branch `uc03-impl` against commit `ab74aa2`; later c
 
 ## Documentation migration state
 
-The AI-facing indexes and split artifacts are in place. Sequence diagrams and per-use-case VOPCs live in `docs/use-cases/UC-*`; shared design artifacts live in `docs/architecture/`; the active coverage matrix lives in `docs/traceability/matrix.md`. Legacy paths `sequence_digrams/` and numbered directories `01_*` through `05_*` have been removed. Consolidated decision, issue, plan, and verification files still await semantic reconciliation and archive. The remaining source-to-destination mapping is defined in [MIGRATION_PLAN.md](MIGRATION_PLAN.md).
+The AI-facing indexes and split artifacts are in place. Sequence diagrams and per-use-case VOPCs live in `docs/use-cases/UC-*`; shared design artifacts live in `docs/architecture/`; the active coverage matrix lives in `docs/traceability/matrix.md`. Legacy paths `sequence_digrams/` and numbered directories `01_*` through `06_*` have been removed. Consolidated use-case, decision, and issue sources have passed semantic reconciliation and now live under `docs/archive/consolidated/`. The implementation plan and verification log still await their dedicated audit. The remaining source-to-destination mapping is defined in [MIGRATION_PLAN.md](MIGRATION_PLAN.md).
 
 ## Use-case baseline
 

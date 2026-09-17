@@ -2,11 +2,11 @@
 id: LEGACY-DESIGN-DECISION-LOG
 artifact: consolidated-decision-log
 status: historical
-current_index: ../docs/decisions/README.md
+current_index: ../../decisions/README.md
 last_reviewed: 2026-09-17
 ---
 
-> **Historical consolidated record.** Use the split [ADR index](../docs/decisions/README.md) to determine current decision status. This file is retained for chronology and provenance, and its summary rows may describe an earlier implementation state.
+> **Historical consolidated record.** Use the split [ADR index](../../decisions/README.md) to determine current decision status. The completed comparison is recorded in [`documentation-reconciliation.md`](../../implementation/documentation-reconciliation.md). This file is retained for chronology and provenance, and its summary rows may describe an earlier implementation state.
 
 # Nhật ký quyết định thiết kế
 
