@@ -36,6 +36,11 @@ LEGACY_ROOT_FILES = (
     "implementation_plan.md",
     "usecase_realization_step_1_3.md",
 )
+LEGACY_REFERENCE_EXEMPT_PATHS = {
+    Path("AGENTS.md"),
+    Path("docs/MIGRATION_PLAN.md"),
+    Path("scripts/check_docs.py"),
+}
 
 
 def tracked_markdown() -> set[Path]:
@@ -47,6 +52,16 @@ def tracked_markdown() -> set[Path]:
         text=True,
     )
     return {ROOT / line for line in result.stdout.splitlines() if line}
+
+
+def tracked_files() -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+    return [ROOT / raw.decode("utf-8", errors="surrogateescape") for raw in result.stdout.split(b"\0") if raw]
 
 
 def markdown_candidates() -> list[Path]:
@@ -94,6 +109,24 @@ def main() -> int:
     for relative in LEGACY_ROOT_FILES:
         if (ROOT / relative).exists():
             errors.append(f"legacy root document must not exist: {relative}")
+
+    legacy_references = (*LEGACY_DIRECTORIES, *LEGACY_ROOT_FILES)
+    for path in tracked_files():
+        if not path.is_file():
+            continue
+        rel = path.relative_to(ROOT)
+        if rel in LEGACY_REFERENCE_EXEMPT_PATHS or rel.parts[:2] == ("docs", "archive"):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if "git show " in line:
+                continue
+            for legacy in legacy_references:
+                if legacy in line:
+                    errors.append(f"{rel}:{line_number}: legacy path reference outside provenance: {legacy}")
 
     for path in files:
         rel = path.relative_to(ROOT)
