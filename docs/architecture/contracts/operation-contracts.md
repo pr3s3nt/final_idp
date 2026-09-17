@@ -19,9 +19,9 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
   - `applicationDefinitionDraft` là complete client-owned DTO; backend không giữ hoặc khôi phục draft từ request trước.
   - Developer đã đăng nhập và có quyền tạo hoặc chỉnh sửa Application Definition được truyền vào.
   - Nếu là update, một instance `Application Definition` với `applicationId` tương ứng đã tồn tại trong `application_definition`, có ít nhất một `Application Definition Version`, và draft mang `baseVersion` đã dùng để bắt đầu edit; nếu là create, `baseVersion` rỗng, `applicationId` chưa định danh một row khác và `name` chưa được dùng bởi Application Definition khác.
-  - `applicationDefinitionDraft` có ít nhất một `Workload`. Trong nội dung submit, `Workload.name` và `Resource Requirement.name` không trùng; mỗi `Workload.imageRepository` hợp lệ; mỗi `Workload.port`, nếu có, nằm trong khoảng `1..65535`.
+  - `applicationDefinitionDraft` có ít nhất một `Workload`. Trong nội dung submit, không có hai thành phần trong tập Workload và Resource Requirement trùng `name` (kể cả một Workload và một Resource Requirement); mọi tên tuân thủ [quy tắc đặt tên của UC-01](../../use-cases/UC-01/specification.md#quy-tắc-đặt-tên); mỗi `Workload.imageRepository` hợp lệ và không chứa tag/digest; mỗi `Workload.port`, nếu có, nằm trong khoảng `1..65535`.
   - Thành phần đã có ở phiên bản trước mang đúng ID cố định của nó (kể cả khi đổi tên); thành phần mới chưa có ID hoặc mang ID chưa được dùng trong application.
-  - Mỗi `Environment Variable Definition` và `Secret Definition` thuộc đúng một Workload trong nội dung submit; tên definition là duy nhất trong Workload tương ứng.
+  - Mỗi `Environment Variable Definition` và `Secret Definition` thuộc đúng một Workload trong nội dung submit; tên definition là duy nhất trong Workload tương ứng, tính chung cho cả Environment Variable Definition và Secret Definition.
   - Mỗi `Dependency` có một source là Workload trong nội dung submit và đúng một target là `Workload` hoặc `Resource Requirement` trong nội dung submit; dependency logic không bị trùng và toàn bộ quan hệ `depends on` không tạo thành vòng.
   - Definition không chứa image tag/version, Environment Configuration hoặc deployment target; các dữ liệu này không thuộc UC-01.
 - **Postconditions**:
@@ -34,7 +34,7 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
   - Không instance `Deployment`, `Workload Deployment`, `Environment Configuration`, `Resource Instance` hoặc `Workload Instance` nào được tạo, xóa hay sửa; deployment hiện tại và các environment không tự động thay đổi.
   - Việc tạo/cập nhật `Application Specification` không thuộc state change trực tiếp của contract này; đó là postcondition của `generateApplicationSpecification()` kế tiếp trong luồng UC-01.
 - **Exceptions / Guarantees**:
-  - A1: nếu validation thất bại do tên trùng, image repository/port không hợp lệ, dependency tham chiếu sai hoặc tạo thành vòng, không row `application_definition_version`, `application_component` hay row thành phần nào được insert, và `application_definition` giữ nguyên.
+  - A1: nếu validation thất bại do tên trùng hoặc sai quy tắc đặt tên, image repository/port không hợp lệ, dependency tham chiếu sai hoặc tạo thành vòng, không row `application_definition_version`, `application_component` hay row thành phần nào được insert, và `application_definition` giữ nguyên.
   - A2: nếu version mới nhất khác `baseVersion`, trả `DRAFT_CONFLICT`; không row nào bị insert/update/delete và backend không tự động merge draft.
   - So sánh `baseVersion` và ghi phiên bản mới nằm trong cùng transaction/CAS; hai Save cùng base không thể cùng thành công.
   - Việc tạo phiên bản là atomic: không tồn tại phiên bản chỉ lưu một phần Workload, definition hoặc Dependency.

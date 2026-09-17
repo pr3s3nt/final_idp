@@ -137,6 +137,8 @@ Ví dụ:
 
 Workload name bị trùng.
 
+Tên không đúng quy tắc đặt tên, ví dụ workload `Shop Backend` hoặc Environment Variable `DB-HOST`.
+
 Image repository không hợp lệ.
 
 Port không hợp lệ.
@@ -211,6 +213,24 @@ Developer không khai báo cách resource được provision.
 Developer không cần thao tác trực tiếp với score.yaml.
 
 Environment và deployment target không được lựa chọn trong UC-01.
+
+### Quy tắc đặt tên
+
+Application name, Workload name, Resource name và tên output của workload chỉ gồm chữ thường `a–z`, số `0–9` và dấu `-`; bắt đầu và kết thúc bằng chữ hoặc số; dài tối đa 63 ký tự.
+
+Ví dụ hợp lệ: `shop-app`, `backend`, `postgresql`, `endpoint`. Ví dụ không hợp lệ: `Shop Backend`, `api.v2`, `-backend`.
+
+Tên Environment Variable và Secret chỉ gồm chữ `A–Z`, `a–z`, số `0–9` và dấu `_`; không bắt đầu bằng số.
+
+Ví dụ hợp lệ: `DB_HOST`, `PAYMENT_API_KEY`. Ví dụ không hợp lệ: `DB-HOST`, `1KEY`.
+
+Workload và Resource trong cùng application không được trùng tên với nhau. Ví dụ: không được có đồng thời workload `redis` và resource `redis`.
+
+Environment Variable và Secret trong cùng workload không được trùng tên với nhau, vì cả hai đều trở thành biến môi trường của workload. Ví dụ: workload `backend` không được có đồng thời Environment Variable `DB_PASSWORD` và Secret `DB_PASSWORD`. Tên output trong cùng workload cũng không được trùng.
+
+Workload type, Resource type và Image repository là bắt buộc. Image repository không chứa tag hoặc digest; ví dụ `registry.company.local/shop-backend` hợp lệ, `registry.company.local/shop-backend:v1.4.2` không hợp lệ.
+
+### Quy tắc khác
 
 Hai thành phần không có quan hệ depends on được coi là độc lập với nhau.
 
