@@ -6,8 +6,8 @@ import (
 	"context"
 	"time"
 
-	"deploy/internal/domain"
-	"deploy/internal/integration/kubernetes"
+	"sdp/internal/domain"
+	"sdp/internal/integration/kubernetes"
 )
 
 // SecretObject is materialized secret data applied directly to the cluster,

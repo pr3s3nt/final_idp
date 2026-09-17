@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"deploy/internal/domain"
-	"deploy/internal/integration/kubernetes"
+	"sdp/internal/domain"
+	"sdp/internal/integration/kubernetes"
 )
 
 // WorkloadStatusProvider is the Workload Status Provider abstraction used by

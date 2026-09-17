@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"deploy/internal/domain"
-	"deploy/internal/domain/manifest"
+	"sdp/internal/domain"
+	"sdp/internal/domain/manifest"
 )
 
 // Runs the real score-k8s binary; skipped when it is not installed.

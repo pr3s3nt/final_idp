@@ -9,11 +9,11 @@ import (
 	"runtime"
 	"testing"
 
-	"deploy/internal/domain"
-	"deploy/internal/fixtures"
-	"deploy/internal/integration/secretstore"
-	"deploy/internal/persistence"
-	"deploy/internal/service"
+	"sdp/internal/domain"
+	"sdp/internal/fixtures"
+	"sdp/internal/integration/secretstore"
+	"sdp/internal/persistence"
+	"sdp/internal/service"
 )
 
 type allImagesExist struct{ missing string }

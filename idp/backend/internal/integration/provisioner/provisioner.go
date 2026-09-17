@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"deploy/internal/domain"
+	"sdp/internal/domain"
 )
 
 // Request identifies one Resource Instance workspace and the module that

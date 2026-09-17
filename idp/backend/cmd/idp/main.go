@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"deploy/internal/config"
-	"deploy/internal/fixtures"
-	"deploy/internal/integration/secretstore"
-	"deploy/internal/persistence"
+	"sdp/internal/config"
+	"sdp/internal/fixtures"
+	"sdp/internal/integration/secretstore"
+	"sdp/internal/persistence"
 )
 
 const usage = `usage: idp <command>

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"deploy/internal/domain"
+	"sdp/internal/domain"
 )
 
 // Resolver resolves against the definitions of one catalog version. All holds

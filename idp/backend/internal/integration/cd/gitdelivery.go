@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"deploy/internal/domain"
-	"deploy/internal/integration/deliveryrepo"
-	"deploy/internal/integration/kubernetes"
-	"deploy/internal/integration/secretstore"
+	"sdp/internal/domain"
+	"sdp/internal/integration/deliveryrepo"
+	"sdp/internal/integration/kubernetes"
+	"sdp/internal/integration/secretstore"
 )
 
 // Delivery is what every CD adapter needs: the application's delivery

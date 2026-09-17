@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	"deploy/internal/domain"
+	"sdp/internal/domain"
 )
 
 // ClusterAccess describes how to reach a cluster, derived from k8s-cluster outputs.

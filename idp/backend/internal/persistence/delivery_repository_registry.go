@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"deploy/internal/domain"
+	"sdp/internal/domain"
 )
 
 // DeliveryRepositoryRegistry records where the desired state of each

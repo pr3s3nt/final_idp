@@ -4,8 +4,8 @@ package domaintest
 import (
 	"github.com/google/uuid"
 
-	"deploy/internal/domain"
-	"deploy/internal/domain/resourceresolver"
+	"sdp/internal/domain"
+	"sdp/internal/domain/resourceresolver"
 )
 
 func f(v float64) *float64 { return &v }

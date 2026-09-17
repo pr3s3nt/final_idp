@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"deploy/internal/domain"
+	"sdp/internal/domain"
 )
 
 // LastDeploymentOfOwner returns the most recent deployment that reached

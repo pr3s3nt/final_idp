@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"deploy/internal/domain"
+	"sdp/internal/domain"
 )
 
 // ResourceDefinitionCatalog is the platform-managed, versioned catalog. It is

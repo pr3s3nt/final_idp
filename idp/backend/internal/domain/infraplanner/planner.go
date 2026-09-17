@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strconv"
 
-	"deploy/internal/domain"
-	"deploy/internal/domain/resourceresolver"
+	"sdp/internal/domain"
+	"sdp/internal/domain/resourceresolver"
 )
 
 type Input struct {

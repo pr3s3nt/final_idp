@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"deploy/internal/domain"
+	"sdp/internal/domain"
 )
 
 // LogicalRegistryHost is the registry host used in Application Definitions

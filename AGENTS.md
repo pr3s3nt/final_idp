@@ -172,7 +172,7 @@ Mandatory rules:
 1. The backend Go module is:
 
    ```text
-   deploy
+   sdp
    ```
 
 2. The demo-application Go module is:

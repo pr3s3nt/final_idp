@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"deploy/internal/domain"
+	"sdp/internal/domain"
 )
 
 // DeploymentRepository stores the Deployment aggregate: deployment, context,

@@ -4,12 +4,12 @@ import (
 	"reflect"
 	"testing"
 
-	"deploy/internal/domain"
-	dt "deploy/internal/domain/domaintest"
-	"deploy/internal/domain/graphbuilder"
-	"deploy/internal/domain/infraplanner"
-	"deploy/internal/domain/resourceresolver"
-	"deploy/internal/domain/waveplanner"
+	"sdp/internal/domain"
+	dt "sdp/internal/domain/domaintest"
+	"sdp/internal/domain/graphbuilder"
+	"sdp/internal/domain/infraplanner"
+	"sdp/internal/domain/resourceresolver"
+	"sdp/internal/domain/waveplanner"
 )
 
 func names(g *domain.DeploymentGraph, waves [][]string) [][]string {

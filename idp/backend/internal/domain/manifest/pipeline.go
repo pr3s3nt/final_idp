@@ -20,9 +20,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"deploy/internal/domain"
-	"deploy/internal/domain/targetadapter"
-	"deploy/internal/integration/cd"
+	"sdp/internal/domain"
+	"sdp/internal/domain/targetadapter"
+	"sdp/internal/integration/cd"
 )
 
 // ResolvedConfiguration is the transient result of resolving one workload's
