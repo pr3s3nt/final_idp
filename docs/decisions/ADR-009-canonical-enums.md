@@ -9,9 +9,9 @@ source_record: ../../06_traceability/design_decisions.md
 
 # ADR-009 — Nguồn chuẩn cho literal ENUM
 
-**Current status (2026-09-17):** accepted. [`03_database_erd/schema.md`](../../03_database_erd/schema.md) is the canonical catalog of literal ENUM values.
+**Current status (2026-09-17):** accepted. [`docs/architecture/database/schema.md`](../architecture/database/schema.md) is the canonical catalog of literal ENUM values.
 
-**Vấn đề:** `03_database_erd/schema.md` có ba cột ENUM đã ghi giá trị (`dependency.target_type`, `configuration_value.value_source`, `secret.value_source`), nhưng bốn cột trạng thái chỉ ghi `ENUM` mà không có giá trị: `resource_instance.status`, `deployment.status`, `deployment_record.status`, `deployment_step.status`. Chính `operation_contracts.md` (dòng 3) và `05_state_machines/README.md` (dòng 5) ghi nhận "chưa chốt tập literal vật lý". Hệ quả:
+**Vấn đề:** `docs/architecture/database/schema.md` có ba cột ENUM đã ghi giá trị (`dependency.target_type`, `configuration_value.value_source`, `secret.value_source`), nhưng bốn cột trạng thái chỉ ghi `ENUM` mà không có giá trị: `resource_instance.status`, `deployment.status`, `deployment_record.status`, `deployment_step.status`. Chính `operation_contracts.md` (dòng 3) và `docs/architecture/state-machines/README.md` (dòng 5) ghi nhận "chưa chốt tập literal vật lý". Hệ quả:
 
 - Contract và state machine dùng tên "logical state", còn DB không nói giá trị thật; khi code mỗi người tự đặt tên (`READY`, `Ready`, `AVAILABLE`…).
 - Guard và truy vấn dựa trên giá trị cụ thể (ví dụ `status = 'AWAITING_CONFIRMATION'`, chỉ tìm Resource Instance `READY`) sẽ không khớp khi giá trị không thống nhất.
@@ -52,6 +52,6 @@ source_record: ../../06_traceability/design_decisions.md
 | `deployment_record.status` | Bỏ cột, dùng `deployment.status` | D5 |
 | `delivery_status` (trường riêng, nếu lưu) | `ACCEPTED`, `SYNCING`, `SYNCED`, `FAILED` | D5 |
 
-**Sẽ ảnh hưởng:** `schema.md` (bảng danh mục ENUM, các cột status), `erd.puml`, domain model, operation contracts (dòng 3 và các status được nhắc), `05_state_machines/README.md` (dòng 5) cùng các state machine, traceability.
+**Sẽ ảnh hưởng:** `schema.md` (bảng danh mục ENUM, các cột status), `erd.puml`, domain model, operation contracts (dòng 3 và các status được nhắc), `docs/architecture/state-machines/README.md` (dòng 5) cùng các state machine, traceability.
 
-**Đã áp dụng (lượt sửa chung, nhánh `refine_design`):** mục **Danh mục ENUM** trong `03_database_erd/schema.md` (đã chốt / dự kiến, thêm `application_component.component_type` và `deployment_execution_job.status` dự kiến theo D6), các cột status trong `schema.md`/`erd.puml`, domain model, đoạn mở đầu operation contracts, `05_state_machines/README.md` cùng ba state machine; giá trị dự kiến đã ghi vào `deferred_issues.md` các mục D3, D4, D5, D6.
+**Đã áp dụng (lượt sửa chung, nhánh `refine_design`):** mục **Danh mục ENUM** trong `docs/architecture/database/schema.md` (đã chốt / dự kiến, thêm `application_component.component_type` và `deployment_execution_job.status` dự kiến theo D6), các cột status trong `schema.md`/`erd.puml`, domain model, đoạn mở đầu operation contracts, `docs/architecture/state-machines/README.md` cùng ba state machine; giá trị dự kiến đã ghi vào `deferred_issues.md` các mục D3, D4, D5, D6.

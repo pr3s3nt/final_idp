@@ -33,7 +33,7 @@ source_record: ../../06_traceability/design_decisions.md
 | Sức khỏe | `status.health.status` | condition `Ready` + `status.summary` |
 | Xóa resource khi file biến mất | `syncPolicy.automated.prune` | `keepResources` (mặc định tắt nên có xóa) |
 
-**Sẽ ảnh hưởng:** chỉ các dòng ví dụ trong `usecase_realization_step_1_3.md`, `01_vopc_design_class_diagram/README.md`, `06_traceability/deferred_issues.md`; phần còn lại là code và tài liệu vận hành.
+**Sẽ ảnh hưởng:** chỉ các dòng ví dụ trong `usecase_realization_step_1_3.md`, `docs/architecture/design-classes.md`, `06_traceability/deferred_issues.md`; phần còn lại là code và tài liệu vận hành.
 
 **Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** tài liệu và code đều xong, kiểm chứng thật trên cụm nội bộ (`uc03/docs/VERIFICATION.md` §6). Hai application chạy hai CD system khác nhau trên cùng một cụm.
 

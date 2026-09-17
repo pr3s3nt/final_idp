@@ -13,12 +13,12 @@ Shared models are canonical here; use-case packages link to them rather than dup
 
 | Concern | Textual source | Diagram/source |
 |---|---|---|
-| Participating classes and layers | [VOPC guide](../../01_vopc_design_class_diagram/README.md) | [Consolidated design class diagram](../../01_vopc_design_class_diagram/design_class_diagram.puml) |
-| Domain objects and invariants | [Domain objects](../../02_domain_model/domain_objects.md) | [Domain model](../../02_domain_model/domain_model.puml) |
-| Persistence classification | [Persistence classification](../../02_domain_model/persistence_classification.md) | — |
-| Database tables, constraints, and ENUMs | [Database schema](../../03_database_erd/schema.md) | [ERD](../../03_database_erd/erd.puml) |
-| Operation pre/postconditions | [Operation contracts](../../04_operation_contracts/operation_contracts.md) | — |
-| Lifecycle behavior | [State-machine guide](../../05_state_machines/README.md) | [`05_state_machines/`](../../05_state_machines/) |
+| Participating classes and layers | [VOPC guide](design-classes.md) | [Consolidated design class diagram](design-class-diagram.puml) |
+| Domain objects and invariants | [Domain objects](domain/domain-objects.md) | [Domain model](domain/domain-model.puml) |
+| Persistence classification | [Persistence classification](domain/persistence-classification.md) | — |
+| Database tables, constraints, and ENUMs | [Database schema](database/schema.md) | [ERD](database/erd.puml) |
+| Operation pre/postconditions | [Operation contracts](contracts/operation-contracts.md) | — |
+| Lifecycle behavior | [State-machine guide](state-machines/README.md) | [`state-machines/`](state-machines/) |
 | Cross-artifact coverage | [Traceability matrix](../../06_traceability/traceability_matrix.md) | — |
 
 ## Canonical ownership

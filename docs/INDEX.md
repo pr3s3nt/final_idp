@@ -29,7 +29,7 @@ This is the authoritative entry point for project documentation. It tells reader
 | Change result queries/status presentation | [UC-04 context](use-cases/UC-04/README.md) |
 | Change teardown/removal | [UC-05 context](use-cases/UC-05/README.md) |
 | Change domain or persistence model | [Architecture index](architecture/README.md) |
-| Change a database table, constraint, or ENUM | [Database schema](../03_database_erd/schema.md) |
+| Change a database table, constraint, or ENUM | [Database schema](architecture/database/schema.md) |
 | Understand why a design choice was made | [Decision index](decisions/README.md) |
 | Pick up an unresolved design problem | [Backlog index](backlog/README.md) |
 | Compare design with code | [Implementation index](implementation/README.md) |
@@ -43,8 +43,8 @@ This is the authoritative entry point for project documentation. It tells reader
 | Use-Case Model | Current | [`use-cases/`](use-cases/) |
 | Use Case Realizations | Current | Each use-case package's `realization.md` |
 | Software architecture and shared models | Current | [Architecture index](architecture/README.md) |
-| Operation contracts | Current | [`04_operation_contracts/operation_contracts.md`](../04_operation_contracts/operation_contracts.md) |
-| State machines | Current | [`05_state_machines/`](../05_state_machines/) |
+| Operation contracts | Current | [Operation contracts](architecture/contracts/operation-contracts.md) |
+| State machines | Current | [State-machine index](architecture/state-machines/README.md) |
 | Design decisions | Current split index plus original record | [Decision index](decisions/README.md) |
 | Deferred risks/issues | Current split index plus original details | [Backlog index](backlog/README.md) |
 | Traceability | Current | [Traceability index](traceability/README.md) |

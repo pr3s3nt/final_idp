@@ -21,11 +21,11 @@ Plan được nhắc ở nhiều nơi nhưng không nơi nào định nghĩa nó
 | Nơi | Plan được mô tả thế nào |
 |---|---|
 | `docs/use-cases/UC-03/sequence.puml` | Chỉ là dòng chữ `Infrastructure plan (create/update/reuse)` |
-| `docs/use-cases/UC-03/vopc.puml`, `design_class_diagram.puml` | `Infrastructure Planner` có `-plan: Object`, `-allowedOverrides: Map` |
-| `04_operation_contracts/operation_contracts.md` (Contract 4, 5) | Một đoạn văn liệt kê "những thứ đưa vào fingerprint" |
-| `03_database_erd/schema.md` | Chỉ có cột `plan_fingerprint`, `plan_fingerprint_algo` |
-| `02_domain_model/domain_model.puml` | Không có class; chỉ có ghi chú "Infrastructure Plan remains TRANSIENT" |
-| `02_domain_model/persistence_classification.md` | Tự nhận bao phủ toàn bộ domain object nhưng không có dòng Infrastructure Plan |
+| `docs/use-cases/UC-03/vopc.puml`, `docs/architecture/design-class-diagram.puml` | `Infrastructure Planner` có `-plan: Object`, `-allowedOverrides: Map` |
+| `docs/architecture/contracts/operation-contracts.md` (Contract 4, 5) | Một đoạn văn liệt kê "những thứ đưa vào fingerprint" |
+| `docs/architecture/database/schema.md` | Chỉ có cột `plan_fingerprint`, `plan_fingerprint_algo` |
+| `docs/architecture/domain/domain-model.puml` | Không có class; chỉ có ghi chú "Infrastructure Plan remains TRANSIENT" |
+| `docs/architecture/domain/persistence-classification.md` | Tự nhận bao phủ toàn bộ domain object nhưng không có dòng Infrastructure Plan |
 
 Hệ quả:
 

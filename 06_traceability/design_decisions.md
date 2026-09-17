@@ -77,7 +77,7 @@ Trong mỗi Bước, từng use case là một mục con `## UC 01 …`, `## UC 
 
 - `usecase_realization_step_1_3.md`: đặc tả UC-01 đến UC-04 và Bước 1–3.
 - Sequence diagram: `uc_02`, `uc_03` (luồng request và luồng Deployment Worker theo tầng), `uc_04`.
-- VOPC: `vopc_uc02`, `vopc_uc03`, `vopc_uc04`, `design_class_diagram.puml`, `README.md` (Deployment Wave Planner, Workload Output Collector, Workload Instance Repository).
+- VOPC: `docs/use-cases/UC-02/vopc.puml`, `docs/use-cases/UC-03/vopc.puml`, `docs/use-cases/UC-04/vopc.puml`, `docs/architecture/design-class-diagram.puml`, `docs/architecture/design-classes.md` (Deployment Wave Planner, Workload Output Collector, Workload Instance Repository).
 - Domain model: Workload Instance, Workload Output, Deployment Graph có phạm vi/tầng, Workload Deployment có `inclusionReason`/`waveNumber`.
 - ERD: `workload_instance`, `output_fingerprint`, `inclusion_reason`, `wave_number`.
 - Operation contracts: C4, C6–C9; thêm C10 `collectWorkloadOutputs`, C11 `propagateOutputChanges`.
@@ -223,7 +223,7 @@ Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã worklo
 **Vấn đề:** UC-04 hiển thị tiến trình bằng các dấu kiểm Infrastructure Ready, Configuration Resolved, Manifest Generated, CD Synced, Application Ready — mỗi dấu kiểm là một dòng `deployment_step`. Nhưng trong sequence UC-03, `deployment_step` chỉ được ghi một lần trong `saveDeploymentRecord` ở bước cuối (sau khi gửi sang CD), nên:
 
 - Khi deployment đang chạy, UC-04 không thấy bước nào.
-- `CD Synced` và `Application Ready` xảy ra sau `saveDeploymentRecord`, mà `05_state_machines/README.md` ghi rõ không có operation nào sau đó, còn UC-04 chỉ đọc — nên hai dấu kiểm này không bao giờ được ghi.
+- `CD Synced` và `Application Ready` xảy ra sau `saveDeploymentRecord`, mà `docs/architecture/state-machines/README.md` ghi rõ không có operation nào sau đó, còn UC-04 chỉ đọc — nên hai dấu kiểm này không bao giờ được ghi.
 
 **Quyết định:** chưa giải quyết lúc này, để lại xử lý sau.
 
@@ -251,7 +251,7 @@ Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã worklo
 
 ## Vấn đề 9 — Các giá trị ENUM chưa được chốt
 
-**Vấn đề:** `03_database_erd/schema.md` có ba cột ENUM đã ghi giá trị (`dependency.target_type`, `configuration_value.value_source`, `secret.value_source`), nhưng bốn cột trạng thái chỉ ghi `ENUM` mà không có giá trị: `resource_instance.status`, `deployment.status`, `deployment_record.status`, `deployment_step.status`. Chính `operation_contracts.md` (dòng 3) và `05_state_machines/README.md` (dòng 5) ghi nhận "chưa chốt tập literal vật lý". Hệ quả:
+**Vấn đề:** `docs/architecture/database/schema.md` có ba cột ENUM đã ghi giá trị (`dependency.target_type`, `configuration_value.value_source`, `secret.value_source`), nhưng bốn cột trạng thái chỉ ghi `ENUM` mà không có giá trị: `resource_instance.status`, `deployment.status`, `deployment_record.status`, `deployment_step.status`. Chính `operation_contracts.md` (dòng 3) và `docs/architecture/state-machines/README.md` (dòng 5) ghi nhận "chưa chốt tập literal vật lý". Hệ quả:
 
 - Contract và state machine dùng tên "logical state", còn DB không nói giá trị thật; khi code mỗi người tự đặt tên (`READY`, `Ready`, `AVAILABLE`…).
 - Guard và truy vấn dựa trên giá trị cụ thể (ví dụ `status = 'AWAITING_CONFIRMATION'`, chỉ tìm Resource Instance `READY`) sẽ không khớp khi giá trị không thống nhất.
@@ -292,9 +292,9 @@ Ví dụ `worker` đã deploy 20 lần; bảng lịch sử chỉ lưu mã worklo
 | `deployment_record.status` | Bỏ cột, dùng `deployment.status` | D5 |
 | `delivery_status` (trường riêng, nếu lưu) | `ACCEPTED`, `SYNCING`, `SYNCED`, `FAILED` | D5 |
 
-**Sẽ ảnh hưởng:** `schema.md` (bảng danh mục ENUM, các cột status), `erd.puml`, domain model, operation contracts (dòng 3 và các status được nhắc), `05_state_machines/README.md` (dòng 5) cùng các state machine, traceability.
+**Sẽ ảnh hưởng:** `schema.md` (bảng danh mục ENUM, các cột status), `erd.puml`, domain model, operation contracts (dòng 3 và các status được nhắc), `docs/architecture/state-machines/README.md` (dòng 5) cùng các state machine, traceability.
 
-**Đã áp dụng (lượt sửa chung, nhánh `refine_design`):** mục **Danh mục ENUM** trong `03_database_erd/schema.md` (đã chốt / dự kiến, thêm `application_component.component_type` và `deployment_execution_job.status` dự kiến theo D6), các cột status trong `schema.md`/`erd.puml`, domain model, đoạn mở đầu operation contracts, `05_state_machines/README.md` cùng ba state machine; giá trị dự kiến đã ghi vào `deferred_issues.md` các mục D3, D4, D5, D6.
+**Đã áp dụng (lượt sửa chung, nhánh `refine_design`):** mục **Danh mục ENUM** trong `docs/architecture/database/schema.md` (đã chốt / dự kiến, thêm `application_component.component_type` và `deployment_execution_job.status` dự kiến theo D6), các cột status trong `schema.md`/`erd.puml`, domain model, đoạn mở đầu operation contracts, `docs/architecture/state-machines/README.md` cùng ba state machine; giá trị dự kiến đã ghi vào `deferred_issues.md` các mục D3, D4, D5, D6.
 
 ## Vấn đề 10 — Toàn bộ việc triển khai chạy trong request `confirmDeployment`
 
@@ -437,7 +437,7 @@ Ví dụ: deploy `shop-app` (frontend, backend, PostgreSQL) lên AWS. IDP phải
 | Sức khỏe | `status.health.status` | condition `Ready` + `status.summary` |
 | Xóa resource khi file biến mất | `syncPolicy.automated.prune` | `keepResources` (mặc định tắt nên có xóa) |
 
-**Sẽ ảnh hưởng:** chỉ các dòng ví dụ trong `usecase_realization_step_1_3.md`, `01_vopc_design_class_diagram/README.md`, `06_traceability/deferred_issues.md`; phần còn lại là code và tài liệu vận hành.
+**Sẽ ảnh hưởng:** chỉ các dòng ví dụ trong `usecase_realization_step_1_3.md`, `docs/architecture/design-classes.md`, `06_traceability/deferred_issues.md`; phần còn lại là code và tài liệu vận hành.
 
 **Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** tài liệu và code đều xong, kiểm chứng thật trên cụm nội bộ (`uc03/docs/VERIFICATION.md` §6). Hai application chạy hai CD system khác nhau trên cùng một cụm.
 

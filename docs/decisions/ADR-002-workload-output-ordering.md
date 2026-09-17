@@ -35,7 +35,7 @@ source_record: ../../06_traceability/design_decisions.md
 
 - `usecase_realization_step_1_3.md`: đặc tả UC-01 đến UC-04 và Bước 1–3.
 - Sequence diagram: `uc_02`, `uc_03` (luồng request và luồng Deployment Worker theo tầng), `uc_04`.
-- VOPC: `vopc_uc02`, `vopc_uc03`, `vopc_uc04`, `design_class_diagram.puml`, `README.md` (Deployment Wave Planner, Workload Output Collector, Workload Instance Repository).
+- VOPC: `docs/use-cases/UC-02/vopc.puml`, `docs/use-cases/UC-03/vopc.puml`, `docs/use-cases/UC-04/vopc.puml`, `docs/architecture/design-class-diagram.puml`, `docs/architecture/design-classes.md` (Deployment Wave Planner, Workload Output Collector, Workload Instance Repository).
 - Domain model: Workload Instance, Workload Output, Deployment Graph có phạm vi/tầng, Workload Deployment có `inclusionReason`/`waveNumber`.
 - ERD: `workload_instance`, `output_fingerprint`, `inclusion_reason`, `wave_number`.
 - Operation contracts: C4, C6–C9; thêm C10 `collectWorkloadOutputs`, C11 `propagateOutputChanges`.

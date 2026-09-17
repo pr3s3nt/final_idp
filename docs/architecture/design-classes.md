@@ -5,9 +5,9 @@ status: current
 last_reviewed: 2026-09-17
 ---
 
-# Step 1: VOPC / Design Class Diagram
+# VOPC / Design Class Diagram
 
-Tài liệu này mô tả **View Of Participating Classes (VOPC)** cho năm use case của Internal Developer Platform. `design_class_diagram.puml` là góc nhìn hợp nhất toàn hệ thống; VOPC của từng use case nằm cạnh specification và realization trong `docs/use-cases/UC-*/vopc.puml`.
+Tài liệu này mô tả **View Of Participating Classes (VOPC)** cho năm use case của Internal Developer Platform. [`design-class-diagram.puml`](design-class-diagram.puml) là góc nhìn hợp nhất toàn hệ thống; VOPC của từng use case nằm cạnh specification và realization trong `docs/use-cases/UC-*/vopc.puml`.
 
 ## Cách đọc diagram
 
@@ -90,9 +90,9 @@ Tài liệu này mô tả **View Of Participating Classes (VOPC)** cho năm use 
 
 | File | Nội dung |
 |---|---|
-| `design_class_diagram.puml` | Consolidated design class diagram của toàn bộ UC-01 đến UC-05. |
-| [`docs/use-cases/UC-01/vopc.puml`](../docs/use-cases/UC-01/vopc.puml) | Participating classes cho Create / Configure Application. |
-| [`docs/use-cases/UC-02/vopc.puml`](../docs/use-cases/UC-02/vopc.puml) | Participating classes cho Configure Application Environment. |
-| [`docs/use-cases/UC-03/vopc.puml`](../docs/use-cases/UC-03/vopc.puml) | Participating classes cho Deploy Application. |
-| [`docs/use-cases/UC-04/vopc.puml`](../docs/use-cases/UC-04/vopc.puml) | Participating classes cho View Deployment Result. |
-| [`docs/use-cases/UC-05/vopc.puml`](../docs/use-cases/UC-05/vopc.puml) | Participating classes cho Remove Application from Environment. |
+| [`design-class-diagram.puml`](design-class-diagram.puml) | Consolidated design class diagram của toàn bộ UC-01 đến UC-05. |
+| [`docs/use-cases/UC-01/vopc.puml`](../use-cases/UC-01/vopc.puml) | Participating classes cho Create / Configure Application. |
+| [`docs/use-cases/UC-02/vopc.puml`](../use-cases/UC-02/vopc.puml) | Participating classes cho Configure Application Environment. |
+| [`docs/use-cases/UC-03/vopc.puml`](../use-cases/UC-03/vopc.puml) | Participating classes cho Deploy Application. |
+| [`docs/use-cases/UC-04/vopc.puml`](../use-cases/UC-04/vopc.puml) | Participating classes cho View Deployment Result. |
+| [`docs/use-cases/UC-05/vopc.puml`](../use-cases/UC-05/vopc.puml) | Participating classes cho Remove Application from Environment. |

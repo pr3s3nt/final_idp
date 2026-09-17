@@ -23,9 +23,9 @@ Implemented and end-to-end verified on an existing internal kind cluster and on 
 ## Shared artifacts
 
 - [Architecture index](../../architecture/README.md)
-- [Database schema](../../../03_database_erd/schema.md)
-- [Operation contracts](../../../04_operation_contracts/operation_contracts.md)
-- [Deployment state machine](../../../05_state_machines/deployment_state.puml)
+- [Database schema](../../architecture/database/schema.md)
+- [Operation contracts](../../architecture/contracts/operation-contracts.md)
+- [Deployment state machine](../../architecture/state-machines/deployment.puml)
 - [Traceability matrix](../../../06_traceability/traceability_matrix.md)
 
 ## Important decisions

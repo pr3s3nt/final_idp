@@ -14,10 +14,10 @@ source_record: ../../06_traceability/deferred_issues.md
 
 ### Vấn đề
 
-UC-04 hiển thị tiến trình một deployment bằng các dấu kiểm **Infrastructure Ready**, **Configuration Resolved**, **Manifest Generated**, **CD Synced**, **Application Ready**. Theo `05_state_machines/README.md`, mỗi dấu kiểm là một dòng riêng trong bảng `deployment_step`, và UC-04 đọc bảng này qua `getDeploymentProgress()`. Nhưng thiết kế không nói rõ thành phần nào ghi các dòng đó và ghi vào lúc nào:
+UC-04 hiển thị tiến trình một deployment bằng các dấu kiểm **Infrastructure Ready**, **Configuration Resolved**, **Manifest Generated**, **CD Synced**, **Application Ready**. Theo `docs/architecture/state-machines/README.md`, mỗi dấu kiểm là một dòng riêng trong bảng `deployment_step`, và UC-04 đọc bảng này qua `getDeploymentProgress()`. Nhưng thiết kế không nói rõ thành phần nào ghi các dòng đó và ghi vào lúc nào:
 
 1. **Chỉ ghi một lần ở cuối.** Trong `docs/use-cases/UC-03/sequence.puml`, `deployment_step` chỉ được ghi trong `saveDeploymentRecord(...)` ở bước cuối cùng, sau khi đã gửi desired state sang CD (Contract 9). Trong lúc chạy, IDP chỉ đổi `deployment.status`.
-2. **Hai dấu kiểm cuối không ai ghi.** `CD Synced` và `Application Ready` chỉ xảy ra sau khi gửi sang CD, tức sau cả `saveDeploymentRecord`. `05_state_machines/README.md` ghi rõ "Không có operation contract sau `saveDeploymentRecord`", còn UC-04 chỉ đọc, không được ghi.
+2. **Hai dấu kiểm cuối không ai ghi.** `CD Synced` và `Application Ready` chỉ xảy ra sau khi gửi sang CD, tức sau cả `saveDeploymentRecord`. `docs/architecture/state-machines/README.md` ghi rõ "Không có operation contract sau `saveDeploymentRecord`", còn UC-04 chỉ đọc, không được ghi.
 
 Hệ quả:
 

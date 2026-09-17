@@ -24,7 +24,7 @@ Files under `docs/archive/` are historical and are never normative. Verification
 
 1. Use relative links for repository files. Never add workstation-specific paths such as `/home/...`.
 2. Do not duplicate a canonical definition. Link to its source instead.
-3. Database table, column, constraint, and ENUM definitions are canonical in `03_database_erd/schema.md`.
+3. Database table, column, constraint, and ENUM definitions are canonical in `docs/architecture/database/schema.md`.
 4. Keep PlantUML source next to a textual explanation or link it from a realization/architecture document. Do not make an image the only source of design meaning.
 5. Preserve stable IDs such as `UC03`, `ADR-006`, and `D13` when renaming headings or files.
 6. When a decision supersedes another decision, update both records and the decision index.

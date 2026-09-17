@@ -92,7 +92,7 @@ UC-04 hiển thị kết quả một deployment bằng hai nguồn: dữ liệu 
 
 Hệ quả:
 
-1. **Hỏi thứ không tồn tại.** Deployment thất bại ở bước tạo hạ tầng thì chưa từng được gửi sang CD; `deployment_record.delivery_reference` bằng `NULL` (`03_database_erd/schema.md` cho phép). IDP vẫn gọi `getCDStatus(NULL)`, dẫn tới lỗi hoặc kết quả vô nghĩa.
+1. **Hỏi thứ không tồn tại.** Deployment thất bại ở bước tạo hạ tầng thì chưa từng được gửi sang CD; `deployment_record.delivery_reference` bằng `NULL` (`docs/architecture/database/schema.md` cho phép). IDP vẫn gọi `getCDStatus(NULL)`, dẫn tới lỗi hoặc kết quả vô nghĩa.
 2. **Hiển thị "Healthy" giả — lỗi nguy hiểm nhất.** `getWorkloadStatus(target, workloads)` hỏi Kubernetes về workload **đang chạy** trên cluster, không phải workload **của deployment đang xem**. Ví dụ:
 
     ```text
@@ -151,11 +151,11 @@ Plan được nhắc ở nhiều nơi nhưng không nơi nào định nghĩa nó
 | Nơi | Plan được mô tả thế nào |
 |---|---|
 | `docs/use-cases/UC-03/sequence.puml` | Chỉ là dòng chữ `Infrastructure plan (create/update/reuse)` |
-| `docs/use-cases/UC-03/vopc.puml`, `design_class_diagram.puml` | `Infrastructure Planner` có `-plan: Object`, `-allowedOverrides: Map` |
-| `04_operation_contracts/operation_contracts.md` (Contract 4, 5) | Một đoạn văn liệt kê "những thứ đưa vào fingerprint" |
-| `03_database_erd/schema.md` | Chỉ có cột `plan_fingerprint`, `plan_fingerprint_algo` |
-| `02_domain_model/domain_model.puml` | Không có class; chỉ có ghi chú "Infrastructure Plan remains TRANSIENT" |
-| `02_domain_model/persistence_classification.md` | Tự nhận bao phủ toàn bộ domain object nhưng không có dòng Infrastructure Plan |
+| `docs/use-cases/UC-03/vopc.puml`, `docs/architecture/design-class-diagram.puml` | `Infrastructure Planner` có `-plan: Object`, `-allowedOverrides: Map` |
+| `docs/architecture/contracts/operation-contracts.md` (Contract 4, 5) | Một đoạn văn liệt kê "những thứ đưa vào fingerprint" |
+| `docs/architecture/database/schema.md` | Chỉ có cột `plan_fingerprint`, `plan_fingerprint_algo` |
+| `docs/architecture/domain/domain-model.puml` | Không có class; chỉ có ghi chú "Infrastructure Plan remains TRANSIENT" |
+| `docs/architecture/domain/persistence-classification.md` | Tự nhận bao phủ toàn bộ domain object nhưng không có dòng Infrastructure Plan |
 
 Hệ quả:
 
@@ -238,10 +238,10 @@ Domain model có class cho plan và các thành phần của nó; VOPC không c�
 
 ### Vấn đề
 
-UC-04 hiển thị tiến trình một deployment bằng các dấu kiểm **Infrastructure Ready**, **Configuration Resolved**, **Manifest Generated**, **CD Synced**, **Application Ready**. Theo `05_state_machines/README.md`, mỗi dấu kiểm là một dòng riêng trong bảng `deployment_step`, và UC-04 đọc bảng này qua `getDeploymentProgress()`. Nhưng thiết kế không nói rõ thành phần nào ghi các dòng đó và ghi vào lúc nào:
+UC-04 hiển thị tiến trình một deployment bằng các dấu kiểm **Infrastructure Ready**, **Configuration Resolved**, **Manifest Generated**, **CD Synced**, **Application Ready**. Theo `docs/architecture/state-machines/README.md`, mỗi dấu kiểm là một dòng riêng trong bảng `deployment_step`, và UC-04 đọc bảng này qua `getDeploymentProgress()`. Nhưng thiết kế không nói rõ thành phần nào ghi các dòng đó và ghi vào lúc nào:
 
 1. **Chỉ ghi một lần ở cuối.** Trong `docs/use-cases/UC-03/sequence.puml`, `deployment_step` chỉ được ghi trong `saveDeploymentRecord(...)` ở bước cuối cùng, sau khi đã gửi desired state sang CD (Contract 9). Trong lúc chạy, IDP chỉ đổi `deployment.status`.
-2. **Hai dấu kiểm cuối không ai ghi.** `CD Synced` và `Application Ready` chỉ xảy ra sau khi gửi sang CD, tức sau cả `saveDeploymentRecord`. `05_state_machines/README.md` ghi rõ "Không có operation contract sau `saveDeploymentRecord`", còn UC-04 chỉ đọc, không được ghi.
+2. **Hai dấu kiểm cuối không ai ghi.** `CD Synced` và `Application Ready` chỉ xảy ra sau khi gửi sang CD, tức sau cả `saveDeploymentRecord`. `docs/architecture/state-machines/README.md` ghi rõ "Không có operation contract sau `saveDeploymentRecord`", còn UC-04 chỉ đọc, không được ghi.
 
 Hệ quả:
 
@@ -312,7 +312,7 @@ Có hai loại trạng thái khác nhau:
 - **Trạng thái vòng đời của deployment** — do IDP quyết định (chờ xác nhận, đang triển khai, thành công, thất bại), được state machine và các contract dùng để chặn thao tác.
 - **Trạng thái giao hàng (delivery status)** — do hệ thống CD báo về, ví dụ Argo CD báo `Synced`, `OutOfSync`, `Progressing`, `Degraded`; Fleet lại báo bằng `GitRepo.status.summary` (`ready`, `notReady`, `errApplied`, `outOfSync`, `modified`) và condition `Ready`. Hai sản phẩm, hai tập giá trị hoàn toàn khác nhau.
 
-Contract 9 (`saveDeploymentRecord`, `04_operation_contracts/operation_contracts.md`) trộn hai loại này:
+Contract 9 (`saveDeploymentRecord`, `docs/architecture/contracts/operation-contracts.md`) trộn hai loại này:
 
 - "Ở success path, `deployment_record.status` phản ánh delivery status đã nhận" — status của record lấy theo trạng thái CD báo về.
 - "`Deployment.status` … được cập nhật đồng nhất với trạng thái current/final của Deployment Record" — status của deployment chép theo record.

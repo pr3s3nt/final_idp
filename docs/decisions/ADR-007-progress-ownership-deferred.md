@@ -14,7 +14,7 @@ source_record: ../../06_traceability/design_decisions.md
 **Vấn đề:** UC-04 hiển thị tiến trình bằng các dấu kiểm Infrastructure Ready, Configuration Resolved, Manifest Generated, CD Synced, Application Ready — mỗi dấu kiểm là một dòng `deployment_step`. Nhưng trong sequence UC-03, `deployment_step` chỉ được ghi một lần trong `saveDeploymentRecord` ở bước cuối (sau khi gửi sang CD), nên:
 
 - Khi deployment đang chạy, UC-04 không thấy bước nào.
-- `CD Synced` và `Application Ready` xảy ra sau `saveDeploymentRecord`, mà `05_state_machines/README.md` ghi rõ không có operation nào sau đó, còn UC-04 chỉ đọc — nên hai dấu kiểm này không bao giờ được ghi.
+- `CD Synced` và `Application Ready` xảy ra sau `saveDeploymentRecord`, mà `docs/architecture/state-machines/README.md` ghi rõ không có operation nào sau đó, còn UC-04 chỉ đọc — nên hai dấu kiểm này không bao giờ được ghi.
 
 **Quyết định:** chưa giải quyết lúc này, để lại xử lý sau.
 

@@ -9,7 +9,9 @@ last_reviewed: 2026-09-17
 
 Step này mô tả lifecycle có trạng thái và transition không tầm thường của ba aggregate root: **Deployment**, **Resource Instance** và **Workload Instance**. Tên state dễ đọc bám theo tiến trình UC-03/UC-04; literal viết hoa trong ngoặc là giá trị của cột `status`.
 
-Mọi literal dùng đúng mục **Danh mục ENUM** trong `03_database_erd/schema.md`: `deployment.status` gồm `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED`, `FAILED`; `resource_instance.status` gồm `PLANNED`, `PROVISIONING`, `READY`, `FAILED`, `DESTROYED`, `UNLINKED`; `workload_instance.status` gồm `DEPLOYING`, `HEALTHY`, `FAILED`, `REMOVED`. Tên bước tiến trình của UC-04 (`deployment_step`) không phải literal của `deployment.status`; tập giá trị của chúng thuộc D4.
+Diagram sources: [Deployment](deployment.puml), [Resource Instance](resource-instance.puml), and [Workload Instance](workload-instance.puml).
+
+Mọi literal dùng đúng mục **Danh mục ENUM** trong `docs/architecture/database/schema.md`: `deployment.status` gồm `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED`, `FAILED`; `resource_instance.status` gồm `PLANNED`, `PROVISIONING`, `READY`, `FAILED`, `DESTROYED`, `UNLINKED`; `workload_instance.status` gồm `DEPLOYING`, `HEALTHY`, `FAILED`, `REMOVED`. Tên bước tiến trình của UC-04 (`deployment_step`) không phải literal của `deployment.status`; tập giá trị của chúng thuộc D4.
 
 ## Vì sao có ba state machine
 

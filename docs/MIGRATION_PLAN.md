@@ -2,7 +2,7 @@
 id: DOC-MIGRATION-PLAN
 artifact: documentation-migration-plan
 status: current
-migration_stage: use-case-diagrams-moved
+migration_stage: shared-architecture-moved
 last_reviewed: 2026-09-17
 ---
 
@@ -91,6 +91,8 @@ The specification, realization, and context README files created in `6c835d9` re
 Before moving the consolidated source, compare every `specification.md` and `realization.md` with its source sections in `usecase_realization_step_1_3.md`. Record only genuine omissions; formatting differences and the new stable IDs are expected.
 
 ## Mapping B — Shared architecture
+
+**Status:** completed on 2026-09-17. All shared architecture artifacts now exist only under `docs/architecture/`; numbered directories `01_*` through `05_*` have been removed.
 
 | Current path | Final path | Action |
 |---|---|---|
@@ -218,7 +220,7 @@ The audit procedure is manual and must be recorded in this table or a linked rec
 ## Execution order
 
 1. **DONE —** Move sequence and VOPC sources into the five use-case context packages.
-2. Move shared architecture artifacts under `docs/architecture/`.
+2. **DONE —** Move shared architecture artifacts under `docs/architecture/`.
 3. Move the traceability matrix and update all active links.
 4. Compare split artifacts with consolidated predecessors and archive the predecessors.
 5. Move operational documents and archive the consolidated verification and implementation plan.

@@ -20,9 +20,9 @@ Designed. The current Go implementation imports Environment Configuration data a
 
 ## Shared artifacts
 
-- [Domain objects](../../../02_domain_model/domain_objects.md)
-- [Database schema](../../../03_database_erd/schema.md)
-- [Operation contracts](../../../04_operation_contracts/operation_contracts.md)
+- [Domain objects](../../architecture/domain/domain-objects.md)
+- [Database schema](../../architecture/database/schema.md)
+- [Operation contracts](../../architecture/contracts/operation-contracts.md)
 
 ## Open issues
 

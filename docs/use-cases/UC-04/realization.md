@@ -82,5 +82,5 @@ UC-04 không dùng Deployment Orchestrator để thực hiện hành động. UC
 
 - [Sequence diagram](sequence.puml)
 - [VOPC](vopc.puml)
-- [Operation contracts](../../../04_operation_contracts/operation_contracts.md)
+- [Operation contracts](../../architecture/contracts/operation-contracts.md)
 - [Traceability matrix](../../../06_traceability/traceability_matrix.md)

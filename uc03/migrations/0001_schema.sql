@@ -1,4 +1,4 @@
--- UC-03 schema. Follows 03_database_erd/schema.md; extensions are marked
+-- UC-03 schema. Follows docs/architecture/database/schema.md; extensions are marked
 -- "DEVIATION" and listed in implementation_plan.md.
 
 CREATE TYPE component_type AS ENUM (

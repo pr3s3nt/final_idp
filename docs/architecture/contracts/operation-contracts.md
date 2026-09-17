@@ -7,7 +7,7 @@ last_reviewed: 2026-09-17
 
 # Step 4: Operation Contracts
 
-Tài liệu này đặc tả các system operation quan trọng của UC-01 đến UC-03 và UC-05 theo kiểu Larman. Tên domain object dùng đúng Step 2; tên table/column `snake_case` dùng đúng Step 3. Các nhãn trạng thái như `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED` và `FAILED` dùng đúng literal trong mục **Danh mục ENUM** của `03_database_erd/schema.md`; literal thuộc các mục hoãn (D3–D6) chỉ là giá trị dự kiến.
+Tài liệu này đặc tả các system operation quan trọng của UC-01 đến UC-03 và UC-05 theo kiểu Larman. Tên domain object dùng đúng Step 2; tên table/column `snake_case` dùng đúng Step 3. Các nhãn trạng thái như `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED` và `FAILED` dùng đúng literal trong mục **Danh mục ENUM** của `docs/architecture/database/schema.md`; literal thuộc các mục hoãn (D3–D6) chỉ là giá trị dự kiến.
 
 Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastructure Plan, `Resource Output`, `Workload Output`, `Resolved Configuration` và `Resolved Specification` là `TRANSIENT`; postcondition có thể tạo chúng trong execution hiện tại nhưng không tạo table/row tương ứng. Mọi postcondition bên dưới mô tả state sau khi operation hoàn tất, không mô tả trình tự gọi component. Từ contract 6 trở đi, operation do **Deployment Worker** chạy nền gọi, sau khi job triển khai đã được tạo ở contract 5. Cấu trúc chi tiết của plan (D3), việc ghi `deployment_step` (D4), việc tách trạng thái CD (D5) và phục hồi worker (D6) chưa được đặc tả ở đây.
 

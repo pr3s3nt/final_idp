@@ -19,7 +19,7 @@ Có hai loại trạng thái khác nhau:
 - **Trạng thái vòng đời của deployment** — do IDP quyết định (chờ xác nhận, đang triển khai, thành công, thất bại), được state machine và các contract dùng để chặn thao tác.
 - **Trạng thái giao hàng (delivery status)** — do hệ thống CD báo về, ví dụ Argo CD báo `Synced`, `OutOfSync`, `Progressing`, `Degraded`; Fleet lại báo bằng `GitRepo.status.summary` (`ready`, `notReady`, `errApplied`, `outOfSync`, `modified`) và condition `Ready`. Hai sản phẩm, hai tập giá trị hoàn toàn khác nhau.
 
-Contract 9 (`saveDeploymentRecord`, `04_operation_contracts/operation_contracts.md`) trộn hai loại này:
+Contract 9 (`saveDeploymentRecord`, `docs/architecture/contracts/operation-contracts.md`) trộn hai loại này:
 
 - "Ở success path, `deployment_record.status` phản ánh delivery status đã nhận" — status của record lấy theo trạng thái CD báo về.
 - "`Deployment.status` … được cập nhật đồng nhất với trạng thái current/final của Deployment Record" — status của deployment chép theo record.

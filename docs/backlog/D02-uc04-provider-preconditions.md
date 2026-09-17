@@ -23,7 +23,7 @@ UC-04 hiển thị kết quả một deployment bằng hai nguồn: dữ liệu 
 
 Hệ quả:
 
-1. **Hỏi thứ không tồn tại.** Deployment thất bại ở bước tạo hạ tầng thì chưa từng được gửi sang CD; `deployment_record.delivery_reference` bằng `NULL` (`03_database_erd/schema.md` cho phép). IDP vẫn gọi `getCDStatus(NULL)`, dẫn tới lỗi hoặc kết quả vô nghĩa.
+1. **Hỏi thứ không tồn tại.** Deployment thất bại ở bước tạo hạ tầng thì chưa từng được gửi sang CD; `deployment_record.delivery_reference` bằng `NULL` (`docs/architecture/database/schema.md` cho phép). IDP vẫn gọi `getCDStatus(NULL)`, dẫn tới lỗi hoặc kết quả vô nghĩa.
 2. **Hiển thị "Healthy" giả — lỗi nguy hiểm nhất.** `getWorkloadStatus(target, workloads)` hỏi Kubernetes về workload **đang chạy** trên cluster, không phải workload **của deployment đang xem**. Ví dụ:
 
     ```text

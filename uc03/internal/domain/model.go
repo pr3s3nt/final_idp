@@ -1,4 +1,4 @@
-// Package domain holds the UC-03 domain objects from 02_domain_model, including
+// Package domain holds the UC-03 domain objects from docs/architecture/domain, including
 // the transient execution objects (graph, resolution, plan, outputs).
 package domain
 
