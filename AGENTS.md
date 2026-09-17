@@ -4,6 +4,8 @@
 
 Read `docs/INDEX.md` before changing requirements, design, implementation, tests, or operational documentation.
 
+The repository is currently migrating legacy documentation paths. Before moving, renaming, archiving, or deleting documentation, follow `docs/MIGRATION_PLAN.md`; do not invent a different destination or leave compatibility copies behind.
+
 For a use-case-specific task, read that use case's `docs/use-cases/UC-*/README.md` context file and only then follow its links to shared artifacts.
 
 ## Sources of truth

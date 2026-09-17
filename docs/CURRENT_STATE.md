@@ -13,6 +13,10 @@ The project follows UP. UC-03 and UC-05 are in a late Construction/verification 
 
 This status was reviewed on branch `uc03-impl` against commit `ab74aa2`; later changes must update this document when they change the baseline.
 
+## Documentation migration state
+
+The AI-facing indexes and split artifacts are in place. Physical migration of legacy paths has not started. The exact source-to-destination mapping is approved in [MIGRATION_PLAN.md](MIGRATION_PLAN.md); until it completes, numbered design directories and consolidated historical files remain present but non-canonical where explicitly marked.
+
 ## Use-case baseline
 
 | ID | Status | Notes |

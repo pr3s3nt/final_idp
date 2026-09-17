@@ -16,6 +16,7 @@ This is the authoritative entry point for project documentation. It tells reader
 - Implementation branch at the time of this review: `uc03-impl`.
 - Detailed status: [CURRENT_STATE.md](CURRENT_STATE.md).
 - Documentation conventions: [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md).
+- Active physical-layout migration: [MIGRATION_PLAN.md](MIGRATION_PLAN.md).
 
 ## Read by task
 
@@ -52,6 +53,7 @@ This is the authoritative entry point for project documentation. It tells reader
 | End-to-end execution records | Evidence, not specification | [Verification index](verification/README.md) |
 | Iteration records | Current policy; historical work was not formally numbered | [Iteration index](iterations/README.md) |
 | Archived/superseded material | Historical, never normative | [Archive policy](archive/README.md) |
+| Documentation migration map | Current until the legacy layout is removed | [Migration plan](MIGRATION_PLAN.md) |
 
 ## Authority rules
 
