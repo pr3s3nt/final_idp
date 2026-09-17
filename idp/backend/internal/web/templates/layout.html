@@ -20,6 +20,6 @@ button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:7p
 .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}.muted{color:var(--muted)}.wave{font-weight:700;white-space:nowrap}
 .action-CREATE,.action-DEPLOY,.action-LINK{color:var(--ok);font-weight:700}.action-UPDATE{color:var(--busy);font-weight:700}.action-REUSE{color:var(--muted);font-weight:700}
 .action-DESTROY,.action-REMOVE,.action-UNLINK{color:var(--bad);font-weight:700}
-</style></head><body><header><a href="/">IDP · Deploy Application</a></header><main>{{end}}
+</style></head><body><header><a href="/">IDP · Deploy Application</a><a href="/ui/applications">Application definitions</a></header><main>{{end}}
 {{define "foot"}}</main></body></html>{{end}}
 {{define "problems"}}{{if .}}<div class="card problems"><strong>The request was rejected</strong><ul>{{range .}}<li><code>{{.Code}}</code> {{.Message}}</li>{{end}}</ul></div>{{end}}{{end}}

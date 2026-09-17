@@ -26,7 +26,9 @@ type Server struct {
 	Orch     *service.Orchestrator
 	Query    *service.QueryService
 	Registry imageregistry.Checker
-	tmpl     *template.Template
+	// FrontendDir is the built React bundle served under /ui/ (ADR-017).
+	FrontendDir string
+	tmpl        *template.Template
 }
 
 func (s *Server) Handler() http.Handler {
@@ -71,6 +73,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /apps/{app}/teardown", s.submitTeardown)
 	mux.HandleFunc("GET /deployments/{id}", s.pageDeployment)
 	mux.HandleFunc("POST /deployments/{id}/confirm", s.submitConfirm)
+	// React web frontend (UC-01)
+	mux.Handle("GET /ui/", frontendHandler(s.FrontendDir))
+	mux.Handle("GET /ui", http.RedirectHandler("/ui/applications", http.StatusSeeOther))
 	return logRequests(mux)
 }
 

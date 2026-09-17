@@ -15,6 +15,7 @@ type Config struct {
 	ModulesDir  string // Terraform module sources (terraform://modules/<name>)
 	FixturesDir string
 	ListenAddr  string
+	FrontendDir string // built React bundle served under /ui/ (ADR-017)
 
 	// Delivery repositories: every application keeps its desired state in its
 	// own repository, which the IDP creates on the application's first
@@ -40,6 +41,7 @@ func Load() (*Config, error) {
 		ModulesDir:        env("IDP_MODULES_DIR", filepath.Join(root, "terraform", "modules")),
 		FixturesDir:       env("IDP_FIXTURES_DIR", filepath.Join(root, "fixtures")),
 		ListenAddr:        env("IDP_LISTEN", "127.0.0.1:8088"),
+		FrontendDir:       env("IDP_FRONTEND_DIR", filepath.Join(root, "..", "frontend", "dist")),
 		DeliveryRepoPattern: os.Getenv("IDP_DELIVERY_REPO_PATTERN"),
 		DeliveryBranch:      env("IDP_DELIVERY_BRANCH", "main"),
 		CDProvider:          env("IDP_CD_PROVIDER", "fleet"),

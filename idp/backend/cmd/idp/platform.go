@@ -67,7 +67,7 @@ func runPlatform(ctx context.Context, cfg *config.Config, db *persistence.DB, cm
 	switch cmd {
 	case "serve":
 		query := &service.QueryService{Repositories: repos, Orch: orch, Kube: kube, CD: cdProvider, ResourceOutputs: outputs}
-		srv := &web.Server{Orch: orch, Query: query, Registry: registry}
+		srv := &web.Server{Orch: orch, Query: query, Registry: registry, FrontendDir: cfg.FrontendDir}
 		httpServer := &http.Server{Addr: cfg.ListenAddr, Handler: srv.Handler()}
 		go func() {
 			<-ctx.Done()
