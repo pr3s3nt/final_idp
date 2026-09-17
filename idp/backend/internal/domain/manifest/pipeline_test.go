@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/manifest"
+	"deploy/internal/domain"
+	"deploy/internal/domain/manifest"
 )
 
 // Runs the real score-k8s binary; skipped when it is not installed.

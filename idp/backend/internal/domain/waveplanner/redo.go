@@ -3,7 +3,7 @@ package waveplanner
 import (
 	"sort"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
+	"deploy/internal/domain"
 )
 
 // FindPotentialRedeploys lists the components that may be redone automatically

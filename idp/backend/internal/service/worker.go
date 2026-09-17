@@ -12,18 +12,18 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/configresolver"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/infraplanner"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/manifest"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/resourceoutput"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/targetadapter"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/waveplanner"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/cd"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/kubernetes"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/provisioner"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/secretstore"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/persistence"
+	"deploy/internal/domain"
+	"deploy/internal/domain/configresolver"
+	"deploy/internal/domain/infraplanner"
+	"deploy/internal/domain/manifest"
+	"deploy/internal/domain/resourceoutput"
+	"deploy/internal/domain/targetadapter"
+	"deploy/internal/domain/waveplanner"
+	"deploy/internal/integration/cd"
+	"deploy/internal/integration/kubernetes"
+	"deploy/internal/integration/provisioner"
+	"deploy/internal/integration/secretstore"
+	"deploy/internal/persistence"
 )
 
 // Worker is the Deployment Worker: it claims execution jobs and executes them

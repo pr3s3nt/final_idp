@@ -6,9 +6,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/manifest"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/secretstore"
+	"deploy/internal/domain"
+	"deploy/internal/domain/manifest"
+	"deploy/internal/integration/secretstore"
 )
 
 // ResolveEnvironmentConfiguration resolves direct values, Resource Outputs,

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/kubernetes"
+	"deploy/internal/domain"
+	"deploy/internal/integration/kubernetes"
 )
 
 // WorkloadStatusProvider is the Workload Status Provider abstraction used by

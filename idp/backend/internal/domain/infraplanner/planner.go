@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/resourceresolver"
+	"deploy/internal/domain"
+	"deploy/internal/domain/resourceresolver"
 )
 
 type Input struct {

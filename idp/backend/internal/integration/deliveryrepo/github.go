@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/secretstore"
+	"deploy/internal/integration/secretstore"
 )
 
 // GitHub creates the delivery repository of an application on GitHub and gives

@@ -13,10 +13,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/targetadapter"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/imageregistry"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/service"
+	"deploy/internal/domain"
+	"deploy/internal/domain/targetadapter"
+	"deploy/internal/integration/imageregistry"
+	"deploy/internal/service"
 )
 
 //go:embed templates/*.html

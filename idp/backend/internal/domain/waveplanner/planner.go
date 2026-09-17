@@ -6,7 +6,7 @@ package waveplanner
 import (
 	"sort"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
+	"deploy/internal/domain"
 )
 
 // PlanDeploymentWaves computes scope and waves for the selected workloads.

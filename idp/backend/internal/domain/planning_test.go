@@ -4,12 +4,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	dt "github.com/pr3s3nt/final_idp/idp/backend/internal/domain/domaintest"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/graphbuilder"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/infraplanner"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/resourceresolver"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/waveplanner"
+	"deploy/internal/domain"
+	dt "deploy/internal/domain/domaintest"
+	"deploy/internal/domain/graphbuilder"
+	"deploy/internal/domain/infraplanner"
+	"deploy/internal/domain/resourceresolver"
+	"deploy/internal/domain/waveplanner"
 )
 
 func names(g *domain.DeploymentGraph, waves [][]string) [][]string {

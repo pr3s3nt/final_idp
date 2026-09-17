@@ -13,9 +13,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/secretstore"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/persistence"
+	"deploy/internal/domain"
+	"deploy/internal/integration/secretstore"
+	"deploy/internal/persistence"
 )
 
 type Importer struct {

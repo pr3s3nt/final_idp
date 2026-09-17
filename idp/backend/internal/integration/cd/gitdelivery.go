@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/deliveryrepo"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/kubernetes"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/secretstore"
+	"deploy/internal/domain"
+	"deploy/internal/integration/deliveryrepo"
+	"deploy/internal/integration/kubernetes"
+	"deploy/internal/integration/secretstore"
 )
 
 // Delivery is what every CD adapter needs: the application's delivery

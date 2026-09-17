@@ -1,4 +1,4 @@
-module github.com/pr3s3nt/final_idp/idp/backend
+module deploy
 
 go 1.27.1
 

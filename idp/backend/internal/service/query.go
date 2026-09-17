@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/resourceoutput"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/cd"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/kubernetes"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/persistence"
+	"deploy/internal/domain"
+	"deploy/internal/domain/resourceoutput"
+	"deploy/internal/integration/cd"
+	"deploy/internal/integration/kubernetes"
+	"deploy/internal/persistence"
 )
 
 // QueryService is the Deployment Query Service (the UC-04 subset UC-03 needs

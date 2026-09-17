@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/resourceresolver"
+	"deploy/internal/domain"
+	"deploy/internal/domain/resourceresolver"
 )
 
 // BuildDeploymentGraph returns the graph with a Resource Resolution for every

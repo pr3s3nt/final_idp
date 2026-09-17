@@ -9,11 +9,11 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/fixtures"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/secretstore"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/persistence"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/service"
+	"deploy/internal/domain"
+	"deploy/internal/fixtures"
+	"deploy/internal/integration/secretstore"
+	"deploy/internal/persistence"
+	"deploy/internal/service"
 )
 
 type allImagesExist struct{ missing string }

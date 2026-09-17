@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/migrations"
+	"deploy/migrations"
 )
 
 // DB is the shared connection pool used by every repository.

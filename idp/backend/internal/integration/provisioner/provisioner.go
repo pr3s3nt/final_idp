@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
+	"deploy/internal/domain"
 )
 
 // Request identifies one Resource Instance workspace and the module that

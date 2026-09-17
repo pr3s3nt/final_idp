@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/provisioner"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/secretstore"
+	"deploy/internal/domain"
+	"deploy/internal/integration/provisioner"
+	"deploy/internal/integration/secretstore"
 )
 
 type Collector struct {

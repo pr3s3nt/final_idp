@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
+	"deploy/internal/domain"
 )
 
 // Resolver resolves against the definitions of one catalog version. All holds

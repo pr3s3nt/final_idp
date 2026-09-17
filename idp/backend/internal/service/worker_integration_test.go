@@ -13,14 +13,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/manifest"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/resourceoutput"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/cd"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/kubernetes"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/provisioner"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/secretstore"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/service"
+	"deploy/internal/domain"
+	"deploy/internal/domain/manifest"
+	"deploy/internal/domain/resourceoutput"
+	"deploy/internal/integration/cd"
+	"deploy/internal/integration/kubernetes"
+	"deploy/internal/integration/provisioner"
+	"deploy/internal/integration/secretstore"
+	"deploy/internal/service"
 )
 
 // fakeProvisioner stands in for Terraform: it records calls and returns

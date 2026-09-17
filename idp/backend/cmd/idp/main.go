@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/config"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/fixtures"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/secretstore"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/persistence"
+	"deploy/internal/config"
+	"deploy/internal/fixtures"
+	"deploy/internal/integration/secretstore"
+	"deploy/internal/persistence"
 )
 
 const usage = `usage: idp <command>

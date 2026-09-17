@@ -172,7 +172,7 @@ Mandatory rules:
 1. The backend Go module is:
 
    ```text
-   github.com/pr3s3nt/final_idp/idp/backend
+   deploy
    ```
 
 2. The demo-application Go module is:

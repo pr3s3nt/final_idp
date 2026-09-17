@@ -20,9 +20,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/targetadapter"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/cd"
+	"deploy/internal/domain"
+	"deploy/internal/domain/targetadapter"
+	"deploy/internal/integration/cd"
 )
 
 // ResolvedConfiguration is the transient result of resolving one workload's

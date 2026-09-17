@@ -10,14 +10,14 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/graphbuilder"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/infraplanner"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/resourceresolver"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/targetadapter"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/domain/waveplanner"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/integration/secretstore"
-	"github.com/pr3s3nt/final_idp/idp/backend/internal/persistence"
+	"deploy/internal/domain"
+	"deploy/internal/domain/graphbuilder"
+	"deploy/internal/domain/infraplanner"
+	"deploy/internal/domain/resourceresolver"
+	"deploy/internal/domain/targetadapter"
+	"deploy/internal/domain/waveplanner"
+	"deploy/internal/integration/secretstore"
+	"deploy/internal/persistence"
 )
 
 // ImageChecker verifies that an image tag exists in its registry.
