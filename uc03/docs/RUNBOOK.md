@@ -1,3 +1,10 @@
+---
+id: UC03-RUNBOOK
+artifact: operations-runbook
+status: current
+last_reviewed: 2026-09-17
+---
+
 # RUNBOOK – UC-03 Deploy Application
 
 Mọi lệnh chạy trong thư mục `uc03/`.

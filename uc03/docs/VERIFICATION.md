@@ -1,3 +1,13 @@
+---
+id: LEGACY-CONSOLIDATED-VERIFICATION
+artifact: consolidated-verification-log
+status: historical
+current_index: ../../docs/verification/README.md
+last_reviewed: 2026-09-17
+---
+
+> **Consolidated evidence log.** AI agents should use the immutable records in the [verification index](../../docs/verification/README.md). Evidence describes specific executions and is not a normative requirement.
+
 # VERIFICATION – bằng chứng kiểm chứng UC-03
 
 Ghi những gì **đã chạy thật**, ngày giờ theo máy (15/09/2026). Mục nào chưa chạy ghi rõ "CHƯA".

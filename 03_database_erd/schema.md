@@ -1,3 +1,10 @@
+---
+id: DATABASE-SCHEMA
+artifact: database-schema
+status: current
+last_reviewed: 2026-09-17
+---
+
 # Step 3: Database / ERD
 
 Schema này hiện thực persistence classification đã được duyệt ở Step 2. Tên table/column dùng `snake_case`; `UUID` dùng cho identity và foreign key; `JSONB` chỉ dùng cho cấu trúc linh hoạt vốn đã là `Map`/`List` trong domain model. Các `TRANSIENT` execution object không được tạo table.

@@ -1,3 +1,10 @@
+---
+id: STATE-MACHINE-INDEX
+artifact: state-machine-index
+status: current
+last_reviewed: 2026-09-17
+---
+
 # Step 5: State Machine
 
 Step này mô tả lifecycle có trạng thái và transition không tầm thường của ba aggregate root: **Deployment**, **Resource Instance** và **Workload Instance**. Tên state dễ đọc bám theo tiến trình UC-03/UC-04; literal viết hoa trong ngoặc là giá trị của cột `status`.

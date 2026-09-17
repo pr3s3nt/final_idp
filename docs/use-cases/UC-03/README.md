@@ -1,0 +1,51 @@
+---
+id: UC-03-CONTEXT
+artifact: use-case-context
+status: current
+last_reviewed: 2026-09-17
+---
+
+# UC-03 context — Deploy Application
+
+## Delivery state
+
+Implemented and end-to-end verified on an existing internal kind cluster and on AWS. Fleet is the default CD provider on `kind-local`; AWS uses Argo CD.
+
+## Read in this order
+
+1. [Specification](specification.md)
+2. [Use Case Realization](realization.md)
+3. [Sequence diagram](../../../sequence_digrams/uc_03_deploy_application.puml)
+4. [UC-03 implementation map](../../../uc03/README.md)
+5. [Verification index](../../verification/README.md)
+
+## Shared artifacts
+
+- [Architecture index](../../architecture/README.md)
+- [Database schema](../../../03_database_erd/schema.md)
+- [Operation contracts](../../../04_operation_contracts/operation_contracts.md)
+- [Deployment state machine](../../../05_state_machines/deployment_state.puml)
+- [Traceability matrix](../../../06_traceability/traceability_matrix.md)
+
+## Important decisions
+
+- [ADR-002 — Dependency-ordered output propagation](../../decisions/ADR-002-workload-output-ordering.md)
+- [ADR-003 — Resource Instance ownership](../../decisions/ADR-003-resource-instance-ownership.md)
+- [ADR-010 — Background deployment worker](../../decisions/ADR-010-background-deployment-worker.md)
+- [ADR-012 — Target infrastructure and catalog versioning](../../decisions/ADR-012-target-and-catalog-versioning.md)
+- [ADR-013 — Per-application delivery repository](../../decisions/ADR-013-per-application-delivery-repository.md)
+- [ADR-014 — Fleet as the default CD provider](../../decisions/ADR-014-fleet-default-cd-provider.md)
+
+## Open issues
+
+The highest-impact UC-03 items are [D3](../../backlog/D03-typed-infrastructure-plan.md), [D6](../../backlog/D06-worker-recovery.md), [D8](../../backlog/D08-workload-output-reader.md), [D9](../../backlog/D09-shared-and-workload-resources.md), [D10](../../backlog/D10-old-catalog-version-policy.md), and [D11](../../backlog/D11-catalog-formula-change.md).
+
+## Implementation entry points
+
+| Concern | Code |
+|---|---|
+| Request orchestration and confirmation | [`orchestrator.go`](../../../uc03/internal/service/orchestrator.go) |
+| Background execution | [`worker.go`](../../../uc03/internal/service/worker.go) |
+| Graph, wave, and infrastructure planning | [`uc03/internal/domain`](../../../uc03/internal/domain/) |
+| Persistence | [`uc03/internal/persistence`](../../../uc03/internal/persistence/) |
+| External integrations | [`uc03/internal/integration`](../../../uc03/internal/integration/) |

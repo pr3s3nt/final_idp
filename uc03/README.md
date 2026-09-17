@@ -1,10 +1,17 @@
+---
+id: UC03-IMPLEMENTATION-README
+artifact: implementation-guide
+status: current
+last_reviewed: 2026-09-17
+---
+
 # UC-03 Deploy Application – implementation
 
-Go implementation of UC-03 as designed in `../01_…` to `../06_traceability`, with the decisions and deviations recorded in `../implementation_plan.md`.
+Go implementation of UC-03 and UC-05. Start from the repository [documentation index](../docs/INDEX.md); current decisions and deviations are indexed under [`docs/decisions`](../docs/decisions/README.md) and [`docs/implementation`](../docs/implementation/README.md). The root `implementation_plan.md` is historical.
 
 - How to run: `docs/RUNBOOK.md`
 - Demo script: `docs/DEMO.md`
-- What was actually verified (kind and AWS): `docs/VERIFICATION.md`
+- What was actually verified (kind and AWS): [verification index](../docs/verification/README.md)
 
 ## Design component → code
 

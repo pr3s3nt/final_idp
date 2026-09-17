@@ -1,3 +1,10 @@
+---
+id: DESIGN-CLASS-INDEX
+artifact: design-class-and-vopc-index
+status: current
+last_reviewed: 2026-09-17
+---
+
 # Step 1: VOPC / Design Class Diagram
 
 Thư mục này mô tả **View Of Participating Classes (VOPC)** cho năm use case của Internal Developer Platform. `design_class_diagram.puml` là góc nhìn hợp nhất toàn hệ thống; năm file `vopc_uc*.puml` là lát cắt theo từng use case và chỉ chứa các participating class được liệt kê cho use case tương ứng tại Bước 3.

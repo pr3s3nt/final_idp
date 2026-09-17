@@ -1,3 +1,13 @@
+---
+id: LEGACY-USE-CASE-REALIZATION-1-3
+artifact: consolidated-use-case-and-realization
+status: superseded
+superseded_by: docs/use-cases/README.md
+last_reviewed: 2026-09-17
+---
+
+> **Superseded consolidated artifact.** Current specifications and Use Case Realizations are split under [`docs/use-cases/`](docs/use-cases/README.md). This file is retained temporarily for provenance and must not be used as the source of truth.
+
 # Usecase
 UC-01 – Create / Configure Application
 
@@ -1366,4 +1376,3 @@ UC-04 không dùng Deployment Orchestrator để thực hiện hành động. UC
 Luồng responsibility: Web UI → Deployment API → Deployment Orchestrator → Deployment Repository + Application Repository + Environment Configuration Repository + Resource Definition Catalog + Graph Builder + Infrastructure Planner → (Developer xác nhận) → Deployment Worker → CD Integration → Concrete CD Provider → CD System, Kubernetes Adapter → Kubernetes Cluster, Infrastructure Reconciler → Provisioner → Terraform Runner → Resource/Workload Instance Repository → Deployment Repository.
 
 UC-05 không thêm class mới nào so với UC-03: nó dùng lại đúng các thành phần đó, chỉ khác ở chỗ plan chỉ gồm các tầng gỡ bỏ và thứ tự là ngược lại. Application Repository và Environment Configuration Repository chỉ được đọc; không use case nào trong bốn use case còn lại, và cả UC-05, xóa Application Definition hay Environment Configuration.
-

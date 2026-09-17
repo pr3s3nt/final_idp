@@ -1,3 +1,10 @@
+---
+id: TRACEABILITY-MATRIX
+artifact: traceability-matrix
+status: current
+last_reviewed: 2026-09-17
+---
+
 # Step 6: Traceability
 
 Tài liệu này là acceptance check nối các artifact đã chốt từ Use Case Realization, VOPC/Design Class Diagram, Domain Model, Database/ERD, Operation Contracts đến State Machines.
@@ -217,7 +224,7 @@ Quy ước đọc matrix:
 3. **RESOLVED — UC-03 Deployment persistence:** Sequence/VOPC đã có `persistDeployment(..., AWAITING_CONFIRMATION)` cho aggregate ban đầu, `confirmDeploymentAndCreateJob()` cho transition `CONFIRMED` (kèm job), `updateDeploymentStatus()` của Deployment Worker cho `DEPLOYING` và `SUCCEEDED`/`FAILED`; `saveDeploymentRecord()` persist delivery reference, thành phần đã gỡ và failure.
 4. **RESOLVED — Gap 4, transient Infrastructure Plan across requests:** `createDeployment()` canonicalize/hash plan và persist chỉ `plan_fingerprint` + algorithm; `confirmDeployment()` rebuild từ persisted inputs + current catalog/Resource Instance state, trả `PLAN_CHANGED` để review lại khi mismatch, và chỉ apply overrides + atomic status CAS + reconcile khi match. Fingerprint hash phiên bản catalog, action của từng resource, Resource Definition identity cùng các field `provisioner_reference`, `supported_contexts`, `default_parameters`, `allowed_overrides`, `requires`, referenced Resource Instance identity và deployment target. Resolved parameters được suy ra một cách tất định từ `default_parameters` kết hợp Deployment Context; allowed-overrides **definition** được suy ra một cách tất định từ `allowed_overrides`. Resource Definition của một phiên bản catalog không đổi (vấn đề 12), nên thay đổi catalog chỉ đi vào plan khi Developer chọn phiên bản catalog khác. Scope: fingerprint không bao phủ Developer-selected override values (được validate theo `allowed_overrides` sau match); đây chỉ là application-level defense-in-depth, còn shared-resource contention/drift cần Resource-Instance-level version/optimistic lock hoặc per-resource reconcile lock, cộng provisioner idempotency (ví dụ Terraform refresh + plan), đều ngoài phạm vi fingerprint.
 
-5. **OPEN — các mục hoãn:** các vấn đề thiết kế đã được ghi nhận nhưng chưa giải quyết nằm ở `06_traceability/deferred_issues.md`: D1 (bản nháp UC-01/UC-02), D2 (UC-04 gọi hệ thống ngoài không kiểm tra điều kiện), D3 (cấu trúc plan và fingerprint), D4 (writer của `deployment_step`), D5 (tách trạng thái CD), D6 (phục hồi Deployment Worker), D7 (secret bị bỏ rơi), D8 (cơ chế đọc Workload Output), D9 (resource dùng chung và resource riêng theo workload), D10 (khóa phiên bản catalog cũ), D11 (phiên bản catalog mới đổi công thức của resource đang chạy), D12 (UC-02 lấy output theo phiên bản catalog nào). Quyết định cho từng vấn đề ghi ở `06_traceability/design_decisions.md`.
+5. **OPEN — các mục hoãn:** danh sách hiện hành nằm trong [`docs/backlog/README.md`](../docs/backlog/README.md): D1–D12 là các vấn đề thiết kế ban đầu; D13 và D14 là hai lỗ hổng teardown được ghi nhận khi hoàn thiện UC-05. Quyết định đã chốt được tra cứu qua [`docs/decisions/README.md`](../docs/decisions/README.md). Hai file tổng hợp trong thư mục này chỉ còn là bản ghi lịch sử.
 
 ### Notes
 

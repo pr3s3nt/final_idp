@@ -1,3 +1,10 @@
+---
+id: DOMAIN-OBJECTS
+artifact: domain-model-description
+status: current
+last_reviewed: 2026-09-17
+---
+
 # Step 2: Domain Objects
 
 Tài liệu này mô tả domain model được rút ra từ các bảng **Dữ liệu chính**, business rules của UC-01 đến UC-05 và các main-flow sequence diagram. Model chỉ chứa business entity, value object, generated artifact và execution-time data holder; không chứa Boundary, Controller, Service, Validator, Resolver, Generator, Adapter hay Repository.

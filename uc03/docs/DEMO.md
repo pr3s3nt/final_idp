@@ -1,3 +1,10 @@
+---
+id: UC03-DEMO
+artifact: demo-script
+status: current
+last_reviewed: 2026-09-17
+---
+
 # Kịch bản demo UC-03
 
 Chuẩn bị theo `RUNBOOK.md` mục 3–4 (`serve` và `worker` đang chạy, cụm nội bộ `idp-internal` đã đăng ký). Mỗi bước làm được bằng UI (`http://127.0.0.1:8088`) hoặc bằng `scripts/idpctl.sh` (lệnh `deploy` tạo plan rồi confirm ngay; muốn xem plan trước khi confirm thì dùng UI hoặc gọi `POST /api/deployments` rồi `idpctl.sh plan <id>`). Phiên bản catalog chọn bằng biến `IDP_CATALOG_VERSION`. Sau mỗi `deploy`, chờ bằng `idpctl.sh wait <id>`, xem bằng `idpctl.sh show <id>`.

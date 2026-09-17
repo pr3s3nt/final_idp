@@ -1,3 +1,13 @@
+---
+id: LEGACY-UC03-IMPLEMENTATION-PLAN
+artifact: implementation-plan-and-progress-log
+status: historical
+current_index: docs/implementation/README.md
+last_reviewed: 2026-09-17
+---
+
+> **Historical/mixed artifact.** This file began before implementation and later accumulated progress and discussion notes. Statements such as “chưa có code”, “chưa commit”, or “đang viết” describe earlier points in time. Use the [implementation index](docs/implementation/README.md) and [current state](docs/CURRENT_STATE.md) for the current baseline.
+
 # Plan triển khai đầy đủ UC-03 – Deploy Application (Go, Fleet/Argo CD, kind + AWS)
 
 ## 1. Context

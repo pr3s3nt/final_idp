@@ -1,0 +1,249 @@
+---
+id: UC-01
+artifact: use-case-specification
+status: current
+delivery_status: designed
+last_reviewed: 2026-09-17
+---
+
+# UC-01 — Create / Configure Application
+
+
+## Mục tiêu
+
+Cho phép Developer tạo mới hoặc chỉnh sửa application thông qua giao diện **IDP**.
+
+Developer khai báo:
+
+Workload.
+
+Resource mà application cần.
+
+Quan hệ dependency.
+
+Environment Variable và Secret mà từng workload cần.
+
+**IDP** lưu Application Definition và sinh application specification tương ứng, ví dụ score.yaml.
+
+## Actor
+
+**Primary Actor:** Developer
+
+## Tiền điều kiện
+
+Developer đã đăng nhập.
+
+Developer có quyền tạo hoặc chỉnh sửa application.
+
+## Hậu điều kiện
+
+Một phiên bản mới của Application Definition được tạo; các phiên bản cũ giữ nguyên, không bị sửa hay xóa.
+
+Workload, resource, dependency và configuration requirement được lưu trong phiên bản mới; mỗi thành phần giữ ID cố định qua các phiên bản.
+
+Application specification được tạo hoặc cập nhật theo phiên bản mới.
+
+Deployment hiện tại không tự động bị thay đổi; phiên bản mới chỉ có hiệu lực ở một environment khi được deploy vào environment đó trong UC-03.
+
+## Luồng chính
+
+Developer chọn Create Application hoặc mở application hiện có để chỉnh sửa.
+
+Developer khai báo:
+
+Application name.
+
+Description.
+
+Developer chọn Add Resource để khai báo resource application cần.
+
+Với mỗi resource:
+
+Resource name.
+
+Resource type.
+
+Ví dụ:
+
+Name: postgresql Type: PostgreSQL
+
+Developer chọn Add Workload.
+
+Với mỗi workload, Developer khai báo:
+
+Workload name.
+
+Workload type.
+
+Image repository.
+
+Application port nếu cần.
+
+Output mà workload cung cấp cho thành phần khác nếu có, ví dụ endpoint.
+
+Ví dụ:
+
+Workload: backend Type: Backend Service Image Repository: registry.company.local/shop-backend Port: **8080** Outputs: endpoint
+
+Trong workload, Developer khai báo các Environment Variable mà workload cần bằng Add Environment Variable.
+
+Ví dụ:
+
+LOG_LEVEL PAYMENT_API_URL DB_HOST DB_PORT
+
+Developer khai báo các Secret mà workload cần bằng Add Secret.
+
+Ví dụ:
+
+DB_USERNAME DB_PASSWORD PAYMENT_API_KEY
+
+Developer khai báo dependency giữa các thành phần bằng quan hệ depends on.
+
+Ví dụ:
+
+frontend → backend backend  → postgresql
+
+Quan hệ depends on quyết định thứ tự triển khai trong UC-03 và giới hạn những output mà workload được phép tham chiếu trong UC-02.
+
+**IDP** hiển thị topology và cấu hình tổng quan của application.
+
+Developer chọn Save Application.
+
+**IDP** kiểm tra dữ liệu, lưu Application Definition thành một phiên bản mới và sinh/cập nhật application specification.
+
+Nếu Developer đổi tên một thành phần, thành phần đó vẫn giữ ID cũ trong phiên bản mới. Nếu Developer bỏ một thành phần, phiên bản mới không còn thành phần đó; phiên bản cũ vẫn giữ nguyên.
+
+## Luồng ngoại lệ
+
+A1 – Dữ liệu không hợp lệ
+
+Nếu dữ liệu không hợp lệ, **IDP** hiển thị lỗi để Developer chỉnh sửa.
+
+Ví dụ:
+
+Workload name bị trùng.
+
+Image repository không hợp lệ.
+
+Port không hợp lệ.
+
+Dependency tham chiếu tới thành phần không tồn tại.
+
+Các quan hệ depends on tạo thành vòng, ví dụ frontend → backend và backend → frontend.
+
+A1 chỉ xét lỗi bên trong phiên bản đang lưu. Việc Environment Configuration của từng environment có khớp với phiên bản hay không được kiểm tra khi deploy ở UC-03.
+
+## Dữ liệu chính
+
+Nhóm
+
+Dữ liệu
+
+Application
+
+Name, description
+
+Workload
+
+Name, type, image repository, port, outputs
+
+Resource
+
+Name, resource type
+
+### Environment Variable Definition
+
+Name
+
+### Secret Definition
+
+Name
+
+Dependency
+
+Source → target
+
+## Quy tắc nghiệp vụ
+
+Một application có thể có một hoặc nhiều workload.
+
+Application có thể yêu cầu không hoặc nhiều resource.
+
+Environment Variable và Secret thuộc về một workload cụ thể.
+
+UC-01 chỉ khai báo workload cần configuration gì, chưa khai báo giá trị cụ thể theo environment.
+
+Image repository có thể được khai báo trong Workload Definition.
+
+Image tag/version không thuộc UC-01.
+
+Image tag/version được xác định khi tạo deployment trong UC-03 – Deploy Application hoặc được cung cấp thông qua CI/External Delivery Integration.
+
+Secret được phân biệt với Environment Variable thông thường.
+
+Developer không khai báo Kubernetes ConfigMap hoặc Kubernetes Secret.
+
+Developer chỉ mô tả resource ở mức logic, ví dụ PostgreSQL, Redis.
+
+Developer không khai báo cách resource được provision.
+
+Developer không cần thao tác trực tiếp với score.yaml.
+
+Environment và deployment target không được lựa chọn trong UC-01.
+
+Hai thành phần không có quan hệ depends on được coi là độc lập với nhau.
+
+Workload chỉ được dùng output của thành phần mà nó depends on (xem UC-02).
+
+Các quan hệ depends on không được tạo thành vòng.
+
+Mỗi lần lưu tạo một phiên bản mới của Application Definition; phiên bản đã lưu không bao giờ bị sửa hay xóa.
+
+Workload, resource, Environment Variable Definition và Secret Definition giữ ID cố định qua các phiên bản; đổi tên không làm đổi ID.
+
+Bỏ một thành phần khỏi application nghĩa là phiên bản mới không còn thành phần đó. Workload hoặc hạ tầng đang chạy chỉ bị gỡ khi environment được deploy phiên bản mới trong UC-03.
+
+Mọi application có đúng hai environment cố định: staging và production.
+
+9. Ví dụ
+
+Application: shop-app
+
+Resources ────────────────────────────
+
+postgresql Type: PostgreSQL
+
+Workload: backend ────────────────────────────
+
+Type: Backend Service Image Repository: registry.company.local/shop-backend
+
+Port: **8080**
+
+Outputs: endpoint
+
+Environment Variables:
+    LOG_LEVEL
+    DB_HOST
+    DB_PORT
+
+Secrets:
+    DB_USERNAME
+    DB_PASSWORD
+
+Depends on: postgresql
+
+Workload: frontend ────────────────────────────
+
+Type: Frontend Image Repository: registry.company.local/shop-frontend
+
+Port: **3000**
+
+Environment Variables: BACKEND_URL
+
+Depends on: backend
+
+Không có image version cụ thể trong UC-01:
+
+✗ backend:v1.4.2 ✗ frontend:v2.1.0
+
+Các version cụ thể sẽ được lựa chọn hoặc nhận từ CI khi thực hiện deployment trong UC-03.

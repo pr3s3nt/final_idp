@@ -1,3 +1,13 @@
+---
+id: LEGACY-DESIGN-DECISION-LOG
+artifact: consolidated-decision-log
+status: historical
+current_index: ../docs/decisions/README.md
+last_reviewed: 2026-09-17
+---
+
+> **Historical consolidated record.** Use the split [ADR index](../docs/decisions/README.md) to determine current decision status. This file is retained for chronology and provenance, and its summary rows may describe an earlier implementation state.
+
 # Nhật ký quyết định thiết kế
 
 Tài liệu này ghi lại quyết định cho từng vấn đề thiết kế khi rà soát lại tài liệu trên nhánh `refine_design` (bắt đầu từ `11ad582`). Danh sách 11 vấn đề lấy theo commit message của `88585cc`; các cách sửa trong commit đó chỉ dùng để tham khảo, chưa được xác nhận là đúng.

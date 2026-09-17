@@ -1,3 +1,13 @@
+---
+id: LEGACY-DEFERRED-ISSUE-LOG
+artifact: consolidated-deferred-issue-log
+status: historical
+current_index: ../docs/backlog/README.md
+last_reviewed: 2026-09-17
+---
+
+> **Historical consolidated record.** Use the split [backlog index](../docs/backlog/README.md) for current issue navigation and status. This file is retained for provenance.
+
 # Các vấn đề thiết kế hoãn sau MVP
 
 Tài liệu này ghi các vấn đề thiết kế đã được nhận diện nhưng **chưa cần giải quyết ở MVP**. Mỗi mục giữ đủ bối cảnh để sau này quay lại xử lý mà không phải dò lại từ đầu.

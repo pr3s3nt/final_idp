@@ -1,3 +1,10 @@
+---
+id: PERSISTENCE-CLASSIFICATION
+artifact: persistence-classification
+status: current
+last_reviewed: 2026-09-17
+---
+
 # Step 2: Persistence Classification
 
 Phân loại dưới đây bao phủ toàn bộ domain object trong `domain_model.puml`. Với các object thuộc application lifecycle, `PERSISTENT` nghĩa là state cần tồn tại qua nhiều request/deployment execution và được quản lý bởi đúng một trong sáu repository boundary đã thống nhất (năm repository ban đầu cộng **Workload Instance Repository** được bổ sung cho việc triển khai theo tầng). `Catalog Version` và `Resource Definition` cũng là dữ liệu bền vững, nhưng là reference data thuộc catalog do platform quản lý và nằm ngoài phạm vi sáu repository này; UC-03 đọc chúng qua **Resource Definition Catalog**. `TRANSIENT` nghĩa là object chỉ được dựng/resolve trong một deployment execution và không được lưu như một domain record độc lập.
