@@ -22,6 +22,12 @@ ALLOWED_STATUS = {
     "evidence",
 }
 LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
+USE_CASE_DIR_RE = re.compile(r"UC-\d{2}")
+REQUIRED_USE_CASE_FILES = (
+    "README.md",
+    "specification.md",
+    "realization.md",
+)
 LEGACY_DIRECTORIES = (
     "01_vopc_design_class_diagram",
     "02_domain_model",
@@ -104,6 +110,40 @@ def normalized_link(raw: str) -> str:
     return raw
 
 
+def validate_use_case_packages(errors: list[str]) -> None:
+    use_case_root = ROOT / "docs/use-cases"
+    use_case_index = use_case_root / "README.md"
+    documentation_index = ROOT / "docs/INDEX.md"
+
+    if not use_case_index.is_file() or not documentation_index.is_file():
+        return
+
+    use_case_index_text = use_case_index.read_text(encoding="utf-8")
+    documentation_index_text = documentation_index.read_text(encoding="utf-8")
+
+    for directory in sorted(path for path in use_case_root.glob("UC-*") if path.is_dir()):
+        if not USE_CASE_DIR_RE.fullmatch(directory.name):
+            errors.append(f"invalid use-case directory name: {directory.relative_to(ROOT)}")
+            continue
+
+        for filename in REQUIRED_USE_CASE_FILES:
+            required = directory / filename
+            if not required.is_file():
+                errors.append(f"incomplete use-case package; missing: {required.relative_to(ROOT)}")
+
+        model_target = f"{directory.name}/README.md"
+        if f"({model_target})" not in use_case_index_text:
+            errors.append(
+                f"docs/use-cases/README.md does not register {directory.name}: {model_target}"
+            )
+
+        documentation_target = f"use-cases/{directory.name}/README.md"
+        if f"({documentation_target})" not in documentation_index_text:
+            errors.append(
+                f"docs/INDEX.md does not route {directory.name}: {documentation_target}"
+            )
+
+
 def main() -> int:
     errors: list[str] = []
     ids: dict[str, Path] = {}
@@ -121,6 +161,8 @@ def main() -> int:
     for relative in RETIRED_DOCUMENTATION_DIRECTORIES:
         if (ROOT / relative).exists():
             errors.append(f"retired documentation directory must not exist: {relative}")
+
+    validate_use_case_packages(errors)
 
     legacy_references = (*LEGACY_DIRECTORIES, *LEGACY_ROOT_FILES)
     for path in tracked_files():
