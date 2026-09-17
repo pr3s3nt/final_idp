@@ -35,6 +35,6 @@ source_record: ../archive/consolidated/design-decisions-log.md
 
 **Sẽ ảnh hưởng:** chỉ các dòng ví dụ trong [các use case](../use-cases/README.md), [`design-classes.md`](../architecture/design-classes.md) và [backlog](../backlog/README.md); phần còn lại là code và tài liệu vận hành.
 
-**Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** tài liệu và code đều xong, kiểm chứng thật trên cụm nội bộ (`uc03/docs/VERIFICATION.md` §6). Hai application chạy hai CD system khác nhau trên cùng một cụm.
+**Đã áp dụng (nhánh `uc03-impl`, 16/09/2026):** tài liệu và code đều xong, kiểm chứng thật trên cụm nội bộ ([Fleet verification](../verification/2026-09-16-fleet-provider.md)). Hai application chạy hai CD system khác nhau trên cùng một cụm.
 
 **Một hệ quả phát hiện khi chạy thật:** manifest do IDP sinh ra từng đánh dấu bằng nhãn chuẩn `app.kubernetes.io/managed-by: idp`. Fleet triển khai bundle qua Helm, mà Helm luôn đặt nhãn đó thành `Helm`, nên object trong cụm lệch Git vĩnh viễn và Fleet không bao giờ báo xong. Bài học chung, không riêng Fleet: **IDP chỉ được đánh dấu bằng nhãn thuộc không gian tên của mình** (`idp.dev/managed-by`), vì nhãn `app.kubernetes.io/managed-by` thuộc về công cụ trực tiếp áp manifest xuống cụm, và công cụ đó thay đổi theo CD system.

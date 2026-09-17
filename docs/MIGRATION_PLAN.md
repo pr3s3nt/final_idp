@@ -2,7 +2,7 @@
 id: DOC-MIGRATION-PLAN
 artifact: documentation-migration-plan
 status: current
-migration_stage: consolidated-artifacts-archived
+migration_stage: implementation-and-evidence-archived
 last_reviewed: 2026-09-17
 ---
 
@@ -152,19 +152,19 @@ Before archiving the consolidated verification log, verify that all five dated s
 
 ### Mandatory reconciliation for `implementation_plan.md`
 
-`implementation_plan.md` is historical as a plan, but it still contains current design and implementation facts not owned by another canonical artifact. It must not move to the archive until a manual semantic audit is complete.
+The former `implementation_plan.md` was historical as a plan but contained current design and implementation facts. Its complete semantic audit is now recorded in [`documentation-reconciliation.md`](implementation/documentation-reconciliation.md), and the source has moved to `docs/archive/planning/uc03-original-implementation-plan.md`.
 
 The following seven known gaps are mandatory checklist items, not the complete audit:
 
 | Known current concept | Canonical destination before archive | Status |
 |---|---|---|
-| Complete UC-03 A1 catalog (`A1-1` through `A1-12`) | `docs/use-cases/UC-03/specification.md` | `PENDING` |
-| `FinishDeployment` writes Deployment Record, `SUCCEEDED`, and job `COMPLETED` atomically | `docs/implementation/deviations.md`; reconcile the accepted behavior with operation contracts afterward | `PENDING` |
-| `RESOURCE_DEFINITION_CHANGED` when a running resource owner changes definition | `docs/implementation/deviations.md`; link to the relevant UC-03 validation rule if promoted to required behavior | `PENDING` |
-| Secret Store uses AES-256-GCM and `idpsecret://`; workload Secret is materialized through `secretKeyRef` | `docs/architecture/security-and-secrets.md` | `PENDING` |
-| Terraform and Git are invoked through CLI rather than `terraform-exec`/`go-git` | `docs/implementation/deviations.md` | `PENDING` |
-| `resource_instance.applied_overrides` | Final database schema at `docs/architecture/database/schema.md` | `PENDING` |
-| `deployment_step.detail` | Final database schema at `docs/architecture/database/schema.md` | `PENDING` |
+| Complete UC-03 A1 catalog (`A1-1` through `A1-12`) | `docs/use-cases/UC-03/specification.md` | `COVERED` — [audit](implementation/documentation-reconciliation.md#implementation-plan) |
+| `FinishDeployment` writes Deployment Record, `SUCCEEDED`, and job `COMPLETED` atomically | `docs/implementation/deviations.md`; reconcile the accepted behavior with operation contracts afterward | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| `RESOURCE_DEFINITION_CHANGED` when a running resource owner changes definition | `docs/implementation/deviations.md`; link to the relevant UC-03 validation rule if promoted to required behavior | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| Secret Store uses AES-256-GCM and `idpsecret://`; workload Secret is materialized through `secretKeyRef` | `docs/architecture/security-and-secrets.md` | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| Terraform and Git are invoked through CLI rather than `terraform-exec`/`go-git` | `docs/implementation/deviations.md` | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| `resource_instance.applied_overrides` | Final database schema at `docs/architecture/database/schema.md` | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| `deployment_step.detail` | Final database schema at `docs/architecture/database/schema.md` | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
 
 The two schema findings must be reconciled against the executable migrations, not copied only from prose. At the time this map was reviewed, both columns exist in `uc03/migrations/0001_schema.sql` but are absent from `03_database_erd/schema.md`.
 
@@ -172,26 +172,26 @@ The audit must cover every item in §10 and §10.1, even if it is not one of the
 
 | Plan item | Subject | Expected canonical owner(s) | Audit status |
 |---|---|---|---|
-| §10 item 1 | Target infrastructure as graph nodes and `requires` edges | UC-03 specification/realization and ADR-012 | `PENDING` |
-| §10 item 2 | TEARDOWN and `deployment.kind` | UC-05 specification/realization and database schema | `PENDING` |
-| §10 item 3 | Override baseline and input fingerprint | UC-03 realization and database schema | `PENDING` |
-| §10 item 4 | A1-12 overlapping-deployment rejection | UC-03 specification | `PENDING` |
-| §10 item 5 | Atomic `FinishDeployment` | Implementation deviations, then operation contract if accepted as design | `PENDING` |
-| §10 item 6 | Full typed-plan fingerprint and pre-side-effect recheck | UC-03 specification/realization | `PENDING` |
-| §10 item 7 | Verify workload disappearance before removal/destruction | UC-05 specification and D13 | `PENDING` |
-| §10 item 8 | Partial unique constraint for active Workload Instance | Database schema | `PENDING` |
-| §10 item 9 | Applied portions of D4/D5/D6/D8 | ADR/backlog status, contracts, state machines, and schema as applicable | `PENDING` |
-| §10 item 10 | `deployment_step.detail` | Database schema | `PENDING` |
-| §10.1 item 11 | Transitive closure of resource `requires` | UC-03 specification/realization | `PENDING` |
-| §10.1 item 12 | Platform-node output does not trigger workload cascade | UC-03 specification/realization | `PENDING` |
-| §10.1 item 13 | Logical image registry and target-specific mapping | Implementation deviations or shared integration architecture | `PENDING` |
-| §10.1 item 14 | Encrypted Secret Store and Secret materialization | Security/Secret architecture | `PENDING` |
-| §10.1 item 15 | Added step, kind, platform requirement, `requires`, fingerprints, detail, and uniqueness fields | Decompose and verify against each canonical owner; do not treat this row as one concept | `PENDING` |
-| §10.1 item 16 | Terraform/Git CLI and Kubernetes `client-go` choices | Implementation deviations | `PENDING` |
-| §10.1 item 17 | Separate resource and workload namespaces on kind | Implementation deviations or deployment architecture | `PENDING` |
-| §10.1 item 18 | `RESOURCE_DEFINITION_CHANGED` | Implementation deviations and UC-03 validation behavior if normative | `PENDING` |
-| §10.1 item 19 | UC-02 importer validation behavior | Implementation deviations and UC-02 delivery-state context | `PENDING` |
-| §10.1 item 20 | Step creation timing and failed-step transition to `SKIPPED` | Implementation deviations; reconcile with D04 and operation contracts | `PENDING` |
+| §10 item 1 | Target infrastructure as graph nodes and `requires` edges | UC-03 specification/realization and ADR-012 | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10 item 2 | TEARDOWN and `deployment.kind` | UC-05 specification/realization and database schema | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10 item 3 | Override baseline and input fingerprint | UC-03 realization and database schema | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10 item 4 | A1-12 overlapping-deployment rejection | UC-03 specification | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10 item 5 | Atomic `FinishDeployment` | Implementation deviations, then operation contract if accepted as design | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10 item 6 | Full typed-plan fingerprint and pre-side-effect recheck | UC-03 specification/realization | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10 item 7 | Verify workload disappearance before removal/destruction | UC-05 specification and D13 | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10 item 8 | Partial unique constraint for active Workload Instance | Database schema | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10 item 9 | Applied portions of D4/D5/D6/D8 | ADR/backlog status, contracts, state machines, and schema as applicable | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10 item 10 | `deployment_step.detail` | Database schema | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10.1 item 11 | Transitive closure of resource `requires` | UC-03 specification/realization | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10.1 item 12 | Platform-node output does not trigger workload cascade | UC-03 specification/realization | `HISTORICAL` — superseded by §12 Q4; [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10.1 item 13 | Logical image registry and target-specific mapping | Implementation deviations or shared integration architecture | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10.1 item 14 | Encrypted Secret Store and Secret materialization | Security/Secret architecture | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10.1 item 15 | Added step, kind, platform requirement, `requires`, fingerprints, detail, and uniqueness fields | Decompose and verify against each canonical owner; do not treat this row as one concept | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10.1 item 16 | Terraform/Git CLI and Kubernetes `client-go` choices | Implementation deviations | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10.1 item 17 | Separate resource and workload namespaces on kind | Implementation deviations or deployment architecture | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10.1 item 18 | `RESOURCE_DEFINITION_CHANGED` | Implementation deviations and UC-03 validation behavior if normative | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10.1 item 19 | UC-02 importer validation behavior | Implementation deviations and UC-02 delivery-state context | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
+| §10.1 item 20 | Step creation timing and failed-step transition to `SKIPPED` | Implementation deviations; reconcile with D04 and operation contracts | `COVERED` — [audit](implementation/documentation-reconciliation.md#10-and-101-audit) |
 
 The audit procedure is manual and must be recorded in this table or a linked reconciliation record:
 
@@ -225,7 +225,7 @@ The audit procedure is manual and must be recorded in this table or a linked rec
 2. **DONE —** Move shared architecture artifacts under `docs/architecture/`.
 3. **DONE —** Move the traceability matrix and update all active links.
 4. **DONE —** Compare split artifacts with consolidated predecessors and archive the predecessors. Results are recorded in [`documentation-reconciliation.md`](implementation/documentation-reconciliation.md).
-5. Move operational documents and archive the consolidated verification and implementation plan.
+5. **DONE —** Move operational documents and archive the consolidated verification and implementation plan after [semantic reconciliation](implementation/documentation-reconciliation.md).
 6. Remove empty legacy directories, normalize remaining links, and enforce final-layout checks.
 
 Each numbered item should be a separate reviewable commit unless a move and its required link updates cannot safely be separated.

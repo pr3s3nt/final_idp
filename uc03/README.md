@@ -7,10 +7,10 @@ last_reviewed: 2026-09-17
 
 # UC-03 Deploy Application – implementation
 
-Go implementation of UC-03 and UC-05. Start from the repository [documentation index](../docs/INDEX.md); current decisions and deviations are indexed under [`docs/decisions`](../docs/decisions/README.md) and [`docs/implementation`](../docs/implementation/README.md). The root `implementation_plan.md` is historical.
+Go implementation of UC-03 and UC-05. Start from the repository [documentation index](../docs/INDEX.md); current decisions and deviations are indexed under [`docs/decisions`](../docs/decisions/README.md) and [`docs/implementation`](../docs/implementation/README.md). The original implementation plan is archived and non-normative.
 
-- How to run: `docs/RUNBOOK.md`
-- Demo script: `docs/DEMO.md`
+- How to run: [`docs/operations/uc03/RUNBOOK.md`](../docs/operations/uc03/RUNBOOK.md)
+- Demo script: [`docs/operations/uc03/DEMO.md`](../docs/operations/uc03/DEMO.md)
 - What was actually verified (kind and AWS): [verification index](../docs/verification/README.md)
 
 ## Design component → code

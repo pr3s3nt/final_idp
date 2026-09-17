@@ -25,6 +25,6 @@ Hệ thống CD trên cụm nội bộ mặc định là **Fleet** (`IDP_CD_PROV
 | 8 | Gỡ app | `idpctl.sh teardown reporting-app STAGING kind-local` → `confirm`, rồi tương tự cho shop-app | REMOVE workload → DESTROY Postgres/Redis hoặc UNLINK database dùng chung → UNLINK k8s-cluster; `kind get clusters` vẫn còn `idp-internal` |
 | 9 | AWS: catalog v1 | `IDP_CATALOG_VERSION=1 idpctl.sh deploy shop-app 1 STAGING aws backend=v1,worker=v1,frontend=v1` | tầng 0 CREATE network; tầng 1 CREATE EKS+Argo CD / Aurora / ElastiCache; app chạy |
 | 10 | AWS: catalog v2 | `IDP_CATALOG_VERSION=2 …` như bước 9 | network UPDATE (output `network_label` mới) → EKS, Aurora, ElastiCache được apply lại |
-| 11 | AWS: gỡ | `idpctl.sh teardown shop-app STAGING aws` → `confirm` | xóa workload → Aurora, ElastiCache, EKS → network; xem `VERIFICATION.md` |
+| 11 | AWS: gỡ | `idpctl.sh teardown shop-app STAGING aws` → `confirm` | xóa workload → Aurora, ElastiCache, EKS → network; xem [verification index](../../verification/README.md) |
 
-Các kịch bản khác (A1 thiếu cấu hình, image lỗi, cascade khi đổi password, override giữ làm baseline, phiên bản app mới gỡ worker/redis, EXISTING UNLINK) chạy như trước; bằng chứng lần chạy đầu ở `VERIFICATION.md` mục 2 và 3.
+Các kịch bản khác (A1 thiếu cấu hình, image lỗi, cascade khi đổi password, override giữ làm baseline, phiên bản app mới gỡ worker/redis, EXISTING UNLINK) chạy như trước; bằng chứng lần chạy đầu nằm trong [UC-03 baseline](../../verification/2026-09-15-uc03-kind-aws.md).

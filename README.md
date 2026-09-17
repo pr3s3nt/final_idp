@@ -8,7 +8,7 @@ This repository applies the Unified Process (UP): development is use-case-driven
 - [Current project state](docs/CURRENT_STATE.md) — implemented scope, lifecycle position, and known limitations.
 - [Glossary](docs/GLOSSARY.md) — canonical project terminology.
 - [UC-03 implementation](uc03/README.md) — code layout and design-to-code map.
-- [Runbook](uc03/docs/RUNBOOK.md) — build, run, test, and troubleshooting instructions.
+- [Runbook](docs/operations/uc03/RUNBOOK.md) — build, run, test, and troubleshooting instructions.
 
 ## Documentation model
 

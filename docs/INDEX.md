@@ -33,7 +33,7 @@ This is the authoritative entry point for project documentation. It tells reader
 | Understand why a design choice was made | [Decision index](decisions/README.md) |
 | Pick up an unresolved design problem | [Backlog index](backlog/README.md) |
 | Compare design with code | [Implementation index](implementation/README.md) |
-| Run or troubleshoot the system | [Runbook](../uc03/docs/RUNBOOK.md) |
+| Run or troubleshoot the system | [Runbook](operations/uc03/RUNBOOK.md) |
 | Review actual test executions | [Verification index](verification/README.md) |
 
 ## Artifact map
@@ -49,7 +49,7 @@ This is the authoritative entry point for project documentation. It tells reader
 | Deferred risks/issues | Current split index plus original details | [Backlog index](backlog/README.md) |
 | Traceability | Current | [Traceability index](traceability/README.md) |
 | UC-03/UC-05 source code | Current | [`uc03/`](../uc03/) |
-| Original implementation plan | Historical/mixed | [`implementation_plan.md`](../implementation_plan.md) |
+| Original implementation plan | Historical | [Archived implementation plan](archive/planning/uc03-original-implementation-plan.md) |
 | End-to-end execution records | Evidence, not specification | [Verification index](verification/README.md) |
 | Iteration records | Current policy; historical work was not formally numbered | [Iteration index](iterations/README.md) |
 | Archived/superseded material | Historical, never normative | [Archive policy](archive/README.md) |

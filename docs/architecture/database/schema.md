@@ -262,6 +262,7 @@ Table này hoàn toàn không có column chứa khóa hay thông tin đăng nh�
 | `provider_state_reference` | VARCHAR(2048) | NULL | Reference tới provider state nếu có. |
 | `status` | ENUM (`PLANNED`, `PROVISIONING`, `READY`, `FAILED`, `DESTROYED`, `UNLINKED`) | NOT NULL | Lifecycle status của Resource Instance. `DESTROYED`/`UNLINKED` là trạng thái kết thúc; dòng được giữ lại cho lịch sử. |
 | `output_fingerprint` | CHAR(64) | NULL | SHA-256 hex của output lần gần nhất, dùng để phát hiện output thay đổi; không lưu giá trị output. |
+| `applied_overrides` | JSONB | NOT NULL, DEFAULT `{}` | Baseline override đã được apply gần nhất. Lần deploy sau không truyền lại override vẫn dùng baseline này; planner so sánh nó để quyết định `UPDATE` hay `REUSE`. |
 | `applied_input_fingerprint` | CHAR(64) | NULL | SHA-256 hex của đầu vào lần apply gần nhất: definition của phiên bản catalog, tham số đã resolve và dấu vân tay output của các Platform Requirement được `requires`. Đầu vào hiện tại khác giá trị này thì plan cập nhật instance. `NULL` với instance `EXISTING`. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
@@ -287,7 +288,7 @@ Không có table `resource_output`: `Resource Output` là runtime view `TRANSIEN
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
 
-Constraint bổ sung: `UNIQUE (workload_id, environment, deployment_target)`.
+Constraint bổ sung: partial `UNIQUE (workload_id, environment, deployment_target) WHERE status <> 'REMOVED'` — mỗi workload có tối đa một instance đang hoạt động trên environment/target, nhưng instance lịch sử ở `REMOVED` không chặn việc deploy lại.
 
 Không có table `workload_output`: `Workload Output` là runtime view `TRANSIENT` do Workload Output Collector đọc trong execution.
 
@@ -334,7 +335,7 @@ Job triển khai được tạo trong **cùng một transaction** với atomic c
 | `job_id` | UUID | PK, NOT NULL | Identity của job. |
 | `deployment_id` | UUID | FK → `deployment.deployment_id`, NOT NULL, UNIQUE | Deployment cần thực thi; mỗi deployment có tối đa một job. |
 | `selected_overrides` | JSONB | NOT NULL | Giá trị override Developer đã chọn khi xác nhận (không phải plan payload). |
-| `status` | ENUM | NOT NULL | Trạng thái job; tập giá trị dự kiến xem danh mục ENUM (chốt ở D6). |
+| `status` | ENUM (`QUEUED`, `RUNNING`, `COMPLETED`, `FAILED`) | NOT NULL | Trạng thái job vật lý hiện được migration thực thi. D6 vẫn theo dõi cơ chế lease/recovery. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo job. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật gần nhất. |
 
@@ -360,7 +361,7 @@ Cơ chế phục hồi khi worker chết giữa chừng (lease, heartbeat, thử
 | `deployment_target` | VARCHAR(255) | NOT NULL | Target thực tế được ghi nhận. |
 | `delivery_reference` | VARCHAR(2048) | NULL | Reference tới desired state/CD delivery nếu có. |
 | `removed_components` | JSONB | NOT NULL | Danh sách thành phần (ID cố định) đã được gỡ, hủy hoặc gỡ liên kết trong deployment; mảng rỗng nếu không có. |
-| `status` | ENUM | NOT NULL | Final/current status được lưu bền vững. Có thể bỏ cột và dùng `deployment.status` — chốt ở D5; không được nhận giá trị từ CD system. |
+| `status` | ENUM (`AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED`, `FAILED`) | NOT NULL | Final/current status được lưu bền vững bằng cùng type với `deployment.status`; không được nhận giá trị từ CD system. D5 vẫn theo dõi việc có bỏ cột này hay không. |
 | `error_summary` | TEXT | NULL | Lỗi tổng quát nếu deployment thất bại. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo record. |
 | `updated_at` | TIMESTAMP | NOT NULL | Thời điểm cập nhật record. |
@@ -376,10 +377,11 @@ Cơ chế phục hồi khi worker chết giữa chừng (lease, heartbeat, thử
 | `deployment_record_id` | UUID | FK → `deployment_record.deployment_record_id`, NOT NULL | Deployment Record sở hữu step. Qua quan hệ 1:1 record–deployment, một Deployment có nhiều step. |
 | `sequence_number` | INT | NOT NULL, UNIQUE (`deployment_record_id`, `sequence_number`) | Thứ tự step trong deployment. |
 | `wave_number` | INT | NOT NULL, CHECK (`wave_number` >= 0) | Tầng triển khai mà step thuộc về. |
-| `step_name` | VARCHAR(255) | NOT NULL | Tên step; dự kiến đổi sang ENUM khi chốt D4. |
-| `status` | ENUM | NOT NULL | Trạng thái step; tập giá trị dự kiến xem danh mục ENUM (chốt ở D4). |
+| `step_name` | ENUM (`PLAN_VERIFIED`, `INFRASTRUCTURE_READY`, `CONFIGURATION_RESOLVED`, `MANIFEST_GENERATED`, `CD_SYNCED`, `APPLICATION_READY`, `REMOVED`, `DESTROYED`, `UNLINKED`) | NOT NULL | Tên bước vật lý hiện được migration thực thi. D4 vẫn theo dõi mô hình ownership/progress tổng quát. |
+| `status` | ENUM (`PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `SKIPPED`) | NOT NULL | Trạng thái step vật lý hiện được migration thực thi. |
 | `related_component_reference` | VARCHAR(2048) | NULL | Workload/resource reference (ID cố định) mà step thuộc về. |
 | `error_summary` | TEXT | NULL | Chi tiết lỗi của step nếu có. |
+| `detail` | JSONB | NOT NULL, DEFAULT `{}` | Chi tiết có cấu trúc riêng của step, ví dụ delivery reference theo tầng hoặc lý do resource được apply lại; không chứa plaintext secret. |
 | `started_at` | TIMESTAMP | NULL | Thời điểm bắt đầu. |
 | `completed_at` | TIMESTAMP | NULL | Thời điểm hoàn tất. |
 
@@ -448,6 +450,9 @@ Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, opera
 | `deployment.status` | `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED`, `FAILED` |
 | `workload_deployment.inclusion_reason` | `SELECTED`, `CASCADED` |
 | `deployment.kind` | `DEPLOY`, `TEARDOWN` |
+| `deployment_execution_job.status` | `QUEUED`, `RUNNING`, `COMPLETED`, `FAILED` |
+| `deployment_step.status` | `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `SKIPPED` |
+| `deployment_step.step_name` | `PLAN_VERIFIED`, `INFRASTRUCTURE_READY`, `CONFIGURATION_RESOLVED`, `MANIFEST_GENERATED`, `CD_SYNCED`, `APPLICATION_READY`, `REMOVED`, `DESTROYED`, `UNLINKED` |
 
 ### Dự kiến, chưa chốt
 
@@ -456,11 +461,8 @@ Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, opera
 | Loại thành phần trong plan | `RESOURCE`, `WORKLOAD` | D3 |
 | Action cho resource trong plan | `CREATE`, `UPDATE`, `REUSE`, `DESTROY`, `UNLINK` | D3 |
 | Action cho workload trong plan | `DEPLOY`, `REMOVE` | D3 |
-| `deployment_step.status` | `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `SKIPPED` | D4 |
-| `deployment_step.step_name` (đổi từ VARCHAR sang ENUM) | `INFRASTRUCTURE_READY`, `CONFIGURATION_RESOLVED`, `MANIFEST_GENERATED`, `CD_SYNCED`, `APPLICATION_READY`, `REMOVED`, `DESTROYED`, `UNLINKED` | D4 |
 | `deployment_record.status` | Bỏ cột, dùng `deployment.status` | D5 |
 | `delivery_status` (trường riêng, nếu lưu) | `ACCEPTED`, `SYNCING`, `SYNCED`, `FAILED` | D5 |
-| `deployment_execution_job.status` | `QUEUED`, `RUNNING`, `COMPLETED`, `FAILED` | D6 |
 
 ## Mapping domain → table
 

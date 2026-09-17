@@ -279,19 +279,22 @@ Tầng 3: frontend.BACKEND_URL → backend.endpoint
 
 ### A1 – Deployment input hoặc dependency không hợp lệ
 
-Deployment dừng nếu:
+Deployment dừng theo danh mục ổn định sau:
 
-- Image version không hợp lệ.
-- Configuration bắt buộc chưa được cấu hình.
-- Environment Configuration không khớp với phiên bản được deploy, ví dụ biến còn tham chiếu output của thành phần không có trong phiên bản.
-- Phiên bản catalog được chọn không tồn tại.
-- Chọn deploy một phần application nhưng phiên bản Application Definition hoặc phiên bản catalog được chọn khác bản đang chạy.
-- Dependency không thể resolve hoặc các quan hệ tạo thành vòng (kể cả vòng do `requires` trong catalog).
-- Workload phụ thuộc không nằm trong phạm vi deployment và chưa chạy healthy trên environment/target đã chọn.
-- Phiên bản catalog được chọn không có Resource Definition phù hợp, kể cả công thức cụm Kubernetes cho nơi triển khai đã chọn.
-- Resource Output hoặc Workload Output được tham chiếu không hợp lệ.
+- **A1-1 — Invalid image:** image version không hợp lệ hoặc không tồn tại trong registry đích.
+- **A1-2 — Missing configuration:** thiếu Environment Variable hoặc Secret bắt buộc.
+- **A1-3 — Configuration/version mismatch:** Environment Configuration không khớp phiên bản Application Definition được deploy, ví dụ binding còn trỏ tới thành phần không có trong phiên bản.
+- **A1-4 — Invalid partial deployment:** deploy một phần nhưng phiên bản Application Definition hoặc Catalog Version khác bản đang chạy, hoặc trạng thái đang chạy không thống nhất để xác định baseline.
+- **A1-5 — Invalid dependency graph:** dependency hay `requires` không resolve được hoặc tạo thành vòng.
+- **A1-6 — Dependency outside scope not ready:** workload/resource cần đọc ngoài phạm vi chưa ở trạng thái `HEALTHY`/`READY` trên đúng environment và target.
+- **A1-7 — Invalid Resource Definition:** không có hoặc có nhiều Resource Definition cùng mức ưu tiên; management mode không tương thích; hoặc definition của một Resource Instance đang chạy đổi sang definition khác (`RESOURCE_DEFINITION_CHANGED`). IDP không tự thay thế resource đang chạy.
+- **A1-8 — Invalid output reference:** Resource Output hoặc Workload Output reference không tồn tại, không được expose hoặc không thuộc dependency được phép.
+- **A1-9 — Invalid override:** override không được phép, sai kiểu/phạm vi, hoặc cố đổi tham số bất biến. Deployment giữ `AWAITING_CONFIRMATION`; không job nào được tạo.
+- **A1-10 — Duplicate confirmation:** xác nhận lại một Deployment đã được xác nhận trả `DEPLOYMENT_ALREADY_CONFIRMED`; deployment đó vẫn chỉ có đúng một execution job.
+- **A1-11 — Unsupported target/context:** target hoặc context không được hỗ trợ, đặc biệt không có Resource Definition `k8s-cluster` phù hợp.
+- **A1-12 — Overlapping deployment:** đã có Deployment cùng application, environment và target ở `CONFIRMED` hoặc `DEPLOYING`; yêu cầu mới trả `DEPLOYMENT_IN_PROGRESS`.
 
-**IDP** hiển thị lỗi để Developer chỉnh sửa.
+Với lỗi phát hiện trước khi persist plan (A1-1 đến A1-8, A1-11 và A1-12), attempt không để lại row Deployment hay job và không gây side effect. A1-9 chỉ giữ plan hiện có ở `AWAITING_CONFIRMATION`; A1-10 không tạo job thứ hai. **IDP** hiển thị mã lỗi để Developer chỉnh sửa hoặc tải lại plan.
 
 ### A2 – Provisioning, delivery hoặc workload thất bại
 
@@ -339,6 +342,7 @@ Nếu infrastructure provisioning (kể cả VPC, cụm Kubernetes), việc chu�
 - Environment Configuration được kiểm tra khớp với phiên bản được deploy trước khi lập plan.
 - Resource Instance thuộc về đúng một chủ: application + environment + resource requirement + deployment target. Resource chỉ được dùng lại khi khớp đủ bộ này.
 - Resource dùng chung giữa các application hoặc environment chỉ được khai báo ở Resource Definition do platform quản lý; với loại này, IDP chỉ đọc output, không tạo, sửa hay hủy hạ tầng thật.
+- Override đã apply thành công trở thành baseline của Resource Instance. Lần deploy sau không truyền lại override thì tiếp tục dùng baseline đó; override mới chỉ thay các key được phép và plan hiển thị `UPDATE` nếu effective input thay đổi.
 - Workload và resource không còn trong phiên bản được deploy bị gỡ, hủy hoặc gỡ liên kết trên environment/target đó; việc này hiện trong plan và cần Developer xác nhận. Resource dùng chung chỉ được gỡ liên kết.
 - Sau khi Developer xác nhận, IDP trả lời ngay; việc triển khai do Deployment Worker chạy nền dựa trên job đã lưu.
 - Dependency/resource graph được xây dựng tại thời điểm deployment dựa trên phiên bản Application Definition được chọn, Environment Configuration và deployment context.

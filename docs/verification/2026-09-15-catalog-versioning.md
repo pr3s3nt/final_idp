@@ -3,7 +3,7 @@ id: VER-2026-09-15-CATALOG
 artifact: verification-record
 status: evidence
 executed_on: 2026-09-15
-source_record: ../../uc03/docs/VERIFICATION.md
+source_record: ../archive/consolidated/uc03-verification-log.md
 ---
 
 # Catalog versioning and existing internal cluster

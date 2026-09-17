@@ -193,6 +193,7 @@ package "Resource Instance Repository" {
     provider_state_reference : VARCHAR(2048)
     * status : ENUM(PLANNED, PROVISIONING, READY, FAILED, DESTROYED, UNLINKED) <<NOT NULL>>
     output_fingerprint : CHAR(64)
+    * applied_overrides : JSONB <<NOT NULL>>
     applied_input_fingerprint : CHAR(64)
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
@@ -249,7 +250,7 @@ package "Deployment Repository" {
     --
     * deployment_id : UUID <<FK, NOT NULL, UNIQUE>>
     * selected_overrides : JSONB <<NOT NULL>>
-    * status : ENUM <<NOT NULL>>
+    * status : ENUM(QUEUED, RUNNING, COMPLETED, FAILED) <<NOT NULL>>
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
   }
@@ -271,7 +272,7 @@ package "Deployment Repository" {
     * deployment_target : VARCHAR(255) <<NOT NULL>>
     delivery_reference : VARCHAR(2048)
     * removed_components : JSONB <<NOT NULL>>
-    * status : ENUM <<NOT NULL>>
+    * status : ENUM(AWAITING_CONFIRMATION, CONFIRMED, DEPLOYING, SUCCEEDED, FAILED) <<NOT NULL>>
     error_summary : TEXT
     * created_at : TIMESTAMP <<NOT NULL>>
     * updated_at : TIMESTAMP <<NOT NULL>>
@@ -284,10 +285,11 @@ package "Deployment Repository" {
     * deployment_record_id : UUID <<FK, NOT NULL>>
     * sequence_number : INT <<NOT NULL>>
     * wave_number : INT <<NOT NULL>>
-    * step_name : VARCHAR(255) <<NOT NULL>>
-    * status : ENUM <<NOT NULL>>
+    * step_name : ENUM <<NOT NULL>>
+    * status : ENUM(PENDING, RUNNING, SUCCEEDED, FAILED, SKIPPED) <<NOT NULL>>
     related_component_reference : VARCHAR(2048)
     error_summary : TEXT
+    * detail : JSONB <<NOT NULL>>
     started_at : TIMESTAMP
     completed_at : TIMESTAMP
   }
@@ -410,10 +412,12 @@ note bottom of resource_instance
   applied_input_fingerprint: input of the last apply (definition of
   the catalog version, parameters, outputs of required platform
   requirements); a different current input means UPDATE.
+  applied_overrides is the effective override baseline from the last apply.
 end note
 
 note bottom of workload_instance
-  UNIQUE (workload_id, environment, deployment_target).
+  Partial UNIQUE (workload_id, environment, deployment_target)
+  WHERE status <> REMOVED.
   Kept with status REMOVED after removal. Workload Output is TRANSIENT;
   only output_fingerprint is stored.
 end note

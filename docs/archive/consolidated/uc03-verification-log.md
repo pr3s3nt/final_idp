@@ -2,11 +2,11 @@
 id: LEGACY-CONSOLIDATED-VERIFICATION
 artifact: consolidated-verification-log
 status: historical
-current_index: ../../docs/verification/README.md
+current_index: ../../verification/README.md
 last_reviewed: 2026-09-17
 ---
 
-> **Consolidated evidence log.** AI agents should use the immutable records in the [verification index](../../docs/verification/README.md). Evidence describes specific executions and is not a normative requirement.
+> **Consolidated evidence log.** AI agents should use the immutable records in the [verification index](../../verification/README.md). The snapshot comparison is recorded in [documentation reconciliation](../../implementation/documentation-reconciliation.md). Evidence describes specific executions and is not a normative requirement.
 
 # VERIFICATION – bằng chứng kiểm chứng UC-03
 
