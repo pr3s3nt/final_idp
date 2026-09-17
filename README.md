@@ -22,7 +22,7 @@ Each use case has a small context package under `docs/use-cases/`. Shared archit
 
 | Use case | Name | Current state |
 |---|---|---|
-| UC-01 | Create / Configure Application | Designed; the UC-03 implementation consumes imported fixture data rather than implementing the full authoring experience |
+| UC-01 | Create / Configure Application | Implemented as a React web editor with a Go JSON API; verified by automated tests |
 | UC-02 | Configure Application Environment | Designed; the UC-03 implementation consumes imported configuration rather than implementing the full configuration experience |
 | UC-03 | Deploy Application | Implemented and verified on `kind-local` and AWS |
 | UC-04 | View Deployment Result | Designed; a minimal query/UI path exists to support UC-03 execution tracking |

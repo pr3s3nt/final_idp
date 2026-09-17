@@ -236,6 +236,20 @@ Quy ước đọc matrix:
 - `application_component` là identity table hiện thực ID cố định qua phiên bản, không phải domain object mới.
 - PlantUML source is validated with `-checkonly` in the documentation CI job; local validation reports an explicit notice when the executable is unavailable.
 
+## D. UC-01 implementation and automated tests
+
+This section links UC-01 design operations to code and tests. Code paths are relative to `idp/`; the detailed map is in the [code map](../implementation/code-map.md).
+
+| Operation or rule | Implementation | Automated tests |
+|---|---|---|
+| `createApplication()`, `addWorkload()`, `addResourceRequirement()`, `defineConfigurationRequirement()`, `defineDependency()` | `frontend/src/draft/reducer.ts`, `frontend/src/components/Sections.tsx` | `frontend/src/draft/reducer.test.ts`; `ApplicationEditorPage.test.tsx` "builds a complete draft locally and saves it in one request" |
+| Draft in `sessionStorage`: restore after refresh, Discard, clear after Save, discard incompatible data | `frontend/src/draft/storage.ts`, `frontend/src/pages/ApplicationEditorPage.tsx` | `frontend/src/draft/storage.test.ts`; editor tests for restore, Discard, Save success and Save failure |
+| `updateApplication()` | `backend/internal/web/applications.go`, `backend/internal/service/application.go`, `ApplicationRepository.LatestVersion` | `backend/internal/web/applications_test.go`; `TestUC01CreateApplication` (integration) |
+| `validateApplicationDefinition()` and A1, including naming and uniqueness rules | `backend/internal/domain/appvalidator`; client copy in `frontend/src/draft/validation.ts` | `appvalidator/validator_test.go`; `frontend/src/draft/validation.test.ts`; `TestUC01InvalidDraftWritesNothing` (integration) |
+| `saveApplicationDefinition()` with `saveNewVersionIfBaseMatches()`, stable IDs and A2 `DRAFT_CONFLICT` | `backend/internal/persistence/application_save.go` | `TestUC01EditCreatesNewVersionWithStableIDs`, `TestUC01StaleBaseVersionIsDraftConflict`, `TestUC01ConcurrentSavesFromSameBase`, `TestUC01RejectsForeignComponentIDAndTakenName` (integration); editor DRAFT_CONFLICT test |
+| `generateApplicationSpecification()` | `backend/internal/domain/appspec`, `backend/internal/persistence/specification_repository.go` | `appspec/generator_test.go`; `TestUC01CreateApplication` (integration) |
+| HTTP status and problem contract (200, 201, 404, 409, 422) | `backend/internal/web/applications.go`, `writeError` in `server.go` | `backend/internal/web/applications_test.go` |
+
 ## Overall acceptance
 
 **Kết quả tổng thể: PASS có điều kiện.** Design hiện trace được 49/49 Step-2 operations, 53/53 VOPC classes, 25/25 tables theo tiêu chí read-or-write, 12/12 operation contracts và 3/3 state machines (UC-05 dùng lại state machine Deployment, thêm nhánh vào bằng `createTeardown()`). Gap 1, Gap 3, Gap 4 và D01 trong Gap 5 đã đóng; Gap 2 vẫn cố ý không giải quyết vì writer của `Catalog Version`/`Resource Definition` thuộc platform administration ngoài năm Developer use case. Kết quả chỉ là coverage/traceability ở mức tài liệu: các mục hoãn D02–D12 còn lại, trong đó có writer của `deployment_step` (D4), vẫn mở và phải được giải quyết trước khi coi thiết kế là hoàn chỉnh.

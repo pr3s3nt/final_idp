@@ -11,7 +11,7 @@ This file lists current differences that an AI agent must not infer away. Histor
 
 | ID | Difference | Authority/action |
 |---|---|---|
-| IMP-001 | UC-01 and UC-02 are designed but the current executable imports their data through fixtures rather than implementing their complete interactions. | Keep the use-case specifications as required future scope; do not describe fixture import as full UC-01/UC-02 delivery. |
+| IMP-001 | UC-02 is designed but the current executable imports its data through fixtures rather than implementing its complete interaction. The fixture importer also still writes UC-01 application versions without the UC-01 validator. | Keep the UC-02 specification as required future scope; do not describe fixture import as UC-02 delivery or as a UC-01 Save. |
 | IMP-002 | UC-04 has a minimal query/UI path needed for deployment tracking, not a proven implementation of every specified query scenario. | Treat UC-04 as partially implemented until its traceability and test coverage are completed. |
 | IMP-003 | Worker crash recovery is not fully implemented or exercised. | [D06](../backlog/D06-worker-recovery.md) remains authoritative. |
 | IMP-004 | Teardown can mark workload removal without definitive cluster verification in some unavailable-cluster paths. | [D13](../backlog/D13-teardown-removal-verification.md) remains authoritative. |
@@ -22,6 +22,8 @@ This file lists current differences that an AI agent must not infer away. Histor
 | IMP-009 | Logical image hosts such as `registry.company.local` are mapped per target from `k8s-cluster.default_parameters.image_registry_mirror`. | Keep logical repositories in application definitions and perform mapping in the Target Manifest Adapter. |
 | IMP-010 | On kind, data resources use module-owned `res-<name>` namespaces while workloads use `<application>-<environment>`. | Do not infer that all resources share the workload namespace; namespace cleanup follows the owner that created it. |
 | IMP-011 | The fixture importer resolves component IDs across all known application versions and does not validate UC-02 configuration against only the latest version. UC-03 validates bindings again against the version being deployed. | Fixture import is not the complete UC-02 interaction (IMP-001); deployment-time validation is authoritative for execution. |
+| IMP-013 | The backend has no authentication or authorization. The UC-01 preconditions "Developer đã đăng nhập" and "có quyền tạo hoặc chỉnh sửa application" are not enforced; this applies to every current API and page. | Do not treat the UC-01 implementation as enforcing access control; authentication needs its own design decision. |
+| IMP-014 | UC-01 Save commits the new version, then generates and stores its Application Specification in a separate write. If that second write fails, the request returns an error although the version exists without a specification, and nothing retries it. | Contract 2 keeps previous specifications intact; the missing-specification repair path is not implemented. |
 | IMP-012 | Deployment steps are inserted when execution begins rather than pre-created as `PENDING`; on finish, any remaining `PENDING`/`RUNNING` step becomes `SKIPPED`. | This is current progress behavior. [D04](../backlog/D04-deployment-progress-ownership.md) remains open for the final generalized model. |
 
 When a deviation is resolved, update the canonical specification/design, tests, verification record, and this table in the same change.

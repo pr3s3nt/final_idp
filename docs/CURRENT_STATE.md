@@ -9,9 +9,9 @@ last_reviewed: 2026-09-17
 
 ## Lifecycle position
 
-The project follows UP. UC-03 and UC-05 are in a late Construction/verification state: executable software exists and has been exercised on local Kubernetes and AWS. The whole product is not in Transition because UC-01, UC-02, and the complete UC-04 experience are not implemented as full product use cases.
+The project follows UP. UC-03 and UC-05 are in a late Construction/verification state: executable software exists and has been exercised on local Kubernetes and AWS. UC-01 is implemented with a React web editor and verified by automated tests. The whole product is not in Transition because UC-02 and the complete UC-04 experience are not implemented as full product use cases.
 
-This status was reviewed on branch `uc03-impl` against commit `ab74aa2`; later changes must update this document when they change the baseline.
+This status was reviewed on branch `uc03-impl` against commit `ab74aa2`, and the UC-01 row after the UC-01 implementation of 2026-09-18; later changes must update this document when they change the baseline.
 
 ## Documentation layout
 
@@ -21,7 +21,7 @@ The AI-facing layout is complete. Sequence diagrams and per-use-case VOPCs live 
 
 | ID | Status | Notes |
 |---|---|---|
-| UC-01 | Designed | Application data is currently supplied to the implementation through fixtures/import rather than the complete authoring workflow. |
+| UC-01 | Implemented, automated tests | React editor under `/ui/applications` with a same-origin JSON API ([ADR-017](decisions/ADR-017-react-web-frontend.md)). Not exercised in a deployed environment; no authentication (IMP-013). Fixtures still seed demo applications. |
 | UC-02 | Designed | Environment configuration is currently supplied through fixtures/import rather than the complete interactive workflow. |
 | UC-03 | Implemented and E2E verified | Verified with an existing internal kind cluster and with AWS infrastructure. Fleet is the default CD provider for `kind-local`; AWS continues to use Argo CD. |
 | UC-04 | Partially implemented | The implementation exposes the execution status/query path required to observe UC-03. Treat the full UC-04 specification as design scope, not as fully delivered scope. |
@@ -35,6 +35,7 @@ The AI-facing layout is complete. Sequence diagrams and per-use-case VOPCs live 
 - Each application has its own delivery repository and key pair.
 - The CD integration is provider-neutral. Fleet is the default on `kind-local`; Argo CD remains supported and is used on AWS.
 - UC-05 reuses deployment orchestration primitives to remove an application from one environment and target.
+- UC-01 drafts are owned by the browser tab and saved with optimistic concurrency (ADR-016). The UC-01 editor is a React app in `idp/frontend`, served by the Go backend under `/ui/`; UC-03 to UC-05 keep their Go templates (ADR-017).
 
 The accepted rationale is indexed in [decisions/README.md](decisions/README.md).
 

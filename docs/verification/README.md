@@ -16,5 +16,6 @@ Verification records capture what was executed in a particular environment on a 
 | 2026-09-16 | Per-application Delivery Repository | [Delivery Repository](2026-09-16-delivery-repository.md) |
 | 2026-09-16 | Fleet as an interchangeable CD provider | [Fleet provider](2026-09-16-fleet-provider.md) |
 | 2026-09-16 | UC-05 on kind-local and AWS | [UC-05 removal](2026-09-16-uc05.md) |
+| 2026-09-18 | UC-01 React editor, API and optimistic save | [UC-01 editor](2026-09-18-uc01-react-editor.md) |
 
 The removed consolidated evidence predecessor and its mapping to these snapshots are recorded in the [documentation reconciliation](../implementation/documentation-reconciliation.md). Add future executions as new immutable files rather than appending unrelated rounds to an existing snapshot.

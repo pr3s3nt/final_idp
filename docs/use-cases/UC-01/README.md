@@ -9,7 +9,7 @@ last_reviewed: 2026-09-17
 
 ## Delivery state
 
-Designed. The current Go implementation imports Application Definitions as fixtures; it does not implement the complete UC-01 authoring workflow.
+Implemented and verified by automated tests on 2026-09-18 ([verification record](../../verification/2026-09-18-uc01-react-editor.md)). The React editor under `/ui/applications` covers the main flow, A1 and A2. Known limits are listed as IMP-013 and IMP-014 in [implementation deviations](../../implementation/deviations.md).
 
 ## Read in this order
 
@@ -35,4 +35,6 @@ Designed. The current Go implementation imports Application Definitions as fixtu
 
 ## Implementation entry point
 
-Fixture/import support is under [`idp/backend/internal/fixtures`](../../../idp/backend/internal/fixtures/); it is not a substitute for the complete use case.
+- Web UI: [`idp/frontend`](../../../idp/frontend/README.md)
+- API, service, validator, repository: see the UC-01 rows in the [backend implementation map](../../../idp/backend/README.md)
+- Fixture import under [`idp/backend/internal/fixtures`](../../../idp/backend/internal/fixtures/) still seeds demo data; it does not apply the UC-01 validator.

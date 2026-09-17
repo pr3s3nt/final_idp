@@ -9,7 +9,7 @@ last_reviewed: 2026-09-17
 
 | ID | Use case | Delivery state | Context |
 |---|---|---|---|
-| UC-01 | Create / Configure Application | Designed | [Open](UC-01/README.md) |
+| UC-01 | Create / Configure Application | Implemented | [Open](UC-01/README.md) |
 | UC-02 | Configure Application Environment | Designed | [Open](UC-02/README.md) |
 | UC-03 | Deploy Application | Implemented and verified | [Open](UC-03/README.md) |
 | UC-04 | View Deployment Result | Partially implemented | [Open](UC-04/README.md) |

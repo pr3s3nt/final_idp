@@ -16,6 +16,7 @@ The Go implementation is under [`idp/backend/`](../../idp/backend/). Its local [
 - [Code map](code-map.md)
 - [Known design/implementation deviations](deviations.md)
 - [Documentation semantic reconciliation](documentation-reconciliation.md)
+- [UC-01 context](../use-cases/UC-01/README.md) and the [web frontend](../../idp/frontend/README.md)
 - [UC-03 context](../use-cases/UC-03/README.md)
 - [UC-05 context](../use-cases/UC-05/README.md)
 
