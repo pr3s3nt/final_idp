@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"sdp/internal/domain"
-	"sdp/internal/integration/provisioner"
-	"sdp/internal/integration/secretstore"
+	"idp/internal/domain"
+	"idp/internal/integration/provisioner"
+	"idp/internal/integration/secretstore"
 )
 
 type Collector struct {

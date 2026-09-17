@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"sdp/internal/domain"
-	"sdp/internal/domain/manifest"
+	"idp/internal/domain"
+	"idp/internal/domain/manifest"
 )
 
 // Runs the real score-k8s binary; skipped when it is not installed.

@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"sdp/internal/domain"
-	"sdp/internal/domain/resourceresolver"
+	"idp/internal/domain"
+	"idp/internal/domain/resourceresolver"
 )
 
 // BuildDeploymentGraph returns the graph with a Resource Resolution for every

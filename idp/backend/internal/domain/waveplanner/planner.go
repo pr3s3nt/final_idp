@@ -6,7 +6,7 @@ package waveplanner
 import (
 	"sort"
 
-	"sdp/internal/domain"
+	"idp/internal/domain"
 )
 
 // PlanDeploymentWaves computes scope and waves for the selected workloads.

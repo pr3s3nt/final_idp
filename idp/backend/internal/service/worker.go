@@ -12,18 +12,18 @@ import (
 
 	"github.com/google/uuid"
 
-	"sdp/internal/domain"
-	"sdp/internal/domain/configresolver"
-	"sdp/internal/domain/infraplanner"
-	"sdp/internal/domain/manifest"
-	"sdp/internal/domain/resourceoutput"
-	"sdp/internal/domain/targetadapter"
-	"sdp/internal/domain/waveplanner"
-	"sdp/internal/integration/cd"
-	"sdp/internal/integration/kubernetes"
-	"sdp/internal/integration/provisioner"
-	"sdp/internal/integration/secretstore"
-	"sdp/internal/persistence"
+	"idp/internal/domain"
+	"idp/internal/domain/configresolver"
+	"idp/internal/domain/infraplanner"
+	"idp/internal/domain/manifest"
+	"idp/internal/domain/resourceoutput"
+	"idp/internal/domain/targetadapter"
+	"idp/internal/domain/waveplanner"
+	"idp/internal/integration/cd"
+	"idp/internal/integration/kubernetes"
+	"idp/internal/integration/provisioner"
+	"idp/internal/integration/secretstore"
+	"idp/internal/persistence"
 )
 
 // Worker is the Deployment Worker: it claims execution jobs and executes them

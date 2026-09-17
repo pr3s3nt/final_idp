@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"sdp/internal/domain"
-	"sdp/internal/domain/resourceoutput"
-	"sdp/internal/integration/cd"
-	"sdp/internal/integration/kubernetes"
-	"sdp/internal/persistence"
+	"idp/internal/domain"
+	"idp/internal/domain/resourceoutput"
+	"idp/internal/integration/cd"
+	"idp/internal/integration/kubernetes"
+	"idp/internal/persistence"
 )
 
 // QueryService is the Deployment Query Service (the UC-04 subset UC-03 needs

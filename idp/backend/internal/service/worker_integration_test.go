@@ -13,14 +13,14 @@ import (
 	"testing"
 	"time"
 
-	"sdp/internal/domain"
-	"sdp/internal/domain/manifest"
-	"sdp/internal/domain/resourceoutput"
-	"sdp/internal/integration/cd"
-	"sdp/internal/integration/kubernetes"
-	"sdp/internal/integration/provisioner"
-	"sdp/internal/integration/secretstore"
-	"sdp/internal/service"
+	"idp/internal/domain"
+	"idp/internal/domain/manifest"
+	"idp/internal/domain/resourceoutput"
+	"idp/internal/integration/cd"
+	"idp/internal/integration/kubernetes"
+	"idp/internal/integration/provisioner"
+	"idp/internal/integration/secretstore"
+	"idp/internal/service"
 )
 
 // fakeProvisioner stands in for Terraform: it records calls and returns

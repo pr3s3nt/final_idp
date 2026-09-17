@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"sdp/internal/domain"
+	"idp/internal/domain"
 )
 
 // EnvironmentConfigurationRepository stores value sources and references per

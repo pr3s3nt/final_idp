@@ -10,14 +10,14 @@ import (
 	"sort"
 	"strings"
 
-	"sdp/internal/domain"
-	"sdp/internal/domain/graphbuilder"
-	"sdp/internal/domain/infraplanner"
-	"sdp/internal/domain/resourceresolver"
-	"sdp/internal/domain/targetadapter"
-	"sdp/internal/domain/waveplanner"
-	"sdp/internal/integration/secretstore"
-	"sdp/internal/persistence"
+	"idp/internal/domain"
+	"idp/internal/domain/graphbuilder"
+	"idp/internal/domain/infraplanner"
+	"idp/internal/domain/resourceresolver"
+	"idp/internal/domain/targetadapter"
+	"idp/internal/domain/waveplanner"
+	"idp/internal/integration/secretstore"
+	"idp/internal/persistence"
 )
 
 // ImageChecker verifies that an image tag exists in its registry.

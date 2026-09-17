@@ -13,10 +13,10 @@ import (
 	"strconv"
 	"strings"
 
-	"sdp/internal/domain"
-	"sdp/internal/domain/targetadapter"
-	"sdp/internal/integration/imageregistry"
-	"sdp/internal/service"
+	"idp/internal/domain"
+	"idp/internal/domain/targetadapter"
+	"idp/internal/integration/imageregistry"
+	"idp/internal/service"
 )
 
 //go:embed templates/*.html

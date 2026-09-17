@@ -1,4 +1,4 @@
-module sdp
+module idp
 
 go 1.27.1
 

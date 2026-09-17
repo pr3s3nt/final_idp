@@ -172,7 +172,7 @@ Mandatory rules:
 1. The backend Go module is:
 
    ```text
-   sdp
+   idp
    ```
 
 2. The demo-application Go module is:

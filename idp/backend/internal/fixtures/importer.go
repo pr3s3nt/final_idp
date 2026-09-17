@@ -13,9 +13,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"sdp/internal/domain"
-	"sdp/internal/integration/secretstore"
-	"sdp/internal/persistence"
+	"idp/internal/domain"
+	"idp/internal/integration/secretstore"
+	"idp/internal/persistence"
 )
 
 type Importer struct {

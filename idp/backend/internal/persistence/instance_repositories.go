@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"sdp/internal/domain"
+	"idp/internal/domain"
 )
 
 // ResourceInstanceRepository stores the durable state of provisioned or linked

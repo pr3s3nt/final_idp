@@ -6,9 +6,9 @@ import (
 	"context"
 	"fmt"
 
-	"sdp/internal/domain"
-	"sdp/internal/domain/manifest"
-	"sdp/internal/integration/secretstore"
+	"idp/internal/domain"
+	"idp/internal/domain/manifest"
+	"idp/internal/integration/secretstore"
 )
 
 // ResolveEnvironmentConfiguration resolves direct values, Resource Outputs,
