@@ -3,7 +3,7 @@ id: D07
 artifact: deferred-issue
 status: deferred
 last_reviewed: 2026-09-17
-source_record: ../archive/consolidated/deferred-issues-log.md
+source_record: "git:f58765e:docs/archive/consolidated/deferred-issues-log.md"
 ---
 
 # D07 — Secret bị bỏ rơi trong Secret Store

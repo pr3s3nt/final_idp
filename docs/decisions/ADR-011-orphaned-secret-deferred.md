@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: deferred
 last_reviewed: 2026-09-17
-source_record: ../archive/consolidated/design-decisions-log.md
+source_record: "git:f58765e:docs/archive/consolidated/design-decisions-log.md"
 ---
 
 # ADR-011 — Xử lý Secret bị orphan khi lưu lỗi

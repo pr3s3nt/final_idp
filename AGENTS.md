@@ -4,7 +4,7 @@
 
 Read `docs/INDEX.md` before changing requirements, design, implementation, tests, or operational documentation.
 
-The documentation layout migration is complete. Do not recreate the retired numbered directories, `sequence_digrams/`, `uc03/docs/`, the former root `uc03/` code directory, or loose historical root documents. The completed [migration record](docs/MIGRATION_PLAN.md) explains provenance; current destinations are indexed from `docs/INDEX.md`.
+The documentation layout migration is complete. Do not recreate `docs/archive/`, the retired numbered directories, `sequence_digrams/`, `uc03/docs/`, the former root `uc03/` code directory, or loose historical root documents. The completed [migration record](docs/MIGRATION_PLAN.md) explains provenance; current destinations are indexed from `docs/INDEX.md`.
 
 For a use-case-specific task, read that use case's `docs/use-cases/UC-*/README.md` context file and only then follow its links to shared artifacts.
 
@@ -24,7 +24,7 @@ For a use-case-specific task, read that use case's `docs/use-cases/UC-*/README.m
 - Current implementation status and design deviations: `docs/implementation/README.md`
 - Requirement-to-design-to-test mapping: `docs/traceability/README.md`
 
-Files under `docs/archive/` are historical and are never normative. Verification records describe observations from a particular execution; they do not define required behavior.
+Deleted historical sources remain available through Git provenance recorded in `docs/implementation/documentation-reconciliation.md`; they are never normative. Verification records describe observations from a particular execution; they do not define required behavior.
 
 ## Editing rules
 

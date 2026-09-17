@@ -1,5 +1,6 @@
 -- UC-03 schema. Follows docs/architecture/database/schema.md; extensions are marked
--- "DEVIATION" and listed in docs/archive/planning/uc03-original-implementation-plan.md.
+-- "DEVIATION"; historical planning source: git show
+-- f58765e:docs/archive/planning/uc03-original-implementation-plan.md.
 
 CREATE TYPE component_type AS ENUM (
     'WORKLOAD', 'RESOURCE_REQUIREMENT', 'ENVIRONMENT_VARIABLE_DEFINITION', 'SECRET_DEFINITION',

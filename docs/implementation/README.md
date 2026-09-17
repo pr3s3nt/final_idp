@@ -19,6 +19,6 @@ The Go implementation is under [`idp/backend/`](../../idp/backend/). Its local [
 - [UC-03 context](../use-cases/UC-03/README.md)
 - [UC-05 context](../use-cases/UC-05/README.md)
 
-## Historical plan
+## Historical plan provenance
 
-The [original UC-03 implementation plan](../archive/planning/uc03-original-implementation-plan.md) is a mixed historical artifact: it began before code existed and later accumulated status, deviation, and discussion notes. It contains stale statements and is not a source of current requirements or implementation status.
+The removed UC-03 implementation plan began before code existed and later accumulated status, deviation, and discussion notes. Its complete audit and exact Git retrieval command are preserved in the [documentation reconciliation](documentation-reconciliation.md). It is not a source of current requirements or implementation status.

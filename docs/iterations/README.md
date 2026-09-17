@@ -18,4 +18,4 @@ For future work, create one `Ixx-short-name.md` file before an iteration starts 
 - resulting commits and verification records;
 - unresolved work carried forward.
 
-Historical progress remains in the [archived implementation plan](../archive/planning/uc03-original-implementation-plan.md) and the [verification index](../verification/README.md), both classified appropriately rather than treated as current plans.
+Historical progress can be reconstructed from the Git source recorded in the [documentation reconciliation](../implementation/documentation-reconciliation.md) and from the [verification index](../verification/README.md); neither should be treated as a current iteration plan.

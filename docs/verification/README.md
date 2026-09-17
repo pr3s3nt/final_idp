@@ -17,4 +17,4 @@ Verification records capture what was executed in a particular environment on a 
 | 2026-09-16 | Fleet as an interchangeable CD provider | [Fleet provider](2026-09-16-fleet-provider.md) |
 | 2026-09-16 | UC-05 on kind-local and AWS | [UC-05 removal](2026-09-16-uc05.md) |
 
-The original consolidated evidence log is archived as [`uc03-verification-log.md`](../archive/consolidated/uc03-verification-log.md) for provenance. Add future executions as new immutable files rather than appending unrelated rounds to an existing snapshot.
+The removed consolidated evidence predecessor and its mapping to these snapshots are recorded in the [documentation reconciliation](../implementation/documentation-reconciliation.md). Add future executions as new immutable files rather than appending unrelated rounds to an existing snapshot.

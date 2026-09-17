@@ -8,7 +8,7 @@ last_reviewed: 2026-09-17
 
 # Documentation migration map
 
-This document is the completed execution record for the documentation refactor begun after commit `6c835d9`. It preserves the approved destination, semantic gates, and provenance of every legacy documentation group. [INDEX.md](INDEX.md) is the current reader entry point.
+This document is the completed execution record for the documentation refactor begun after commit `6c835d9`. It preserves the approved destination, semantic gates, and provenance of every legacy documentation group. Consolidated predecessors were temporarily retained under `docs/archive/`, passed semantic reconciliation, and were then removed from the working tree; their last complete copies are available at commit `f58765e`. [INDEX.md](INDEX.md) is the current reader entry point.
 
 ## Scope and invariants
 
@@ -34,6 +34,7 @@ The following invariants apply to every migration commit:
 | `MOVE` | Move the file to the exact target path and update all inbound links. |
 | `ARCHIVE` | Move a non-normative historical file under `docs/archive/`; it must not own current definitions. |
 | `VERIFY_THEN_ARCHIVE` | Manually audit the complete predecessor, record where each current concept is owned, migrate every gap, and only then archive it. Link/metadata checks alone are insufficient. |
+| `REMOVE_AFTER_RECONCILIATION` | Remove an audited historical copy from the working tree after recording an exact Git retrieval reference. |
 | `REMOVE_EMPTY_DIR` | Remove the directory after all tracked artifacts have moved out. |
 | `EXCLUDE` | The item is intentionally outside this migration. |
 
@@ -60,7 +61,7 @@ After migration, authority will be located as follows:
 | Design-to-code navigation and current deviations | `docs/implementation/` |
 | Execution evidence | `docs/verification/` |
 | Operator and demo instructions | `docs/operations/uc03/` |
-| Historical consolidated artifacts | `docs/archive/` |
+| Historical consolidated artifacts | Git history at commit `f58765e`; retrieval commands are recorded in `docs/implementation/documentation-reconciliation.md` |
 
 ## Mapping A — Use-case context packages
 
@@ -119,7 +120,7 @@ The database schema continues to be the sole owner of physical schema and litera
 
 ## Mapping C — Traceability, decisions, and backlog
 
-**Status:** completed on 2026-09-17. The matrix is canonical under `docs/traceability/`; the two consolidated logs passed the recorded semantic comparison and are archived.
+**Status:** completed on 2026-09-17. The matrix is canonical under `docs/traceability/`; the two consolidated logs passed the recorded semantic comparison and were later removed from the working tree.
 
 | Current path | Final path | Action |
 |---|---|---|
@@ -152,7 +153,7 @@ Before archiving the consolidated verification log, verify that all five dated s
 
 ### Mandatory reconciliation for `implementation_plan.md`
 
-The former `implementation_plan.md` was historical as a plan but contained current design and implementation facts. Its complete semantic audit is now recorded in [`documentation-reconciliation.md`](implementation/documentation-reconciliation.md), and the source has moved to `docs/archive/planning/uc03-original-implementation-plan.md`.
+The former `implementation_plan.md` was historical as a plan but contained current design and implementation facts. Its complete semantic audit is recorded in [`documentation-reconciliation.md`](implementation/documentation-reconciliation.md). The intermediate archived source is now available with `git show f58765e:docs/archive/planning/uc03-original-implementation-plan.md`.
 
 The following seven known gaps are mandatory checklist items, not the complete audit:
 
@@ -213,7 +214,7 @@ The audit procedure is manual and must be recorded in this table or a linked rec
 | `docs/GLOSSARY.md` | Same | `KEEP` |
 | `docs/DOCUMENTATION_RULES.md` | Same | `KEEP` |
 | `docs/iterations/README.md` | Same | `KEEP` |
-| `docs/archive/README.md` | Same | `KEEP` |
+| `docs/archive/README.md` | Git history | `REMOVE_AFTER_RECONCILIATION` |
 | `scripts/check_docs.py` | Same | `KEEP`, then strengthen final-layout checks |
 | `.github/workflows/documentation.yml` | Same | `KEEP`, then make PlantUML validation mandatory |
 | `usecase_realization_step_1_3.md` | `docs/archive/consolidated/usecase-realization-step-1-3.md` | `VERIFY_THEN_ARCHIVE` |
@@ -227,6 +228,7 @@ The audit procedure is manual and must be recorded in this table or a linked rec
 4. **DONE —** Compare split artifacts with consolidated predecessors and archive the predecessors. Results are recorded in [`documentation-reconciliation.md`](implementation/documentation-reconciliation.md).
 5. **DONE —** Move operational documents and archive the consolidated verification and implementation plan after [semantic reconciliation](implementation/documentation-reconciliation.md).
 6. **DONE —** Remove empty legacy directories, normalize remaining links, and enforce final-layout checks, including mandatory PlantUML validation in CI.
+7. **DONE —** Remove the reconciled `docs/archive/` compatibility area, record exact Git retrieval references, and prevent the directory from being recreated.
 
 Each numbered item should be a separate reviewable commit unless a move and its required link updates cannot safely be separated.
 
@@ -237,8 +239,8 @@ The migration is complete only when:
 - no tracked documentation remains in `01_*` through `06_*`, `sequence_digrams/`, or loose historical Markdown files at repository root;
 - every use case owns its specification, realization, sequence source, VOPC source, and context map;
 - every current concept has exactly one canonical owner;
-- archived files are clearly historical and no current definition depends on them;
-- no current concept exists only in `docs/archive/`, and every `VERIFY_THEN_ARCHIVE` move has a recorded, complete semantic reconciliation with no pending item;
+- deleted historical files are clearly non-normative and no current definition depends on them;
+- no current concept exists only in deleted Git history, and every `VERIFY_THEN_ARCHIVE` move has a recorded, complete semantic reconciliation with no pending item;
 - all internal links resolve and no workstation-specific paths exist;
 - PlantUML validation is installed and required in CI rather than skipped;
 - the final-layout rules are enforced by `scripts/check_docs.py`;

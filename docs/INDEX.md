@@ -48,17 +48,15 @@ This is the authoritative entry point for project documentation. It tells reader
 | Software architecture and shared models | Current | [Architecture index](architecture/README.md) |
 | Operation contracts | Current | [Operation contracts](architecture/contracts/operation-contracts.md) |
 | State machines | Current | [State-machine index](architecture/state-machines/README.md) |
-| Design decisions | Current split index plus original record | [Decision index](decisions/README.md) |
-| Deferred risks/issues | Current split index plus original details | [Backlog index](backlog/README.md) |
+| Design decisions | Current | [Decision index](decisions/README.md) |
+| Deferred risks/issues | Current | [Backlog index](backlog/README.md) |
 | Traceability | Current | [Traceability index](traceability/README.md) |
 | IDP source-code boundary | Current | [`idp/`](../idp/) |
 | UC-03/UC-05 backend | Current | [`idp/backend/`](../idp/backend/) |
 | Independent IDP frontend | Reserved; current UI is embedded in backend | [`idp/frontend/`](../idp/frontend/) |
 | Demo workloads | Current test/demo support | [`demo-apps/`](../demo-apps/) |
-| Original implementation plan | Historical | [Archived implementation plan](archive/planning/uc03-original-implementation-plan.md) |
 | End-to-end execution records | Evidence, not specification | [Verification index](verification/README.md) |
 | Iteration records | Current policy; historical work was not formally numbered | [Iteration index](iterations/README.md) |
-| Archived/superseded material | Historical, never normative | [Archive policy](archive/README.md) |
 | Documentation migration map | Historical completed record | [Migration plan](MIGRATION_PLAN.md) |
 
 ## Authority rules
@@ -70,6 +68,6 @@ If two documents disagree, use this order:
 3. Shared canonical architecture/schema artifacts for their model elements.
 4. The use-case realization and traceability mapping.
 5. Implementation documentation and code observations.
-6. Iteration plans, verification records, reviews, and archived material.
+6. Iteration plans, verification records, reviews, and deleted historical material.
 
 Do not resolve a genuine contradiction merely by choosing the newest file date. Record the contradiction in `docs/implementation/deviations.md` or the backlog and reconcile the canonical artifacts.

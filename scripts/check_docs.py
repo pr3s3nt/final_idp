@@ -39,6 +39,9 @@ LEGACY_ROOT_FILES = (
 RETIRED_CODE_DIRECTORIES = (
     "uc03",
 )
+RETIRED_DOCUMENTATION_DIRECTORIES = (
+    "docs/archive",
+)
 LEGACY_REFERENCE_EXEMPT_PATHS = {
     Path("AGENTS.md"),
     Path("docs/MIGRATION_PLAN.md"),
@@ -115,6 +118,9 @@ def main() -> int:
     for relative in RETIRED_CODE_DIRECTORIES:
         if (ROOT / relative).exists():
             errors.append(f"retired code directory must not exist: {relative}")
+    for relative in RETIRED_DOCUMENTATION_DIRECTORIES:
+        if (ROOT / relative).exists():
+            errors.append(f"retired documentation directory must not exist: {relative}")
 
     legacy_references = (*LEGACY_DIRECTORIES, *LEGACY_ROOT_FILES)
     for path in tracked_files():

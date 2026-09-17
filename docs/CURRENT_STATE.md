@@ -15,7 +15,7 @@ This status was reviewed on branch `uc03-impl` against commit `ab74aa2`; later c
 
 ## Documentation layout
 
-The AI-facing layout is complete. Sequence diagrams and per-use-case VOPCs live in `docs/use-cases/UC-*`; shared design artifacts live in `docs/architecture/`; the active coverage matrix lives in `docs/traceability/matrix.md`; operations live under `docs/operations/uc03/`. Consolidated sources, the original implementation plan, and the verification log passed semantic reconciliation before archive. Retired paths are blocked by `scripts/check_docs.py`; the completed work is recorded in [MIGRATION_PLAN.md](MIGRATION_PLAN.md).
+The AI-facing layout is complete. Sequence diagrams and per-use-case VOPCs live in `docs/use-cases/UC-*`; shared design artifacts live in `docs/architecture/`; the active coverage matrix lives in `docs/traceability/matrix.md`; operations live under `docs/operations/uc03/`. Consolidated sources, the original implementation plan, and the verification log passed [semantic reconciliation](implementation/documentation-reconciliation.md) before removal from the working tree. Retired paths are blocked by `scripts/check_docs.py`; the completed work is recorded in [MIGRATION_PLAN.md](MIGRATION_PLAN.md).
 
 ## Use-case baseline
 
@@ -42,8 +42,6 @@ The accepted rationale is indexed in [decisions/README.md](decisions/README.md).
 
 The authoritative list is [backlog/README.md](backlog/README.md). High-impact items include worker recovery after interruption, plan/input concurrency protection, exact teardown verification, and cleanup of CD/desired-state objects in resource-only teardown paths.
 
-## Historical documents
+## Historical provenance
 
-The [original implementation plan](archive/planning/uc03-original-implementation-plan.md) began as a pre-implementation plan and later accumulated progress notes and design discussions. Its current concepts have been migrated; it is now historical and non-normative.
-
-The [consolidated verification log](archive/consolidated/uc03-verification-log.md) records real executions on specific dates and environments. Dated records in the [verification index](verification/README.md) are the reviewable evidence snapshots; neither is a normative definition of system behavior.
+The removed implementation plan and consolidated logs are available through the exact Git references in the [documentation reconciliation](implementation/documentation-reconciliation.md). Their current concepts were migrated before removal. Dated records in the [verification index](verification/README.md) remain the reviewable evidence snapshots; neither Git history nor verification evidence defines required system behavior.

@@ -3,7 +3,7 @@ id: D09
 artifact: deferred-issue
 status: deferred
 last_reviewed: 2026-09-17
-source_record: ../archive/consolidated/deferred-issues-log.md
+source_record: "git:f58765e:docs/archive/consolidated/deferred-issues-log.md"
 ---
 
 # D09 — Resource dùng chung và resource riêng theo workload
