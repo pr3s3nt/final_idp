@@ -3,7 +3,7 @@ id: UC-01-UI-DESIGN
 artifact: user-interface-design
 status: current
 last_reviewed: 2026-09-18
-related: UC-01, ADR-016, ADR-017
+related: UC-01, ADR-016, ADR-017, ADR-018
 ---
 
 # UC-01 — Thiết kế giao diện Application Builder
@@ -180,12 +180,142 @@ cụ phục hồi, không phải import contract hoặc public API contract.
 
 ## Ngôn ngữ thị giác
 
-Dùng nền trung tính nhẹ, bề mặt làm việc màu trắng, chữ xanh navy đậm và một
-màu xanh dương cho action. Loại component có thể dùng hình dạng/label tiết chế
-và dư thừa thông tin (hình tròn cho workload, hình thoi cho resource), nhưng
-hình dạng và màu không thay thế text. Border và khoảng cách tạo phân cấp; tránh
-card trang trí lồng nhau, hero lớn và dashboard metric không hỗ trợ hoàn thành
-UC-01.
+### Nguyên tắc
 
 Kết quả cần mang cảm giác của một công cụ kỹ thuật: đủ gọn để so sánh cấu hình,
 nhưng không dày đặc đến mức che label, lỗi hoặc hướng dẫn phục hồi.
+
+Loại component có thể dùng hình dạng và label tiết chế, có dư thừa thông tin
+(hình tròn cho workload, hình thoi cho resource), nhưng hình dạng và màu không
+thay thế text. Border và khoảng cách tạo phân cấp; tránh card trang trí lồng
+nhau, hero lớn và dashboard metric không hỗ trợ hoàn thành UC-01.
+
+Người dùng UC-01 là Developer đã quen các công cụ kỹ thuật phổ biến. Giao diện
+theo quy ước quen thuộc thay vì xây một ngôn ngữ riêng, để giảm chi phí học.
+
+### Nền tảng token
+
+Hệ thị giác kế thừa [Primer](https://primer.style), design system mã nguồn mở
+của GitHub, qua gói `@primer/primitives` (giấy phép MIT). Bảng dưới ghi lại các
+giá trị đã chốt, đọc từ `dist/css/functional/themes/light.css` phiên bản
+`11.10.0`.
+
+Kế thừa phạm vi token: màu, thang khoảng cách, bo góc, độ đậm chữ và bộ icon
+[Octicons](https://primer.style/octicons) (MIT). Không kế thừa bố cục, header,
+tab bar hay các pattern feed của GitHub — kiến trúc thông tin của UC-01 giữ
+nguyên như mục *Kiến trúc thông tin* ở trên. Không sử dụng logo, tên hoặc nhận
+diện thương hiệu GitHub: giấy phép MIT phủ mã nguồn, không phủ nhận diện.
+
+### Chữ
+
+| Vai trò | Giá trị |
+|---|---|
+| Sans | `-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif` |
+| Mono | `ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace` |
+
+Không nạp webfont. Stack trên là phần dự phòng của `--fontStack-sansSerif`
+trong Primer, đã bỏ font thương hiệu `Mona Sans VF` đứng đầu theo quy tắc không
+kế thừa nhận diện. Hệ quả: không có yêu cầu mạng cho font, và giao diện dùng
+đúng font mà hệ điều hành của Developer đang hiển thị.
+
+**Mono dùng cho giá trị kỹ thuật, không dùng cho văn xuôi.** Áp cho: ô nhập
+định danh (application name, workload name, workload type, image repository,
+port, output name, Environment Variable name, Secret name), tên component trong
+topology và bảng tổng hợp, số version. Không áp cho description, hint, section
+help, thông báo lỗi. Mục đích là tách dữ liệu Developer nhập vào khỏi lời giải
+thích của hệ thống.
+
+Cỡ chữ và độ đậm:
+
+| Token | Giá trị | Dùng cho |
+|---|---|---|
+| `--text-xs` | 12px | hint, meta, caption, nhãn viết hoa, badge |
+| `--text-sm` | 14px | section help, mục điều hướng |
+| `--text-base` | 16px | chữ nền, ô nhập, nhãn field |
+| `--text-lg` | 20px | h2 tiêu đề workspace |
+| `--text-xl` | 24px | h1 tên application |
+| `--weight-normal` | 400 | chữ nền |
+| `--weight-medium` | 500 | nhãn, nút |
+| `--weight-semibold` | 600 | tiêu đề, nhấn mạnh |
+
+Primer dừng ở `600`. Không dùng `700` hay các mức lẻ như `550`, `650`, `750`.
+
+Nhịp dòng: `1.2` cho tiêu đề, `1.5` cho chữ nền. Không bóp `letter-spacing`
+của tiêu đề.
+
+### Khoảng cách
+
+Cơ số 4px, theo `--base-size-*` của Primer:
+
+```text
+4  8  12  16  20  24  28  32  40  48
+```
+
+Mọi `padding`, `margin` và `gap` lấy giá trị từ thang này. Không dùng giá trị
+nằm ngoài thang.
+
+### Bo góc
+
+| Token | Giá trị | Dùng cho |
+|---|---|---|
+| `--radius-small` | 3px | dấu hiệu nhỏ |
+| `--radius-medium` | 6px | nút, ô nhập, khối, shell |
+| `--radius-full` | 999px | badge dạng pill, đếm lỗi |
+
+`6px` là giá trị mặc định cho gần như mọi thứ.
+
+### Màu
+
+Tất cả lấy từ theme `light` của Primer. Tên token bên trái là tên dùng trong
+`styles/tokens.css`; tên Primer để đối chiếu khi cập nhật.
+
+| Token | Giá trị | Token Primer |
+|---|---|---|
+| `--canvas` | `#f6f8fa` | `bgColor-muted` |
+| `--surface` | `#ffffff` | `bgColor-default` |
+| `--surface-subtle` | `#f6f8fa` | `bgColor-muted` |
+| `--ink` | `#1f2328` | `fgColor-default` |
+| `--muted` | `#59636e` | `fgColor-muted` |
+| `--line` | `#d1d9e0` | `borderColor-default` |
+| `--line-translucent` | `#1f232826` | `borderColor-translucent` |
+| `--topbar` | `#25292e` | `bgColor-emphasis` |
+| `--accent` | `#0969da` | `fgColor-accent` |
+| `--accent-soft` | `#ddf4ff` | `bgColor-accent-muted` |
+| `--control-bg` | `#f6f8fa` | `control-bgColor-rest` |
+| `--control-bg-hover` | `#eff2f5` | `control-bgColor-hover` |
+| `--control-fg` | `#25292e` | `control-fgColor-rest` |
+| `--primary-bg` | `#1f883d` | `bgColor-success-emphasis` |
+| `--primary-bg-hover` | `#1c8139` | `button-primary-bgColor-hover` |
+| `--danger-text` | `#d1242f` | `fgColor-danger` |
+| `--danger-border` | `#cf222e` | `borderColor-danger-emphasis` |
+| `--danger-bg` | `#ffebe9` | `bgColor-danger-muted` |
+| `--success-text` | `#1a7f37` | `fgColor-success` |
+| `--success-bg` | `#dafbe1` | `bgColor-success-muted` |
+| `--warning-text` | `#9a6700` | `fgColor-attention` |
+| `--warning-bg` | `#fff8c5` | `bgColor-attention-muted` |
+| `--disabled-bg` | `#eff2f5` | `bgColor-disabled` |
+| `--disabled-fg` | `#818b98` | `fgColor-disabled` |
+
+Hai màu đánh dấu loại component nằm ngoài vai trò ngữ nghĩa của Primer:
+
+| Token | Giá trị | Dùng cho |
+|---|---|---|
+| `--workload-mark` | `#0969da` | vạch trái node workload, icon hình tròn |
+| `--resource-mark` | `#8250df` | vạch trái node resource, icon hình thoi |
+
+Mọi màu phải có token. Không viết giá trị hex trực tiếp trong rule.
+
+### Quy tắc áp dụng
+
+1. Nút primary màu `--primary-bg`. Mỗi vùng màn hình chỉ có một nút primary.
+   Nút trong banner luôn là secondary. Nút phá huỷ dùng secondary với chữ
+   `--danger-text`.
+2. Trạng thái cần chú ý dùng đúng màu ngữ nghĩa của nó. Badge draft chưa lưu
+   dùng cặp `--warning-text` trên `--warning-bg`, không dùng màu trung tính.
+3. Mục điều hướng đang chọn dùng nền `--accent-soft`, giữ nhãn text đầy đủ.
+4. Icon lấy từ Octicons, cỡ 16px, nhúng thẳng dưới dạng SVG nội tuyến. Không
+   thêm dependency thư viện icon. Giữ hình tròn cho workload và hình thoi cho
+   resource, và luôn kèm nhãn text.
+5. Chỉ một mức đổ bóng, áp cho editor shell. Phân cấp còn lại tạo bằng border
+   và khoảng cách.
+6. Giao diện chỉ có chế độ nền sáng. Nền tối nằm ngoài phạm vi UC-01.

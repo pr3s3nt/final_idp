@@ -28,5 +28,6 @@ The split ADRs below are the AI-friendly decision index. The removed chronologic
 | [ADR-015](ADR-015-separate-remove-use-case.md) | Separate UC-05 removal use case | Accepted |
 | [ADR-016](ADR-016-client-owned-drafts.md) | Browser-owned UC-01/UC-02 drafts with optimistic concurrency | Accepted |
 | [ADR-017](ADR-017-react-web-frontend.md) | React web frontend for UC-01, served from the backend origin | Accepted |
+| [ADR-018](ADR-018-primer-design-tokens.md) | Primer design tokens as the visual foundation of the web frontend | Accepted |
 
 An ADR with a deferred outcome records that deferral was accepted; the unresolved technical work remains canonical in the corresponding backlog item.
