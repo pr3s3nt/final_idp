@@ -40,12 +40,18 @@ server (`idp serve`) serves `dist/` under `/ui/`; see the
 
 | Path | Role |
 |---|---|
-| `src/api/` | JSON DTO types and the API client (list, load for edit, Save) |
-| `src/draft/model.ts`, `reducer.ts` | `ApplicationDefinitionDraft` in the browser and its local edit actions |
-| `src/draft/storage.ts` | `sessionStorage` adapter with schema version and shape checks |
-| `src/draft/validation.ts` | Client-side UC-01 rules for fast feedback; the backend re-validates |
-| `src/pages/` | Application list and editor state/orchestration |
-| `src/components/BuilderNavigation.tsx` | Component-focused builder navigation and validation routing |
-| `src/components/Sections.tsx` | Overview, Workload, Resource and read-only Review workspaces |
-| `src/components/Field.tsx`, `ValidationSummary.tsx` | Accessible fields and validation navigation |
-| `src/router.ts` | Minimal History API router for `/ui/` paths |
+| `src/app/` | `App` shell and the minimal History API router for `/ui/` paths |
+| `src/features/application-definition/` | Everything that realizes UC-01, mirroring [`docs/use-cases/UC-01/`](../../docs/use-cases/UC-01/README.md) |
+| `  api/` | JSON DTO types and the API client (list, load for edit, Save) |
+| `  draft/model.ts`, `reducer.ts` | `ApplicationDefinitionDraft` in the browser and its local edit actions |
+| `  draft/storage.ts` | `sessionStorage` adapter with schema version and shape checks |
+| `  draft/validation.ts` | Client-side UC-01 rules for fast feedback; the backend re-validates |
+| `  hooks/useApplicationDraft.ts` | Initial load, restored draft and the dirty flag for one editor session |
+| `  hooks/useDraftExport.ts` | Copy and download the draft when Save reports a conflict |
+| `  pages/` | Application list and editor state/orchestration |
+| `  components/BuilderNavigation.tsx` | Component-focused builder navigation and validation routing |
+| `  components/OverviewWorkspace.tsx` and the Workload, Resource and Review workspaces | One file per workspace of the builder |
+| `  components/ValidationSummary.tsx` | Validation navigation from a problem to the field that owns it |
+| `src/shared/ui/` | `Field` inputs and `ErrorBoundary`; no use-case knowledge |
+| `src/styles/` | Design tokens and stylesheets, one concern per file; values are fixed by [ADR-018](../../docs/decisions/ADR-018-primer-design-tokens.md) |
+| `src/test/` | Vitest setup and shared fixtures |
