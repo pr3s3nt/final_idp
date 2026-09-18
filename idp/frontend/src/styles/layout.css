@@ -3,7 +3,7 @@
 .topbar a:last-child { color: var(--disabled-fg); font-weight: var(--weight-medium); }
 .topbar a[aria-current='page'] { color: var(--on-emphasis); }
 
-.page { width: min(100%, 88rem); margin: 0 auto; padding: var(--space-6); }
+.page { width: 100%; padding: var(--space-6); }
 .page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-5); }
 h1, h2, h3, h4, p { overflow-wrap: anywhere; }
 h1 { margin: 0; font-size: var(--text-xl); line-height: var(--leading-tight); font-weight: var(--weight-semibold); }

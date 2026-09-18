@@ -1,5 +1,5 @@
 .builder-workspace { min-width: 0; padding: var(--space-6) var(--space-8) var(--space-10); background: var(--surface); }
-.workspace-panel { width: min(100%, 58rem); margin: 0 auto; }
+.workspace-panel { width: 100%; }
 .workspace-heading { margin-bottom: var(--space-6); display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); }
 .workspace-heading .muted { max-width: 48rem; margin: var(--space-1) 0 0; }
 .workspace-heading h2 { font-family: var(--font-mono); }
