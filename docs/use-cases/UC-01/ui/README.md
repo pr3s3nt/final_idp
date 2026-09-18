@@ -6,190 +6,186 @@ last_reviewed: 2026-09-18
 related: UC-01, ADR-016, ADR-017
 ---
 
-# UC-01 — Application Builder UI design
+# UC-01 — Thiết kế giao diện Application Builder
 
-## Purpose and boundary
+## Mục đích và ranh giới
 
-This document defines the accepted interaction and screen design for the
-UC-01 React editor. The [UC-01 specification](../specification.md) remains the
-owner of required product behaviour; this document turns that behaviour into
-a reviewable interface contract for humans and coding agents.
+Tài liệu này định nghĩa thiết kế màn hình và tương tác đã được chấp nhận cho
+React editor của UC-01. [Đặc tả UC-01](../specification.md) vẫn là tài liệu sở
+hữu hành vi sản phẩm bắt buộc; tài liệu này chuyển hành vi đó thành hợp đồng
+giao diện mà con người và AI agent có thể review.
 
-The editor is a **structured application builder**. Developers edit real
-components in focused forms and use a read-only review topology to verify the
-result. The topology is not a drag-and-drop authoring surface.
+Editor là một **Application Builder có cấu trúc**. Developer chỉnh sửa từng
+component trong form tập trung và dùng topology chỉ đọc ở `Review` để kiểm tra
+kết quả. Topology không phải bề mặt chỉnh sửa kéo-thả.
 
-UC-01 targets a desktop web browser. There is no mobile application, React
-Native client, phone/tablet-specific layout or separate mobile workflow in
-scope.
+UC-01 chỉ nhắm đến trình duyệt web trên desktop. Ứng dụng mobile, React Native,
+layout riêng cho điện thoại/máy tính bảng và luồng mobile riêng đều nằm ngoài
+phạm vi.
 
-## Design principles
+## Nguyên tắc thiết kế
 
-1. Organize the editor around the application components a Developer thinks
-   about: application, workloads and resources.
-2. Keep all properties of one workload together: identity, runtime, outputs,
-   configuration requirements and dependencies.
-3. Make the current editing location, validation state and unsaved state
-   visible without requiring the Developer to scan one long form.
-4. Use Review as a deliberate final check. It summarizes the draft and shows
-   topology without introducing another editable representation.
-5. Preserve the browser-owned draft, complete-draft Save and optimistic
-   concurrency behavior defined by ADR-016.
-6. Prefer native controls, readable labels and keyboard navigation over
-   visually novel controls. Do not require a UI framework or icon library.
+1. Tổ chức editor theo các component mà Developer dùng để hình dung
+   application: application, workload và resource.
+2. Giữ mọi thuộc tính của một workload ở cùng một nơi: định danh, runtime,
+   output, configuration requirement và dependency.
+3. Luôn cho thấy vị trí đang chỉnh sửa, trạng thái validation và trạng thái
+   chưa lưu mà không bắt Developer phải quét một form dài.
+4. Dùng `Review` làm bước kiểm tra cuối có chủ đích. Nó tổng hợp draft và hiển
+   thị topology mà không tạo thêm một biểu diễn có thể chỉnh sửa.
+5. Giữ nguyên draft do browser sở hữu, cơ chế Save toàn bộ draft và optimistic
+   concurrency theo ADR-016.
+6. Ưu tiên control gốc của trình duyệt, label dễ đọc và điều hướng bằng bàn
+   phím. Không bắt buộc UI framework hoặc thư viện icon.
 
-## Information architecture
+## Kiến trúc thông tin
 
-The editor shell contains three persistent regions on desktop:
+Editor có ba vùng cố định trên giao diện desktop:
 
-- **Header** — back navigation, application identity, version/draft status,
-  Discard and Save.
-- **Builder navigation** — Overview, one item for each Workload, one item for
-  each Resource, add-component actions and Review. Items show a problem count
-  when their fields have validation problems.
-- **Workspace** — the focused form or the read-only Review view.
+- **Header** — điều hướng quay lại, định danh application, trạng thái
+  version/draft, `Discard` và `Save application`.
+- **Builder navigation** — `Overview`, một mục cho từng Workload, một mục cho
+  từng Resource, các action thêm component và `Review`. Mỗi mục hiển thị số lỗi
+  khi các field thuộc nó có lỗi validation.
+- **Workspace** — form đang được tập trung hoặc màn `Review` chỉ đọc.
 
-Overview edits application name and description and explains the boundary of
-UC-01. A Workload workspace owns its general fields, outputs, Environment
-Variable definitions, Secret definitions and dependencies. A Resource
-workspace owns resource name and type. Review owns the topology, validation
-summary and component/configuration summary.
+`Overview` chỉnh sửa application name, description và giải thích ranh giới của
+UC-01. Workspace của Workload sở hữu các field chung, output, Environment
+Variable definition, Secret definition và dependency. Workspace của Resource
+sở hữu resource name và type. `Review` sở hữu topology, validation summary và
+phần tổng hợp component/configuration.
 
-Changing a component name must not change navigation identity: React keys and
-selection use stable component IDs, while visible labels update immediately.
+Đổi tên component không được làm thay đổi định danh điều hướng: React key và
+selection dùng component ID cố định, còn label hiển thị được cập nhật ngay.
 
-## Desktop web diagrams
+## Sơ đồ giao diện web desktop
 
-- [Component workspace](application-builder.puml) defines the persistent
-  header, component navigation and focused editor workspace.
-- [Review workspace](review.puml) defines validation, read-only topology and
+- [Workspace chỉnh sửa component](application-builder.puml) định nghĩa header
+  cố định, navigation theo component và workspace đang được tập trung.
+- [Workspace Review](review.puml) định nghĩa validation, topology chỉ đọc và
   component summary.
-- [Editor state and recovery](states.puml) defines load, draft, validation,
-  Save, failure and conflict transitions.
+- [Trạng thái editor và phục hồi](states.puml) định nghĩa các chuyển tiếp khi
+  load, chỉnh draft, validation, Save, lỗi và conflict.
 
-The Review topology may use a deterministic CSS/HTML layout. It does not need
-to be a general graph canvas. Every relationship must also be available as
-text so the view remains understandable to assistive technology and for large
-graphs.
+Topology trong `Review` có thể dùng layout CSS/HTML xác định trước, không cần
+là graph canvas tổng quát. Mọi quan hệ cũng phải được biểu diễn bằng text để
+người dùng công nghệ hỗ trợ và application graph lớn vẫn hiểu được nội dung.
 
-## Desktop web boundary
+## Ranh giới desktop web
 
-The header, navigation and workspace are designed as one desktop-browser
-surface. A narrower desktop window may wrap controls or scroll a contained
-table as defensive behavior, but this is not a separate mobile layout and is
-not a mobile acceptance target. Fields and actions must not disappear when the
-window is resized.
+Header, navigation và workspace tạo thành một bề mặt duy nhất trên trình duyệt
+desktop. Khi cửa sổ desktop bị thu hẹp, control có thể xuống dòng hoặc table có
+thể cuộn trong vùng chứa như một cơ chế phòng vệ; đây không phải layout mobile
+riêng và không phải mục tiêu acceptance cho mobile. Không được làm biến mất
+field hoặc action khi cửa sổ đổi kích thước.
 
-## Interaction rules
+## Quy tắc tương tác
 
-### Navigation and editing
+### Điều hướng và chỉnh sửa
 
-- New application opens Overview. An existing application also opens Overview
-  after its latest version and any tab-local draft are restored.
-- Adding a Workload or Resource creates it in the client draft and selects its
-  workspace immediately.
-- Removing the selected component first asks for confirmation. Confirmation
-  removes the component and its dependencies through the draft reducer, then
-  selects the nearest remaining item or Overview.
-- Dependency source is implicit in a Workload workspace. The Developer chooses
-  only the component that the current workload depends on. Existing relations
-  are displayed and removable there.
-- Review is always reachable. It does not mutate the draft.
+- Application mới mở tại `Overview`. Application hiện có cũng mở tại
+  `Overview` sau khi tải version mới nhất và phục hồi draft của tab nếu có.
+- `Add workload` hoặc `Add resource` tạo component trong client draft và mở
+  ngay workspace của component đó.
+- Khi xóa component đang chọn, UI phải yêu cầu xác nhận trước. Sau khi xác nhận,
+  draft reducer xóa component cùng các dependency liên quan rồi chọn component
+  gần nhất còn lại hoặc `Overview`.
+- Trong workspace Workload, nguồn của dependency được hiểu ngầm là workload
+  hiện tại. Developer chỉ chọn component mà workload phụ thuộc vào. Quan hệ đã
+  tồn tại được hiển thị và có thể xóa tại đây.
+- `Review` luôn có thể truy cập và không làm thay đổi draft.
 
 ### Validation
 
-- Local validation runs from the current draft. Field messages appear next to
-  the related control after the first Save attempt or when server validation
-  returns that field.
-- Navigation badges show problem counts for Overview, each component and
-  Review. Selecting an item exposes its problems; Review provides links back
-  to the affected workspace or field.
-- Save validates the complete draft. If local problems exist, the editor opens
-  Review, focuses its validation summary and performs no API request.
-- Backend validation is authoritative and is merged into the same navigation,
-  field and Review presentation.
+- Local validation chạy trên draft hiện tại. Lỗi field xuất hiện cạnh control
+  tương ứng sau lần Save đầu tiên hoặc khi backend trả về lỗi cho field đó.
+- Badge trong navigation hiển thị số lỗi của `Overview`, từng component và
+  `Review`. Khi chọn một mục, Developer nhìn thấy lỗi thuộc mục đó; `Review`
+  cung cấp link quay lại đúng workspace hoặc field bị ảnh hưởng.
+- `Save application` kiểm tra toàn bộ draft. Nếu có lỗi local, editor mở
+  `Review`, focus validation summary và không gửi API request.
+- Validation của backend là nguồn có thẩm quyền và được hợp nhất vào cùng cách
+  trình bày ở navigation, field và `Review`.
 
-### Draft status and actions
+### Trạng thái draft và action
 
-- Header status distinguishes `Saved`, `Unsaved changes`, `Restored draft` and
-  `Saving…`. For an existing definition it also shows the base version and the
-  version that a successful Save will create.
-- Save and Discard remain in the header on every workspace. Save sends the
-  complete draft once; field and navigation changes make no API call.
-- Discard asks for confirmation only when changes exist. It clears the local
-  draft and reloads the durable definition (or an empty new definition).
-- Success confirms the saved version and clears the local draft as defined by
-  ADR-016.
+- Header phân biệt `Saved`, `Unsaved changes`, `Restored draft` và `Saving…`.
+  Với definition đã tồn tại, header cũng hiển thị base version và version sẽ
+  được tạo nếu Save thành công.
+- `Save application` và `Discard` luôn nằm trên header ở mọi workspace. Save
+  gửi toàn bộ draft đúng một lần; thay đổi field hoặc navigation không gọi API.
+- `Discard` chỉ yêu cầu xác nhận khi có thay đổi. Action này xóa local draft và
+  tải lại durable definition hoặc khởi tạo definition mới rỗng.
+- Save thành công xác nhận version đã lưu và xóa local draft theo ADR-016.
 
-### Save conflict
+### Conflict khi Save
 
-A `DRAFT_CONFLICT` must not replace or clear the Developer's draft. The editor
-shows a blocking conflict panel with:
+`DRAFT_CONFLICT` không được thay thế hoặc xóa draft của Developer. Editor hiển
+thị conflict panel chặn luồng với:
 
-1. an explanation that another version was saved first;
-2. **Copy draft JSON**, so work can be kept outside the tab;
-3. **Download draft JSON**, when browser download support is available;
-4. **Load latest version**, which explicitly confirms that the local draft will
-   be discarded.
+1. giải thích rằng một version mới hơn đã được lưu trước;
+2. **`Copy draft JSON`** để Developer giữ công việc bên ngoài tab;
+3. **`Download draft JSON`** khi trình duyệt hỗ trợ download;
+4. **`Load latest version`** với xác nhận rõ rằng local draft sẽ bị bỏ.
 
-Automatic merge and a side-by-side diff are outside UC-01. The exported JSON
-is a recovery aid, not an import or public API contract.
+Tự động merge và diff song song nằm ngoài UC-01. JSON được export chỉ là công
+cụ phục hồi, không phải import contract hoặc public API contract.
 
-## Screen states
+## Trạng thái màn hình
 
-| State | Presentation and available recovery |
+| Trạng thái | Cách hiển thị và phục hồi |
 |---|---|
-| Initial load | Workspace skeleton/status; no editable empty flash |
-| Load failed | Error explanation, Try again and Back to applications |
-| Application not found | Not-found explanation and Back to applications |
-| Clean draft | `Saved` status; Discard disabled |
-| Dirty draft | `Unsaved changes · kept in this tab`; Save and Discard enabled |
-| Restored draft | Informational message and `Restored draft` header status |
-| Saving | Save disabled with `Saving…`; current content remains visible |
-| Validation failed | Review selected, summary focused, badges and field errors visible |
-| Save failed | Non-destructive error; Retry uses the normal Save action |
-| Conflict | Draft preserved; copy/download recovery and confirmed Load latest |
-| Save succeeded | Saved-version message, clean draft, durable version reloaded |
+| Bắt đầu load | Hiển thị trạng thái/skeleton workspace, không nháy form rỗng có thể chỉnh sửa |
+| Load thất bại | Giải thích lỗi, `Try again` và `Back to applications` |
+| Không tìm thấy application | Giải thích không tìm thấy và `Back to applications` |
+| Draft sạch | Trạng thái `Saved`; `Discard` bị disable |
+| Draft có thay đổi | `Unsaved changes · kept in this tab`; cho phép Save và Discard |
+| Draft được phục hồi | Thông báo và trạng thái header `Restored draft` |
+| Đang lưu | Disable Save với `Saving…`; nội dung hiện tại vẫn hiển thị |
+| Validation thất bại | Chọn `Review`, focus summary, hiển thị badge và lỗi field |
+| Save thất bại | Lỗi không phá hủy draft; thử lại bằng action Save thông thường |
+| Conflict | Giữ draft; cho copy/download và chỉ load bản mới nhất sau xác nhận |
+| Save thành công | Thông báo version đã lưu, draft sạch và durable version được tải lại |
 
-## Action-to-state/API mapping
+## Ánh xạ action sang state/API
 
-| User action | Client draft/session state | HTTP request |
+| Action của người dùng | Trạng thái client draft/session | HTTP request |
 |---|---|---|
-| Open new application | Restore `new` draft or create empty draft | None |
-| Open existing application | Load latest, then restore matching tab-local draft when present | One `GET /api/application-definitions/{applicationId}` |
-| Select workspace | Selection only | None |
-| Add, edit, rename or remove component/field | Reducer update and `sessionStorage` update | None |
-| Open Review | Selection only; validate current draft for display | None |
-| Discard | Clear `sessionStorage`; reinitialize/reload | Existing application performs the normal load GET |
-| Save valid new application | Keep draft until success, then clear it | One `POST /api/application-definitions` |
-| Save valid existing application | Keep draft until success, then clear it | One `POST /api/application-definitions/{applicationId}/versions` |
-| Copy/download conflicted draft | No state change | None |
-| Load latest after conflict | Confirm, clear local draft, load latest | One load GET |
+| Mở application mới | Phục hồi draft `new` hoặc tạo draft rỗng | Không |
+| Mở application hiện có | Tải version mới nhất, sau đó phục hồi draft của tab khi có | Một `GET /api/application-definitions/{applicationId}` |
+| Chọn workspace | Chỉ thay đổi selection | Không |
+| Thêm, sửa, đổi tên hoặc xóa component/field | Cập nhật reducer và `sessionStorage` | Không |
+| Mở `Review` | Chỉ thay đổi selection; validate draft hiện tại để hiển thị | Không |
+| `Discard` | Xóa `sessionStorage`; khởi tạo hoặc tải lại | Application hiện có thực hiện load GET thông thường |
+| Save application mới hợp lệ | Giữ draft đến khi thành công rồi xóa | Một `POST /api/application-definitions` |
+| Save application hiện có hợp lệ | Giữ draft đến khi thành công rồi xóa | Một `POST /api/application-definitions/{applicationId}/versions` |
+| Copy/download draft conflict | Không thay đổi state | Không |
+| `Load latest version` sau conflict | Xác nhận, xóa local draft và tải version mới nhất | Một load GET |
 
-## Accessibility contract
+## Hợp đồng accessibility
 
-- The shell has one `h1`; workspace sections use an ordered heading hierarchy.
-- Builder navigation is a labelled navigation region. The selected workspace
-  uses `aria-current`; problem badges include screen-reader text.
-- Every control has a persistent label. Meaning is never communicated by
-  color or an icon alone.
-- Validation summary and save/load failures use appropriate live-region roles;
-  focus moves only after an explicit Save attempt or recovery action.
-- Add/remove controls include the affected component or requirement name in
-  their accessible name.
-- All editing, navigation, confirmation and conflict-recovery actions work by
-  keyboard.
-- The interface respects reduced-motion preferences and maintains visible
-  focus and sufficient contrast.
+- Shell có đúng một `h1`; các section trong workspace dùng thứ tự heading hợp
+  lý.
+- Builder navigation là một navigation region có label. Workspace đang chọn
+  dùng `aria-current`; badge lỗi có text cho screen reader.
+- Mọi control có label cố định. Không truyền đạt ý nghĩa chỉ bằng màu hoặc icon.
+- Validation summary và lỗi save/load dùng live-region role phù hợp; focus chỉ
+  di chuyển sau action Save hoặc phục hồi do người dùng chủ động thực hiện.
+- Accessible name của action thêm/xóa chứa tên component hoặc requirement bị
+  ảnh hưởng.
+- Mọi action chỉnh sửa, điều hướng, xác nhận và phục hồi conflict hoạt động bằng
+  bàn phím.
+- Giao diện tôn trọng thiết lập giảm chuyển động, duy trì focus rõ ràng và độ
+  tương phản phù hợp.
 
-## Visual language
+## Ngôn ngữ thị giác
 
-Use a quiet neutral canvas, white work surfaces, dark navy text and one blue
-action color. Component types may use restrained, redundant shapes/labels
-(circle for workload, diamond for resource), but shape and color never replace
-text. Borders and spacing establish hierarchy; avoid nested decorative cards,
-large hero areas and dashboard metrics that do not help complete UC-01.
+Dùng nền trung tính nhẹ, bề mặt làm việc màu trắng, chữ xanh navy đậm và một
+màu xanh dương cho action. Loại component có thể dùng hình dạng/label tiết chế
+và dư thừa thông tin (hình tròn cho workload, hình thoi cho resource), nhưng
+hình dạng và màu không thay thế text. Border và khoảng cách tạo phân cấp; tránh
+card trang trí lồng nhau, hero lớn và dashboard metric không hỗ trợ hoàn thành
+UC-01.
 
-The result should feel like an engineering tool: compact enough to compare
-configuration, but not so dense that labels, errors or recovery guidance are
-hidden.
+Kết quả cần mang cảm giác của một công cụ kỹ thuật: đủ gọn để so sánh cấu hình,
+nhưng không dày đặc đến mức che label, lỗi hoặc hướng dẫn phục hồi.

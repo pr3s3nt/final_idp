@@ -1,5 +1,5 @@
 @startuml
-title UC-01 desktop web — Read-only Review workspace
+title UC-01 desktop web — Workspace Review chỉ đọc
 
 skinparam backgroundColor #F3F5F8
 skinparam shadowing false
@@ -10,14 +10,14 @@ skinparam rectangle {
   FontColor #182230
 }
 
-rectangle "React web route\n/ui/applications/{applicationId}" as Browser {
-  rectangle "Header\n← Applications  |  shop-app  |  Version 2 · Unsaved  |  Discard  |  Save application" as Header
+rectangle "Route React web\n/ui/applications/{applicationId}" as Browser {
+  rectangle "Vùng header\n← Applications  |  shop-app  |  Version 2 · Unsaved  |  Discard  |  Save application" as Header
 
-  rectangle "Builder navigation\n\nOverview\n● backend       1 problem\n○ frontend      1 problem\n◆ postgresql\n\nReview          2 problems" as Navigation
+  rectangle "Điều hướng Application Builder\n\nOverview\n● backend       1 lỗi\n○ frontend      1 lỗi\n◆ postgresql\n\nReview          2 lỗi" as Navigation
 
   rectangle "Review application" as Review {
-    rectangle "Validation summary\n2 problems must be fixed before saving\nEach item navigates to its owning workspace and field" as Validation
-    rectangle "Topology · Read only\n\nfrontend ──depends on──▶ backend\n                            │\n                            └──depends on──▶ postgresql\n\nEvery relation is also available as text" as Topology
+    rectangle "Validation summary\n2 problems must be fixed before saving\nMỗi lỗi điều hướng về đúng workspace và field sở hữu" as Validation
+    rectangle "Topology · Read only\n\nfrontend ──depends on──▶ backend\n                            │\n                            └──depends on──▶ postgresql\n\nMọi quan hệ cũng được biểu diễn bằng text" as Topology
     rectangle "Component summary\n2 workloads · 1 resource · 2 dependencies\nbackend · 1 output · 1 variable · 1 secret" as Summary
 
     Validation -[hidden]down- Topology
@@ -29,9 +29,9 @@ rectangle "React web route\n/ui/applications/{applicationId}" as Browser {
 }
 
 note right of Review
-  Review never mutates the draft.
-  The topology is verification, not
-  a drag-and-drop authoring surface.
+  Review không bao giờ thay đổi draft.
+  Topology dùng để kiểm tra, không phải
+  bề mặt chỉnh sửa kéo-thả.
 end note
 
 @enduml

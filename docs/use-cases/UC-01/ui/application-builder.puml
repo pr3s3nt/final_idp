@@ -1,5 +1,5 @@
 @startuml
-title UC-01 desktop web — Component workspace
+title UC-01 desktop web — Workspace chỉnh sửa component
 
 skinparam backgroundColor #F3F5F8
 skinparam shadowing false
@@ -10,23 +10,23 @@ skinparam rectangle {
   FontColor #182230
 }
 
-rectangle "React web route\n/ui/applications/{applicationId}" as Browser {
-  rectangle "Header\n← Applications  |  shop-app  |  Version 2 · Unsaved  |  Discard  |  Save application" as Header
+rectangle "Route React web\n/ui/applications/{applicationId}" as Browser {
+  rectangle "Vùng header\n← Applications  |  shop-app  |  Version 2 · Unsaved  |  Discard  |  Save application" as Header
 
-  rectangle "Builder navigation\n\nAPPLICATION\n  Overview\n\nWORKLOADS\n  ● backend    2 problems\n  ○ frontend\n  + Add workload\n\nRESOURCES\n  ◆ postgresql\n  + Add resource\n\nREVIEW\n  Review       2 problems" as Navigation
+  rectangle "Điều hướng Application Builder\n\nAPPLICATION\n  Overview\n\nWORKLOADS\n  ● backend    2 lỗi\n  ○ frontend\n  + Add workload\n\nRESOURCES\n  ◆ postgresql\n  + Add resource\n\nREVIEW\n  Review       2 lỗi" as Navigation
 
-  rectangle "Focused Workload workspace\n\nWorkload / backend                         Remove workload\n─────────────────────────────────────────────────────────\nGeneral\n  Name · Type · Image repository · Application port\n\nOutputs\n  endpoint                                      Remove\n\nConfiguration requirements\n  Environment variables             Secrets\n  DB_HOST · Required                DB_PASSWORD · Required\n\nDependencies\n  backend depends on postgresql" as Workspace
+  rectangle "Workspace Workload đang được chọn\n\nWorkload / backend                         Remove workload\n─────────────────────────────────────────────────────────\nGeneral\n  Workload name · Workload type\n  Image repository · Application port\n\nOutputs\n  endpoint                                      Remove\n\nConfiguration requirements\n  Environment variables             Secrets\n  DB_HOST · Required                DB_PASSWORD · Required\n\nDependencies\n  backend depends on postgresql" as Workspace
 
   Header -[hidden]down- Navigation
   Navigation -[hidden]right- Workspace
 }
 
 note right of Workspace
-  Component ID, not its editable name,
-  owns selection and React identity.
+  Component ID, không phải tên có thể sửa,
+  sở hữu selection và định danh React.
 
-  Field and navigation edits update the
-  browser-owned draft without an API call.
+  Thay đổi field hoặc navigation cập nhật
+  draft do browser sở hữu mà không gọi API.
 end note
 
 @enduml

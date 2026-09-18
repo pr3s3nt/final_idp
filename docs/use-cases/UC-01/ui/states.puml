@@ -1,42 +1,51 @@
 @startuml
-title UC-01 desktop web — Editor state and recovery
+title UC-01 desktop web — Trạng thái editor và phục hồi
 
 hide empty description
 
-[*] --> Loading : open existing application
-[*] --> Clean : open new application
+state "Đang tải" as Loading
+state "Draft sạch" as Clean
+state "Draft được phục hồi" as Restored
+state "Load thất bại" as LoadFailed
+state "Draft có thay đổi" as Dirty
+state "Review có lỗi" as ReviewWithProblems
+state "Đang lưu" as Saving
+state "Conflict" as Conflict
 
-Loading --> Clean : latest definition loaded
-Loading --> Restored : tab-local draft restored
-Loading --> LoadFailed : request failed
+[*] --> Loading : mở application hiện có
+[*] --> Clean : mở application mới
+
+Loading --> Clean : đã tải definition mới nhất
+Loading --> Restored : đã phục hồi draft của tab
+Loading --> LoadFailed : request thất bại
 LoadFailed --> Loading : Try again
 
-Clean --> Dirty : edit field or component
-Restored --> Dirty : continue editing
-Dirty --> Dirty : edit / copy or download draft JSON
-Dirty --> ReviewWithProblems : Save [client validation fails]
-Dirty --> Saving : Save [client validation passes]
+Clean --> Dirty : sửa field hoặc component
+Restored --> Dirty : tiếp tục chỉnh sửa
+Dirty --> Dirty : chỉnh sửa / copy hoặc download draft JSON
+Dirty --> ReviewWithProblems : Save [client validation thất bại]
+Dirty --> Saving : Save [client validation thành công]
 
-ReviewWithProblems --> Dirty : correct a problem
-ReviewWithProblems --> Saving : Save [valid]
+ReviewWithProblems --> Dirty : sửa một lỗi
+ReviewWithProblems --> Saving : Save [hợp lệ]
 
-Saving --> Clean : Save succeeded / clear local draft
-Saving --> Dirty : Save failed / preserve draft
-Saving --> Conflict : DRAFT_CONFLICT / preserve draft
-Saving --> ReviewWithProblems : backend validation failed
+Saving --> Clean : Save thành công / xóa local draft
+Saving --> Dirty : Save thất bại / giữ draft
+Saving --> Conflict : DRAFT_CONFLICT / giữ draft
+Saving --> ReviewWithProblems : backend validation thất bại
 
 Conflict --> Dirty : Copy or Download draft JSON
-Conflict --> Loading : confirm Load latest
+Conflict --> Loading : xác nhận Load latest version
 
-Dirty --> Clean : confirm Discard / new application
-Dirty --> Loading : confirm Discard / existing application
-Clean --> [*] : leave editor
+Dirty --> Clean : xác nhận Discard / application mới
+Dirty --> Loading : xác nhận Discard / application hiện có
+Clean --> [*] : rời editor
 
 note right of Conflict
-  No automatic merge.
-  Load latest is destructive only after
-  explicit confirmation; recovery export
-  does not change browser draft state.
+  Không tự động merge.
+  Load latest version chỉ bỏ draft sau khi
+  xác nhận rõ ràng; export để phục hồi
+  không thay đổi trạng thái draft trong browser.
 end note
 
 @enduml
