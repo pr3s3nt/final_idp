@@ -2,7 +2,7 @@
 id: PROJECT-CURRENT-STATE
 artifact: project-status
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Current project state
@@ -11,7 +11,10 @@ last_reviewed: 2026-09-17
 
 The project follows UP. UC-03 and UC-05 are in a late Construction/verification state: executable software exists and has been exercised on local Kubernetes and AWS. UC-01 is implemented with a React web editor and verified by automated tests. The whole product is not in Transition because UC-02 and the complete UC-04 experience are not implemented as full product use cases.
 
-This status was reviewed on branch `uc03-impl` against commit `ab74aa2`, and the UC-01 row after the UC-01 implementation of 2026-09-18; later changes must update this document when they change the baseline.
+This status was reviewed on branch `uc03-impl` against commit `ab74aa2`; the
+UC-01 implementation and component-focused Application Builder were reviewed
+through commit `1417b5e` on 2026-09-18. Later changes must update this document
+when they change the baseline.
 
 ## Documentation layout
 
@@ -21,7 +24,7 @@ The AI-facing layout is complete. Sequence diagrams and per-use-case VOPCs live 
 
 | ID | Status | Notes |
 |---|---|---|
-| UC-01 | Implemented, automated tests | React editor under `/ui/applications` with a same-origin JSON API ([ADR-017](decisions/ADR-017-react-web-frontend.md)). Not exercised in a deployed environment; no authentication (IMP-013). Fixtures still seed demo applications. |
+| UC-01 | Implemented, automated tests | Component-focused React Application Builder under `/ui/applications` with a same-origin JSON API ([ADR-017](decisions/ADR-017-react-web-frontend.md), [latest UI evidence](verification/2026-09-18-uc01-application-builder.md)). Not exercised in a deployed environment; no authentication (IMP-013). Fixtures still seed demo applications. |
 | UC-02 | Designed | Environment configuration is currently supplied through fixtures/import rather than the complete interactive workflow. |
 | UC-03 | Implemented and E2E verified | Verified with an existing internal kind cluster and with AWS infrastructure. Fleet is the default CD provider for `kind-local`; AWS continues to use Argo CD. |
 | UC-04 | Partially implemented | The implementation exposes the execution status/query path required to observe UC-03. Treat the full UC-04 specification as design scope, not as fully delivered scope. |
