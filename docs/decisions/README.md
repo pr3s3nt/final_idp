@@ -30,5 +30,6 @@ The split ADRs below are the AI-friendly decision index. The removed chronologic
 | [ADR-017](ADR-017-react-web-frontend.md) | React web frontend for UC-01, served from the backend origin | Accepted |
 | [ADR-018](ADR-018-primer-design-tokens.md) | Primer design tokens as the visual foundation of the web frontend | Accepted |
 | [ADR-019](ADR-019-local-authentication-boundary.md) | Local accounts behind a provider-neutral authentication boundary | Accepted |
+| [ADR-020](ADR-020-uc02-catalog-version-and-target.md) | UC-02 resolves valid outputs from a selected Catalog Version and deployment target | Accepted |
 
 An ADR with a deferred outcome records that deferral was accepted; the unresolved technical work remains canonical in the corresponding backlog item.

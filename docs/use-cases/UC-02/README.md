@@ -27,11 +27,11 @@ Designed. The current Go implementation imports Environment Configuration data a
 ## Open issues
 
 - [D7 — Orphaned secret after save failure](../../backlog/D07-orphaned-secret.md)
-- [D12 — Catalog version used to list outputs](../../backlog/D12-uc02-catalog-version.md)
 
 ## Resolved decisions
 
 - [ADR-016 — Browser-owned drafts](../../decisions/ADR-016-client-owned-drafts.md)
+- [ADR-020 — Catalog Version and deployment target selected in UC-02](../../decisions/ADR-020-uc02-catalog-version-and-target.md)
 
 ## Implementation entry points
 

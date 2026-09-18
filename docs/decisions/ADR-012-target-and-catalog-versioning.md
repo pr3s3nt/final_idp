@@ -9,7 +9,7 @@ source_record: "git:f58765e:docs/archive/consolidated/design-decisions-log.md"
 
 # ADR-012 — Deployment target, hạ tầng và Catalog Version
 
-**Current status (2026-09-17):** accepted and applied to the current design and implementation. Statements below that code was “chưa sửa” describe the historical decision point. Remaining policy questions are tracked in [D10](../backlog/D10-old-catalog-version-policy.md), [D11](../backlog/D11-catalog-formula-change.md), and [D12](../backlog/D12-uc02-catalog-version.md).
+**Current status (2026-09-18):** accepted and applied to the current design and implementation. Statements below that code was “chưa sửa” describe the historical decision point. Remaining policy questions are tracked in [D10](../backlog/D10-old-catalog-version-policy.md) and [D11](../backlog/D11-catalog-formula-change.md); D12 is resolved by [ADR-020](ADR-020-uc02-catalog-version-and-target.md).
 
 **Vấn đề:** ở UC-03, Developer chọn deployment target và IDP "reconcile infrastructure". Nhưng thiết kế chưa nói có những loại nơi triển khai nào, cụm Kubernetes lấy từ đâu, và VPC mà cụm cần được dựng ở bước nào.
 
@@ -43,8 +43,8 @@ Ví dụ: deploy `shop-app` (frontend, backend, PostgreSQL) lên AWS. IDP phải
 
 - **D10:** platform khóa hoặc ngừng hỗ trợ phiên bản catalog cũ.
 - **D11:** phiên bản catalog mới đổi hẳn công thức của một resource đang chạy (vd Postgres trong cụm → database dùng chung): báo lỗi hay tự dựng lại.
-- **D12:** UC-02 lấy danh sách output từ phiên bản catalog nào, khi cấu hình không gắn với phiên bản catalog.
+- **D12:** UC-02 lấy danh sách output từ phiên bản catalog nào, khi cấu hình không gắn với phiên bản catalog. Đã được chốt sau đó bởi [ADR-020](ADR-020-uc02-catalog-version-and-target.md).
 
-**Sẽ sửa:** use case realization (đặc tả UC-03, UC-04, Bước 1–3), sequence UC-03 và UC-04, VOPC, domain model, ERD, operation contracts 4–6 và 11, state machine Resource Instance, traceability. Contract 3 (UC-02) chưa sửa vì phụ thuộc D12.
+**Sẽ sửa:** use case realization (đặc tả UC-03, UC-04, Bước 1–3), sequence UC-03 và UC-04, VOPC, domain model, ERD, operation contracts 4–6 và 11, state machine Resource Instance, traceability. Contract 3 (UC-02) chưa sửa vì phụ thuộc D12; ADR-020 sau đó chốt D12 và sửa contract 3.
 
 **Đã áp dụng (nhánh `uc03-impl`, 15/09/2026):** use case realization (đặc tả UC-03, UC-04; Bước 1–3 UC-03), sequence UC-03 và UC-04, VOPC (`vopc_uc03`, design class diagram, README), domain model, domain objects, persistence classification, ERD (`catalog_version`, `resource_definition`, `application_component`, `resource_instance`, `deployment`), contracts 4, 5, 6, 11, state machine Resource Instance và ghi chú Deployment, traceability; phần hoãn ghi vào D10, D11, D12. Code trong `idp/backend/` chưa sửa theo quyết định này.

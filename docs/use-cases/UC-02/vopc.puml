@@ -10,6 +10,7 @@ package "Boundary/UI" {
   class "Web UI" as WebUI <<boundary>> {
     -configurationDraft: EnvironmentConfigurationDraft
     +selectEnvironment(applicationId, environment)
+    +selectCatalogVersionAndTarget(draft, catalogVersion, target)
     +setDirectConfigurationValue(draft, item, value)
     +bindResourceOutput(draft, item, resource, output)
     +bindWorkloadOutput(draft, variable, workload, output)
@@ -23,6 +24,8 @@ package "Boundary/UI" {
     +environment: String
     +baseApplicationDefinitionVersion: Integer
     +baseConfigurationRevision: String?
+    +catalogVersion: String
+    +deploymentTarget: String
     +bindings: List
   }
   class "Browser sessionStorage" as DraftStore <<client storage>> {
@@ -34,7 +37,7 @@ package "Boundary/UI" {
     -configurationService: ConfigurationService
     +selectEnvironment(applicationId, environment)
     +setDirectConfigurationValue(secret, secretValue)
-    +requestResourceOutputs(resource)
+    +requestResourceOutputs(resource, catalogVersion, target)
     +requestWorkloadOutputs(workload)
     +saveEnvironmentConfiguration(completeDraft, bases)
   }
@@ -44,7 +47,7 @@ package "Application services" {
   class "Environment Configuration Service" as ConfigurationService <<control>> {
     +selectEnvironment(applicationId, environment)
     +setDirectConfigurationValue(secret, secretValue)
-    +requestResourceOutputs(resource)
+    +requestResourceOutputs(resource, catalogVersion, target)
     +requestWorkloadOutputs(workload)
     +saveEnvironmentConfiguration(completeDraft, bases)
   }
@@ -53,8 +56,9 @@ package "Application services" {
 package "Domain components" {
   class "Resource Output Catalog / Resource Definition Query" as ResourceCatalog <<control>> {
     -resourceDefinitions: List
-    +listValidOutputs(resource)
-    +listValidSensitiveOutputs(resource)
+    +resolveDefinition(resource, catalogVersion, target)
+    +listValidOutputs(resource, catalogVersion, target)
+    +listValidSensitiveOutputs(resource, catalogVersion, target)
   }
   class "Workload Output Catalog" as WorkloadCatalog <<control>> {
     -workloadDefinitions: List
@@ -62,7 +66,7 @@ package "Domain components" {
   }
   class "Environment Configuration Validator" as Validator <<control>> {
     -validationRules: List
-    +validateEnvironmentConfiguration(configuration)
+    +validateEnvironmentConfiguration(configuration, resolvedDefinitions)
   }
 }
 
@@ -102,6 +106,9 @@ note right of ConfigurationDraft
   CLIENT-OWNED DTO, not a domain object.
   sessionStorage excludes plaintext Secret.
   The two base values enable optimistic concurrency.
+  catalogVersion and deploymentTarget select which
+  Resource Definition applies; ADR-020 keeps both
+  out of durable storage.
 end note
 
 note right of ConfigurationService
@@ -114,7 +121,9 @@ end note
 note right of Validator
   Validates against the latest Application Definition version:
   every referenced output must belong to a resource or workload
-  that the owning workload depends on.
+  that the owning workload depends on, and a resource output must
+  exist in the Resource Definition resolved from the draft's
+  catalogVersion and deploymentTarget.
   Environment is one of STAGING, PRODUCTION.
 end note
 

@@ -14,21 +14,25 @@ Chịu trách nhiệm khai báo giá trị cấu hình theo từng environment, 
 
 ## System operations
 
-- **selectEnvironment()** - Tải requirements và Environment Configuration hiện hành để Web UI tạo client-owned draft cho environment đã chọn.
+- **selectEnvironment()** - Tải requirements, Environment Configuration hiện hành, danh sách Catalog Version và danh sách deployment target để Web UI tạo client-owned draft cho environment đã chọn.
 
 - **loadConfigurationRequirements()** - Lấy danh sách Environment Variable và Secret đã được khai báo từ UC-01.
 
 - **setDirectConfigurationValue()** - Web UI gán direct value cho Environment Variable trong draft; với Secret, plaintext được gửi qua secure staging flow và UI chỉ giữ opaque reference.
 
+- **selectCatalogVersionAndTarget()** - Web UI ghi phiên bản Catalog Version và deployment target Developer chọn vào draft. Hai giá trị này quyết định Resource Definition nào áp dụng cho mỗi Resource Requirement, nên quyết định danh sách output hợp lệ. Chúng không được persist ([ADR-020](../../decisions/ADR-020-uc02-catalog-version-and-target.md)).
+
 - **bindResourceOutput()** - Web UI gán configuration trong draft vào một Resource Output của resource mà workload depends on, ví dụ DB_HOST → postgresql.host.
 
 - **bindWorkloadOutput()** - Web UI gán configuration trong draft vào một Workload Output của workload mà workload chứa biến depends on, ví dụ BACKEND_URL → backend.endpoint.
 
-- **validateEnvironmentConfiguration()** - Kiểm tra giá trị, resource, workload và output reference có hợp lệ hay không, gồm việc output được tham chiếu thuộc thành phần mà workload depends on.
+- **validateEnvironmentConfiguration()** - Kiểm tra giá trị, resource, workload và output reference có hợp lệ hay không, gồm việc output được tham chiếu thuộc thành phần mà workload depends on, và việc output của resource nằm trong Resource Definition mà Catalog Version + deployment target của draft resolve ra.
 
 - **saveEnvironmentConfiguration()** - Nhận toàn bộ draft, kiểm tra `baseApplicationDefinitionVersion` và `baseConfigurationRevision`, rồi lưu configuration; stale draft bị từ chối không ghi dữ liệu.
 
 UC-02 chỉ lưu value hoặc reference, chưa resolve giá trị thật của Resource Output / Workload Output. Việc resolve thuộc UC-03 khi deployment thực sự diễn ra.
+
+Catalog Version và deployment target trong draft chỉ dùng để chọn Resource Definition lúc hiển thị và lúc validate. Chúng không được ghi vào `environment_configuration`, và UC-03 vẫn kiểm tra lại configuration theo Catalog Version của lần deploy.
 
 ## Participating components
 
@@ -44,7 +48,7 @@ UC-02 chỉ lưu value hoặc reference, chưa resolve giá trị thật của R
 
 ### Domain components
 
-- **Resource Output Catalog / Resource Definition Query** - Cung cấp danh sách output hợp lệ mà một resource có thể expose để Developer lựa chọn.
+- **Resource Output Catalog / Resource Definition Query** - Resolve một Resource Requirement về đúng một Resource Definition theo Catalog Version, deployment context suy ra từ deployment target và applicability condition của definition - cùng quy tắc UC-03 dùng - rồi cung cấp `exposedOutputs` và `sensitiveOutputs` của definition đó để Developer lựa chọn.
 
 - **Workload Output Catalog** - Cung cấp danh sách output mà workload có thể expose, ví dụ endpoint.
 

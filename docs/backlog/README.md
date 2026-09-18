@@ -23,7 +23,6 @@ For smaller project tasks that need to be remembered but are not yet scheduled, 
 | [D09](D09-shared-and-workload-resources.md) | Shared and per-workload resources | Medium | UC-03 | Deferred |
 | [D10](D10-old-catalog-version-policy.md) | Policy for old Catalog Versions | Medium | UC-03 | Deferred |
 | [D11](D11-catalog-formula-change.md) | Catalog formula replacement | High | UC-03 | Deferred |
-| [D12](D12-uc02-catalog-version.md) | Catalog Version used by UC-02 | Medium | UC-02, UC-03 | Deferred |
 | [D13](D13-teardown-removal-verification.md) | Verify removal before terminal status | High | UC-05 | Deferred |
 | [D14](D14-teardown-delivery-cleanup.md) | Clean delivery objects in resource-only teardown | High | UC-05 | Deferred |
 | [D15](D15-authenticated-draft-isolation.md) | Isolate browser drafts between authenticated users | High | UC-01, UC-02, UC-06 | Deferred |
@@ -33,5 +32,6 @@ For smaller project tasks that need to be remembered but are not yet scheduled, 
 | ID | Summary | Main scope | Resolution |
 |---|---|---|---|
 | [D01](D01-draft-lifetime.md) | Draft lifetime across requests | UC-01, UC-02 | [ADR-016](../decisions/ADR-016-client-owned-drafts.md) |
+| [D12](D12-uc02-catalog-version.md) | Catalog Version used by UC-02 | UC-02, UC-03 | [ADR-020](../decisions/ADR-020-uc02-catalog-version-and-target.md) |
 
 Impact values are navigation aids, not a formal delivery commitment. Assign a target iteration before starting work rather than silently changing a deferred item.

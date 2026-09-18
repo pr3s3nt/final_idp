@@ -29,6 +29,13 @@ note over API, SecretStore
   Secret staging/cleanup remains governed by D07.
 end note
 
+note over UI, ResourceCatalog
+  ADR-020: the Developer selects a Catalog Version and a deployment
+  target. Both stay in the draft and are never persisted. They resolve
+  each Resource Requirement to exactly one Resource Definition, whose
+  exposed/sensitive outputs are the only valid choices.
+end note
+
 Developer -> UI: Open application Configuration page
 Developer -> UI: Select environment (staging or production)
 UI -> API: selectEnvironment(applicationId, environment)
@@ -37,9 +44,15 @@ Service -> AppRepo: loadConfigurationRequirements(applicationId)
 AppRepo --> Service: Latest Application Definition version,\nworkloads, variables, secrets and dependencies
 Service -> ConfigRepo: find(applicationId, environment)
 ConfigRepo --> Service: Current configuration and opaque revision, or none
-Service --> API: Requirements and configuration with\nbaseApplicationDefinitionVersion + baseConfigurationRevision
+Service -> ResourceCatalog: listCatalogVersions()
+ResourceCatalog --> Service: Catalog versions, newest first
+Service --> API: Requirements, configuration, catalog versions and targets with\nbaseApplicationDefinitionVersion + baseConfigurationRevision
 API --> UI: Display variables and secrets by workload
 UI -> DraftStore: restore matching draft or\nsave initialized non-sensitive draft
+
+Developer -> UI: Select Catalog Version (newest by default) and deployment target
+UI -> UI: selectCatalogVersionAndTarget(configurationDraft, catalogVersion, target)
+UI -> DraftStore: save(nonSensitiveConfigurationDraft)
 
 loop For each Environment Variable
     Developer -> UI: Select value source
@@ -48,9 +61,9 @@ loop For each Environment Variable
         UI -> UI: setDirectConfigurationValue(configurationDraft, variable, value)
     else Resource Output
         Developer -> UI: Select a resource that the workload depends on
-        UI -> API: requestResourceOutputs(resource)
-        API -> Service: requestResourceOutputs(resource)
-        Service -> ResourceCatalog: listValidOutputs(resource)
+        UI -> API: requestResourceOutputs(resource, catalogVersion, target)
+        API -> Service: requestResourceOutputs(resource, catalogVersion, target)
+        Service -> ResourceCatalog: listValidOutputs(resource, catalogVersion, target)
         ResourceCatalog --> Service: Valid resource outputs
         Service --> API: Valid resource outputs
         API --> UI: Display valid resource outputs
@@ -82,9 +95,9 @@ loop For each Secret
         API --> UI: Replace plaintext with opaque reference
     else Sensitive Resource Output
         Developer -> UI: Select a depended-on resource\nand its sensitive output
-        UI -> API: requestResourceOutputs(resource)
-        API -> Service: requestResourceOutputs(resource)
-        Service -> ResourceCatalog: listValidSensitiveOutputs(resource)
+        UI -> API: requestResourceOutputs(resource, catalogVersion, target)
+        API -> Service: requestResourceOutputs(resource, catalogVersion, target)
+        Service -> ResourceCatalog: listValidSensitiveOutputs(resource, catalogVersion, target)
         ResourceCatalog --> Service: Valid sensitive outputs
         Service --> API: Valid sensitive outputs
         API --> UI: Display valid sensitive outputs
@@ -101,7 +114,9 @@ Service -> AppRepo: findLatestVersion(applicationId)
 AppRepo --> Service: Current latest Application Definition version
 Service -> ConfigRepo: findRevision(applicationId, environment)
 ConfigRepo --> Service: Current configuration revision or none
-Service -> Validator: validateEnvironmentConfiguration(completeDraft)
+Service -> ResourceCatalog: resolveDefinitions(completeDraft.catalogVersion, completeDraft.target)
+ResourceCatalog --> Service: One Resource Definition per Resource Requirement
+Service -> Validator: validateEnvironmentConfiguration(completeDraft, resolvedDefinitions)
 Validator --> Service: Validation successful
 Service -> ConfigRepo: saveIfBasesMatch(completeDraft, bases)
 note right of ConfigRepo

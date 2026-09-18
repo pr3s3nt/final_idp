@@ -37,6 +37,8 @@ Application có Environment Variable hoặc Secret cần cấu hình.
 
 Configuration của application cho environment được lưu.
 
+Phiên bản catalog và deployment target Developer chọn không được lưu.
+
 Các reference tới Resource Output hoặc Workload Output được lưu.
 
 Việc thay đổi configuration chưa tự động deploy application.
@@ -53,10 +55,19 @@ staging production
 
 **IDP** hiển thị Environment Variable và Secret đã được khai báo cho từng workload trong UC-01.
 
+Developer chọn phiên bản Platform Catalog và deployment target sẽ dùng cho
+environment này. **IDP** chọn sẵn phiên bản catalog mới nhất. Hai giá trị này
+cho **IDP** biết mỗi Resource Requirement sẽ dùng Resource Definition nào, nên
+mới biết resource đó có những output nào.
+
+Ví dụ: `postgresql` trên AWS dùng Aurora và có output `reader_host`, còn
+`postgresql` trên cụm nội bộ dùng Postgres trong cụm và không có output đó.
+
 Web UI tạo một `EnvironmentConfigurationDraft` từ phiên bản Application
 Definition mới nhất và configuration hiện hành. Draft mang
 `baseApplicationDefinitionVersion` cùng `baseConfigurationRevision` nếu
-configuration đã tồn tại.
+configuration đã tồn tại, và mang phiên bản catalog cùng deployment target
+Developer vừa chọn.
 
 Draft thuộc browser tab hiện tại. Các phần không nhạy cảm được phục hồi sau
 refresh trong cùng tab; plaintext Secret không được giữ để phục hồi.
@@ -89,7 +100,7 @@ Resource: postgresql
 
 Output: host
 
-**IDP** chỉ hiển thị các resource mà workload chứa biến này depends on, cùng danh sách output hợp lệ của từng resource để Developer lựa chọn.
+**IDP** chỉ hiển thị các resource mà workload chứa biến này depends on, cùng danh sách output hợp lệ của từng resource để Developer lựa chọn. Danh sách output là `exposedOutputs` của đúng một Resource Definition mà phiên bản catalog và deployment target đã chọn resolve ra cho resource đó.
 
 ### Workload Output
 
@@ -130,11 +141,13 @@ Thiếu giá trị bắt buộc.
 
 Resource không tồn tại.
 
-Output được chọn không tồn tại.
+Output được chọn không tồn tại trong Resource Definition mà phiên bản catalog và deployment target đã chọn resolve ra.
 
 Workload output không hợp lệ.
 
 Output thuộc resource hoặc workload mà workload chứa biến không depends on.
+
+Phiên bản catalog hoặc deployment target đã chọn không resolve được Resource Definition cho một Resource Requirement.
 
 ### A2 – Draft đã cũ
 
@@ -179,6 +192,14 @@ Configuration không có phiên bản. Khi lưu, **IDP** kiểm tra configuratio
 Configuration tham chiếu workload, resource, Environment Variable Definition và Secret Definition qua ID cố định, nên vẫn đúng khi các thành phần đó đổi tên ở phiên bản sau.
 
 **IDP** chỉ cho Developer chọn những output mà Resource Definition hoặc workload expose.
+
+Developer chọn phiên bản Platform Catalog và deployment target ở UC-02 chỉ để
+**IDP** biết Resource Definition nào áp dụng cho mỗi Resource Requirement, từ đó
+biết danh sách output hợp lệ. Hai giá trị này nằm trong draft, không được lưu
+cùng Environment Configuration, nên configuration vẫn không gắn với phiên bản
+catalog hay deployment target nào. Khi deploy, UC-03 kiểm tra lại configuration
+theo phiên bản catalog được chọn cho lần deploy đó và báo A1 nếu output không
+tồn tại ở phiên bản ấy ([ADR-020](../../decisions/ADR-020-uc02-catalog-version-and-target.md)).
 
 Workload chỉ được tham chiếu output của resource hoặc workload mà nó đã khai báo depends on trong UC-01. Nếu cần output của thành phần khác, Developer phải bổ sung dependency ở UC-01 trước.
 
