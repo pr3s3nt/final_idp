@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Problem } from '../api/types';
+import type { Problem } from '../../features/application-definition/api/types';
 
 /** DOM id of the input for a field path such as workloads.<id>.name. */
 export function fieldDomId(field: string): string {

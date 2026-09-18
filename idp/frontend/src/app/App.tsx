@@ -1,7 +1,7 @@
-import { httpApplicationApi, type ApplicationApi } from './api/client';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { ApplicationEditorPage } from './pages/ApplicationEditorPage';
-import { ApplicationListPage } from './pages/ApplicationListPage';
+import { httpApplicationApi, type ApplicationApi } from '../features/application-definition/api/client';
+import { ErrorBoundary } from '../shared/ui/ErrorBoundary';
+import { ApplicationEditorPage } from '../features/application-definition/pages/ApplicationEditorPage';
+import { ApplicationListPage } from '../features/application-definition/pages/ApplicationListPage';
 import { linkHandler, parseRoute, useLocation } from './router';
 
 export function App({ api = httpApplicationApi }: { api?: ApplicationApi }) {

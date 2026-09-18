@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ApiResult, ApplicationApi } from '../api/client';
 import type { ApplicationListItem } from '../api/types';
 import { loadDraft } from '../draft/storage';
-import { linkHandler } from '../router';
+import { linkHandler } from '../../../app/router';
 
 export function ApplicationListPage({ api }: { api: ApplicationApi }) {
   const [result, setResult] = useState<ApiResult<ApplicationListItem[]> | null>(null);

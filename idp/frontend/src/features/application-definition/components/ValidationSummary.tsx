@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import type { Problem } from '../api/types';
-import { fieldDomId } from './Field';
+import { fieldDomId } from '../../../shared/ui/Field';
 
 interface Props {
   problems: Problem[];

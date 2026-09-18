@@ -1,6 +1,6 @@
 import { draftFromDto, newId, type ApplicationDraft } from './model';
 import { validateDraft } from './validation';
-import { BACKEND_ID, DB_ID, shopDto } from '../test/fixtures';
+import { BACKEND_ID, DB_ID, shopDto } from '../../../test/fixtures';
 
 function shop(): ApplicationDraft {
   return draftFromDto(shopDto());

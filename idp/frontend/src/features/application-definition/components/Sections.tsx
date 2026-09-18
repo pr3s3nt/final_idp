@@ -1,7 +1,7 @@
 import type { Dispatch } from 'react';
 import { componentLabel, type ApplicationDraft, type ResourceDraft, type WorkloadDraft } from '../draft/model';
 import type { ConfigGroup, DraftAction } from '../draft/reducer';
-import { fieldDomId, RowErrors, SelectField, TextField, type ProblemsByField } from './Field';
+import { fieldDomId, RowErrors, SelectField, TextField, type ProblemsByField } from '../../../shared/ui/Field';
 
 interface WorkspaceProps {
   draft: ApplicationDraft;

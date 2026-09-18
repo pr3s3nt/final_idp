@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import type { ApplicationApi } from '../api/client';
 import type { Problem } from '../api/types';
 import { BuilderNavigation, workspaceForField, type Workspace } from '../components/BuilderNavigation';
-import { groupProblems } from '../components/Field';
+import { groupProblems } from '../../../shared/ui/Field';
 import { OverviewWorkspace, ResourceWorkspace, ReviewWorkspace, WorkloadWorkspace } from '../components/Sections';
 import { ValidationSummary } from '../components/ValidationSummary';
 import { draftFromDto, draftToDto, emptyDraft, newResource, newWorkload, type ApplicationDraft } from '../draft/model';
 import { draftReducer, type DraftAction } from '../draft/reducer';
 import { loadDraft, removeDraft, saveDraft } from '../draft/storage';
 import { validateDraft } from '../draft/validation';
-import { linkHandler, navigate } from '../router';
+import { linkHandler, navigate } from '../../../app/router';
 
 interface Props {
   api: ApplicationApi;

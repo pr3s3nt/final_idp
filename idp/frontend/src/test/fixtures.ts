@@ -1,6 +1,6 @@
 import { vi, type Mock } from 'vitest';
-import type { ApiResult, ApplicationApi } from '../api/client';
-import type { ApplicationDefinitionDto, ApplicationListItem } from '../api/types';
+import type { ApiResult, ApplicationApi } from '../features/application-definition/api/client';
+import type { ApplicationDefinitionDto, ApplicationListItem } from '../features/application-definition/api/types';
 
 export const APP_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 export const BACKEND_ID = '11111111-1111-4111-8111-111111111111';
