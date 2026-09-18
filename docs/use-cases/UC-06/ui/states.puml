@@ -1,7 +1,9 @@
 @startuml
 title UC-06 - Trạng thái giao diện đăng nhập
 
-[*] --> Ready : GET /login
+[*] --> LoadingContext : GET /ui/login
+LoadingContext --> Ready : GET /api/auth/login-context\ntrả nonce + safe returnTo
+LoadingContext --> Authenticated : session đã hợp lệ
 Ready --> Submitting : Submit hợp lệ ở client
 Submitting --> Authenticated : Credential hợp lệ\nsession đã persist
 Authenticated --> [*] : Redirect safe return_to
@@ -28,7 +30,7 @@ end note
 
 note right of Submitting
   Chỉ một request đang chạy.
-  Button: Đang đăng nhập…
+  Button: Signing in…
 end note
 
 note right of FormExpired

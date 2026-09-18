@@ -52,11 +52,11 @@ enable/disable tài khoản qua CLI trên máy chủ tin cậy.
 ## Luồng chính
 
 1. Developer mở một trang được bảo vệ khi chưa có session hợp lệ.
-2. IDP ghi nhận đường dẫn nội bộ cần quay lại và chuyển browser tới trang đăng
-   nhập. API request không được redirect; API nhận response `401` theo hợp đồng
-   JSON hiện hành.
-3. IDP hiển thị form gồm username, password và action **Đăng nhập**.
-4. Developer nhập thông tin và chọn **Đăng nhập**.
+2. IDP ghi nhận đường dẫn nội bộ cần quay lại và chuyển browser tới React route
+   `/ui/login`. API request không được redirect; API nhận response `401` theo
+   hợp đồng JSON hiện hành.
+3. IDP hiển thị form gồm **Username**, **Password** và action **Sign in**.
+4. Developer nhập thông tin và chọn **Sign in**.
 5. IDP chuẩn hóa username thành chữ thường, áp dụng rate limit theo tài khoản và
    nguồn request, rồi tìm Local User Account; account không tồn tại dùng một
    dummy encoded hash cố định cho bước kiểm tra tiếp theo.
@@ -69,7 +69,7 @@ enable/disable tài khoản qua CLI trên máy chủ tin cậy.
    `/ui/applications` khi không có đường dẫn hợp lệ.
 9. Với mỗi request được bảo vệ, middleware kiểm tra hash token, trạng thái
    session, thời hạn và trạng thái tài khoản, sau đó gắn `Principal` vào request.
-10. Developer chọn **Đăng xuất**. IDP kiểm tra CSRF, thu hồi session hiện tại,
+10. Developer chọn **Sign out**. IDP kiểm tra CSRF, thu hồi session hiện tại,
     xóa cookie và hiển thị lại trang đăng nhập.
 
 ## Luồng ngoại lệ
@@ -78,7 +78,7 @@ enable/disable tài khoản qua CLI trên máy chủ tin cậy.
 
 Nếu username không tồn tại, tài khoản không `ACTIVE` hoặc password không đúng,
 IDP không tiết lộ trường hợp nào đã xảy ra. UI hiển thị cùng một thông báo:
-“Tên đăng nhập hoặc mật khẩu không đúng”. Không tạo session.
+“The username or password is incorrect.” Không tạo session.
 
 ### A2 — Bị giới hạn tần suất
 
@@ -90,8 +90,8 @@ hình account/session.
 
 ### A3 — Session thiếu, hết hạn, bị thu hồi hoặc tài khoản bị disable
 
-Middleware không tạo `Principal`. Browser navigation được chuyển tới trang đăng
-nhập; API nhận `401`. Nếu request có cookie không hợp lệ, response yêu cầu
+Middleware không tạo `Principal`. Browser navigation được chuyển tới
+`/ui/login`; API nhận `401`. Nếu request có cookie không hợp lệ, response yêu cầu
 browser xóa cookie đó. Session hết hạn hoặc của tài khoản đã disable không được
 khôi phục.
 
@@ -169,6 +169,8 @@ nhận qua command argument hoặc environment variable. Không có thay đổi 
 
 - Mặc định mọi page và API đều được bảo vệ. Chỉ trang/action đăng nhập, static
   asset và health/readiness endpoint tối thiểu là public.
+- User-facing copy của React web UI hiện dùng tiếng Anh; tài liệu vẫn có thể
+  viết tiếng Việt. UC-06 dùng cùng quy ước này để không đổi ngôn ngữ sau login.
 - Request đã xác thực nhưng thay đổi trạng thái phải có CSRF token gắn với
   session. `SameSite` là lớp phòng vệ bổ sung, không thay thế CSRF validation.
 - Login form phải mang pre-auth CSRF nonce ngắn hạn và server phải kiểm tra

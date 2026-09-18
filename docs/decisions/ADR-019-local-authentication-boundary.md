@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: accepted
 last_reviewed: 2026-09-18
-related: UC-06, IMP-013
+related: ADR-016, ADR-017, ADR-018, UC-06, IMP-013, D15
 ---
 
 # ADR-019 — Xác thực bằng tài khoản nội bộ sau một boundary trung lập
@@ -45,8 +45,16 @@ không buộc domain service phụ thuộc lâu dài vào username/password nộ
 9. Rate limit dùng bucket theo username chuẩn hóa và nguồn request, không khóa
    account vĩnh viễn và không tạo khác biệt thông báo giữa account không tồn
    tại, password sai hoặc account disabled.
-10. Login UI là web cùng origin. ADR này không quyết định React hay Go template;
-    lựa chọn triển khai phải giữ nguyên UI/HTTP contract của UC-06.
+10. Login UI là một feature React trong `idp/frontend/`, dùng cùng bundle và
+    Primer tokens với UC-01. Route public là `/ui/login`; backend chỉ cung cấp
+    login context cùng JSON action dưới `/api/auth/` và không render login bằng
+    Go template.
+11. Frontend dùng một HTTP transport dùng chung để gửi session CSRF token cho
+    request thay đổi trạng thái và chuyển full-page tới `/ui/login` khi API trả
+    `401`. React shell và các Go page shell đều có action logout bằng `POST`;
+    không có logout qua `GET`.
+12. Việc scope browser draft theo local user chưa được giải quyết trong lát cắt
+    này và được ghi riêng ở D15; UC-06 không được âm thầm đổi ADR-016.
 
 ## Hệ quả
 
@@ -54,6 +62,12 @@ không buộc domain service phụ thuộc lâu dài vào username/password nộ
   migration trước khi middleware được bật.
 - Mọi route phải được phân loại public/protected; browser navigation chưa xác
   thực redirect tới login, còn API trả JSON `401`.
+- Backend phải phục vụ cùng React entry point cho `/ui/login` và các route
+  `/ui/applications...`; chỉ login route và static asset là public. Vite dev
+  tiếp tục proxy `/api`, bao gồm các authentication endpoint.
+- Login page gọi login-context endpoint để lấy pre-auth CSRF nonce, rồi submit
+  credential bằng JSON. Session token vẫn chỉ nằm trong `HttpOnly` cookie và
+  không đi qua React state hay response body.
 - CLI trở thành đường bootstrap và phục hồi account, nên phải dùng hidden prompt
   và không nhận password qua argument, environment hoặc log.
 - Khi thêm OIDC, adapter mới ánh xạ external identity sang cùng user identity và

@@ -34,30 +34,50 @@ management API.
 
 ### Boundary/UI
 
-- **Login Web UI** — form web desktop gồm username/password, trạng thái submit,
-  lỗi chung và thông báo session hết hạn; không lưu password hay session token.
+- **Authentication Web UI** — feature React gồm login page, trạng thái submit,
+  lỗi chung, thông báo session hết hạn và action logout trong authenticated
+  shell; không lưu password hay session token.
 - **Authentication API / Controller** — nhận login/logout, validate request
   shape, cookie/CSRF và ánh xạ kết quả thành redirect hoặc response HTTP.
 - **Local User CLI** — prompt password ẩn, gọi cùng Authentication Service để
   create/reset/enable/disable; không nhận password qua argument hoặc biến môi
   trường.
 
-Thiết kế UI không quyết định React hay Go template. Việc chọn công nghệ render
-được thực hiện khi lập kế hoạch triển khai, nhưng phải giữ nguyên contract trong
-[`ui/README.md`](ui/README.md) và cùng origin với backend.
+Authentication Web UI nằm tại `idp/frontend/src/features/authentication/`, dùng
+cùng React bundle, router và Primer tokens với UC-01. Backend phục vụ entry point
+cho `/ui/login`; login page lấy pre-auth context và submit credential qua JSON
+API cùng origin.
 
 ### HTTP contract
 
 | Method và path | Public/protected | Hành vi |
 |---|---|---|
-| `GET /login` | Public | Render login form, cấp pre-auth CSRF nonce và giữ safe `return_to`. Session đang hợp lệ được redirect tới safe `return_to` hoặc `/ui/applications`. |
-| `POST /auth/login` | Public, pre-auth CSRF bắt buộc | Nhận form username/password. Thành công đặt session/CSRF cookie và trả `303`; credential sai render lại form với `401`; rate limit trả `429` cùng `Retry-After`. |
-| `POST /auth/logout` | Protected, session CSRF bắt buộc | Revoke session hiện tại, xóa cookie và trả `303 /login`. Không cung cấp logout bằng `GET`. |
-| Mọi protected browser route | Protected | Thiếu session trả `303 /login?return_to=...`. |
+| `GET /ui/login` | Public | Phục vụ React entry point. Login page gọi login-context; session đang hợp lệ được điều hướng tới safe `return_to` hoặc `/ui/applications`. |
+| `GET /api/auth/login-context` | Public | Cấp pre-auth CSRF nonce ngắn hạn và trả safe `returnTo`; nếu request đã có session hợp lệ thì trả `redirectTo` thay vì credential form context. |
+| `POST /api/auth/login` | Public, pre-auth CSRF bắt buộc | Nhận JSON username/password/returnTo và CSRF header. Thành công đặt session/CSRF cookie rồi trả `200 {redirectTo}`; credential sai trả problem JSON `401`; rate limit trả `429` cùng `Retry-After`. |
+| `POST /api/auth/logout` | Protected, session CSRF bắt buộc | Revoke session hiện tại, xóa cookie và trả `204`. React/Go shell điều hướng full-page tới `/ui/login?reason=logged-out`. Không cung cấp logout bằng `GET`. |
+| Mọi protected browser route | Protected | Thiếu session trả `303 /ui/login?return_to=...`. |
 | Mọi protected `/api/` route | Protected | Thiếu session trả JSON `401`; không redirect sang HTML. |
 
-Login dùng native form semantics ngay cả khi view được render bằng React, nên
-success redirect điều hướng toàn trang và password không cần một JSON API riêng.
+React giữ password chỉ trong controlled form state tới khi request kết thúc rồi
+xóa nó. Response không trả session token; sau thành công UI dùng
+`window.location.assign(redirectTo)` để tạo full-page navigation.
+
+### Frontend integration contract
+
+- Router thêm route public `/ui/login`; các route `/ui/applications...` vẫn
+  protected. `/ui/assets/...` là public để login page tải được bundle.
+- Shared HTTP transport đọc session CSRF cookie và gửi `X-CSRF-Token` cho mọi
+  `POST`, `PUT`, `PATCH`, `DELETE`. Login dùng nonce từ login-context thay cho
+  session CSRF.
+- Khi protected API trả `401`, transport điều hướng full-page tới
+  `/ui/login?return_to=<current internal path>`; nó không biến `401` thành lỗi
+  nghiệp vụ của UC-01.
+- `403` từ CSRF được trình bày như session/form không còn hợp lệ và không tự
+  retry request thay đổi trạng thái.
+- Authenticated React shell và shell của Go pages gọi cùng
+  `POST /api/auth/logout`. Vite development tiếp tục proxy prefix `/api`, nên
+  không tạo contract dev-only.
 
 ### Application/security services
 

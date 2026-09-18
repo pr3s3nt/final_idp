@@ -35,7 +35,7 @@ Tài liệu này mô tả **View Of Participating Classes (VOPC)** cho sáu use 
 
 | Class | Layer | Responsibility |
 |---|---|---|
-| Login Web UI | Boundary/UI | Thu username/password, trình bày lỗi chung và trạng thái session; không lưu credential hoặc session token bằng code ứng dụng. |
+| Authentication Web UI | Boundary/UI | Feature React tải login context, thu username/password, trình bày lỗi/session state và cung cấp logout trong authenticated shell; không lưu credential hoặc session token bằng browser storage. |
 | Authentication API / Controller | Boundary/UI | Nhận sign-in/sign-out, validate return path, cookie và CSRF, rồi ánh xạ kết quả thành redirect/HTTP response. |
 | Authentication Middleware | Boundary/UI | Bảo vệ page/API, xác thực session và gắn `Principal` trung lập vào request context. |
 | Local User CLI | Boundary/UI | Tạo/reset/enable/disable local user qua terminal tin cậy với hidden password prompt. |

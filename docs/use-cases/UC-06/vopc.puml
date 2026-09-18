@@ -7,8 +7,9 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 package "Boundary/UI" {
-  class "Login Web UI" as LoginUI <<boundary>> {
+  class "Authentication Web UI" as LoginUI <<boundary>> {
     +showLogin(returnTo)
+    +loadLoginContext(returnTo)
     +submitCredentials(username, password)
     +showGenericError()
     +submitLogout(csrfToken)

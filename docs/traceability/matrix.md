@@ -98,7 +98,7 @@ Quy ước đọc matrix:
 
 | VOPC class | Operation evidence hoặc justification | Kết quả |
 |---|---|---|
-| Login Web UI | `showLogin()`, `submitCredentials()`, `submitLogout()`; không sở hữu credential/session persistence | PASS |
+| Authentication Web UI | `showLogin()`, `loadLoginContext()`, `submitCredentials()`, `submitLogout()`; không sở hữu credential/session persistence | PASS |
 | Authentication API / Controller | `signIn()`, `signOut()` và HTTP/cookie/CSRF mapping | PASS |
 | Authentication Middleware | `authenticateRequest()` và gắn Principal vào protected request | PASS |
 | Local User CLI | `createLocalUser()`, `resetLocalPassword()`, `setLocalUserStatus()` qua trusted terminal | PASS |
@@ -259,7 +259,7 @@ Quy ước đọc matrix:
 3. **RESOLVED — UC-03 Deployment persistence:** Sequence/VOPC đã có `persistDeployment(..., AWAITING_CONFIRMATION)` cho aggregate ban đầu, `confirmDeploymentAndCreateJob()` cho transition `CONFIRMED` (kèm job), `updateDeploymentStatus()` của Deployment Worker cho `DEPLOYING` và `SUCCEEDED`/`FAILED`; `saveDeploymentRecord()` persist delivery reference, thành phần đã gỡ và failure.
 4. **RESOLVED — Gap 4, transient Infrastructure Plan across requests:** `createDeployment()` canonicalize/hash plan và persist chỉ `plan_fingerprint` + algorithm; `confirmDeployment()` rebuild từ persisted inputs + current catalog/Resource Instance state, trả `PLAN_CHANGED` để review lại khi mismatch, và chỉ apply overrides + atomic status CAS + reconcile khi match. Fingerprint hash phiên bản catalog, action của từng resource, Resource Definition identity cùng các field `provisioner_reference`, `supported_contexts`, `default_parameters`, `allowed_overrides`, `requires`, referenced Resource Instance identity và deployment target. Resolved parameters được suy ra một cách tất định từ `default_parameters` kết hợp Deployment Context; allowed-overrides **definition** được suy ra một cách tất định từ `allowed_overrides`. Resource Definition của một phiên bản catalog không đổi (vấn đề 12), nên thay đổi catalog chỉ đi vào plan khi Developer chọn phiên bản catalog khác. Scope: fingerprint không bao phủ Developer-selected override values (được validate theo `allowed_overrides` sau match); đây chỉ là application-level defense-in-depth, còn shared-resource contention/drift cần Resource-Instance-level version/optimistic lock hoặc per-resource reconcile lock, cộng provisioner idempotency (ví dụ Terraform refresh + plan), đều ngoài phạm vi fingerprint.
 
-5. **OPEN — các mục hoãn:** danh sách hiện hành nằm trong [`docs/backlog/README.md`](../backlog/README.md): D01 đã được ADR-016 giải quyết; D02–D12 là các vấn đề thiết kế ban đầu còn mở; D13 và D14 là hai lỗ hổng teardown được ghi nhận khi hoàn thiện UC-05. Quyết định đã chốt được tra cứu qua [`docs/decisions/README.md`](../decisions/README.md). Hai file tổng hợp trong thư mục này chỉ còn là bản ghi lịch sử.
+5. **OPEN — các mục hoãn:** danh sách hiện hành nằm trong [`docs/backlog/README.md`](../backlog/README.md): D01 đã được ADR-016 giải quyết; D02–D12 là các vấn đề thiết kế ban đầu còn mở; D13 và D14 là hai lỗ hổng teardown; D15 hoãn policy cô lập browser draft giữa các authenticated user. Quyết định đã chốt được tra cứu qua [`docs/decisions/README.md`](../decisions/README.md). Hai file tổng hợp trong thư mục này chỉ còn là bản ghi lịch sử.
 
 ### Notes
 

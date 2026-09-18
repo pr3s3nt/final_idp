@@ -4,7 +4,7 @@ artifact: architecture-decision-record
 status: current
 outcome: accepted
 last_reviewed: 2026-09-18
-related: ADR-017, UC-01, UC-01-UI-DESIGN
+related: ADR-017, ADR-019, UC-01, UC-01-UI-DESIGN, UC-06
 ---
 
 # ADR-018 — Primer design tokens as the visual foundation of the web frontend
@@ -95,6 +95,9 @@ Three options were considered.
    for UC-03 to UC-05 under `idp/backend/internal/web/templates/` are
    unchanged. A later use case that moves to React inherits these tokens; one
    that stays on Go templates does not have to.
+
+   ADR-019 places the UC-06 login page in this React frontend, so that page
+   inherits the same token set while keeping its own login-specific layout.
 
 ## Consequences
 

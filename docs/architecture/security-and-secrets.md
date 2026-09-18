@@ -61,11 +61,12 @@ profile in production.
 
 ### Route and request protection
 
-All page and API routes are protected by default. Login, its submit action,
-static assets and minimal health/readiness endpoints are explicit public
-exceptions. Missing/invalid session redirects browser navigation to login with
-a validated internal return path, while API calls receive JSON `401` and are
-never redirected to HTML.
+All page and API routes are protected by default. The React route `/ui/login`,
+`GET /api/auth/login-context`, `POST /api/auth/login`, `/ui/assets/...` and
+minimal health/readiness endpoints are explicit public exceptions. Other
+browser navigation with a missing/invalid session redirects to `/ui/login`
+with a validated internal return path, while API calls receive JSON `401` and
+are never redirected to HTML.
 
 Every cookie-authenticated state-changing request (`POST`, `PUT`, `PATCH`,
 `DELETE`) requires a CSRF token bound to the Auth Session. The raw CSRF value
@@ -74,8 +75,14 @@ code and echoed through a request header or hidden form field; only its hash is
 persisted. It is not an authentication credential and cannot create a session.
 `SameSite` and Origin/Fetch-Metadata checks are defense in depth, not
 replacements for token validation. The public login POST additionally requires
-a short-lived pre-auth CSRF nonce issued by GET `/login`, plus Origin/Fetch
-Metadata validation, to prevent login CSRF.
+a short-lived pre-auth CSRF nonce issued by
+`GET /api/auth/login-context`, plus Origin/Fetch Metadata validation, to prevent
+login CSRF. The React login feature keeps the password only in form state until
+the request finishes and never writes it to browser storage.
+
+The shared React HTTP transport attaches the session CSRF value to unsafe
+requests and performs a full-page navigation to `/ui/login` after protected API
+`401`. Authentication errors are not mapped into UC-01 validation errors.
 
 Login rate limiting uses expiring buckets for both normalized username and
 request source. Bucket keys persist as keyed HMAC-SHA-256 values and contain no

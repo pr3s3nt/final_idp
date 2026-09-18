@@ -2,7 +2,7 @@
 id: BACKLOG-INDEX
 artifact: risk-and-issue-index
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Deferred risks and design issues
@@ -26,6 +26,7 @@ For smaller project tasks that need to be remembered but are not yet scheduled, 
 | [D12](D12-uc02-catalog-version.md) | Catalog Version used by UC-02 | Medium | UC-02, UC-03 | Deferred |
 | [D13](D13-teardown-removal-verification.md) | Verify removal before terminal status | High | UC-05 | Deferred |
 | [D14](D14-teardown-delivery-cleanup.md) | Clean delivery objects in resource-only teardown | High | UC-05 | Deferred |
+| [D15](D15-authenticated-draft-isolation.md) | Isolate browser drafts between authenticated users | High | UC-01, UC-02, UC-06 | Deferred |
 
 ## Resolved issues
 

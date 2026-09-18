@@ -41,13 +41,13 @@ The AI-facing layout is complete. Sequence diagrams and per-use-case VOPCs live 
 - The CD integration is provider-neutral. Fleet is the default on `kind-local`; Argo CD remains supported and is used on AWS.
 - UC-05 reuses deployment orchestration primitives to remove an application from one environment and target.
 - UC-01 drafts are owned by the browser tab and saved with optimistic concurrency (ADR-016). The UC-01 editor is a React app in `idp/frontend`, served by the Go backend under `/ui/`; UC-03 to UC-05 keep their Go templates (ADR-017).
-- UC-06 will place local username/password authentication behind middleware that exposes a provider-neutral `Principal`; OIDC/SSO and detailed authorization remain out of scope (ADR-019).
+- UC-06 will place local username/password authentication behind middleware that exposes a provider-neutral `Principal`; its login page is designed as a React feature at `/ui/login`, while OIDC/SSO and detailed authorization remain out of scope (ADR-019).
 
 The accepted rationale is indexed in [decisions/README.md](decisions/README.md).
 
 ## Known limitations
 
-The authoritative list is [backlog/README.md](backlog/README.md). High-impact items include worker recovery after interruption, plan/input concurrency protection, exact teardown verification, and cleanup of CD/desired-state objects in resource-only teardown paths.
+The authoritative list is [backlog/README.md](backlog/README.md). High-impact items include worker recovery after interruption, plan/input concurrency protection, exact teardown verification, cleanup of CD/desired-state objects in resource-only teardown paths, and authenticated browser-draft isolation (D15).
 
 ## Historical provenance
 

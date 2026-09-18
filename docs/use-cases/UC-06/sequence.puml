@@ -6,7 +6,7 @@ hide footbox
 
 actor Developer
 actor "Platform Operator" as Operator
-boundary "Login Web UI" as UI
+boundary "Authentication Web UI (React)" as UI
 boundary "Local User CLI" as CLI
 control "Authentication API / Controller" as API
 control "Authentication Middleware" as Middleware
@@ -51,11 +51,13 @@ group Supporting account lifecycle (khi Operator yêu cầu)
 end
 
 Developer -> Middleware: GET protectedPath (không có session hợp lệ)
-Middleware --> Developer: 303 /login?return_to=protectedPath
+Middleware --> Developer: 303 /ui/login?return_to=protectedPath
 Developer -> UI: mở trang đăng nhập
-UI --> Developer: form username/password + pre-auth CSRF nonce
-Developer -> UI: chọn Đăng nhập
-UI -> API: POST /auth/login\ncredentials + returnTo + pre-auth CSRF
+UI -> API: GET /api/auth/login-context?return_to=protectedPath
+API --> UI: pre-auth CSRF nonce + safe returnTo
+UI --> Developer: form Username/Password
+Developer -> UI: chọn Sign in
+UI -> API: POST /api/auth/login JSON\ncredentials + returnTo + CSRF header
 API -> API: validate Origin/Fetch Metadata + nonce
 API -> Service: signIn(..., requestSource)
 Service -> Limiter: check(normalizedUsername, requestSource)
@@ -72,7 +74,8 @@ alt account ACTIVE và password hợp lệ
   SessionRepo --> Sessions: session persisted
   Sessions --> Service: raw token + raw CSRF token
   Service --> API: success + session material
-  API --> UI: Set-Cookie session; redirect tới safe returnTo
+  API --> UI: Set-Cookie session/CSRF; 200 redirectTo
+  UI --> Developer: window.location.assign(redirectTo)
 else thông tin không hợp lệ
   Service -> Limiter: recordFailure(username, requestSource)
   Limiter -> AttemptRepo: persist buckets
@@ -89,10 +92,11 @@ Users --> Sessions: account ACTIVE hoặc invalid
 Sessions --> Middleware: Principal hoặc unauthenticated
 Middleware --> Developer: chuyển request tới handler hoặc 401/redirect
 
-Developer -> UI: chọn Đăng xuất
-UI -> API: signOut() + CSRF token
+Developer -> UI: chọn Sign out
+UI -> API: POST /api/auth/logout + CSRF header
 API -> Sessions: revokeCurrentSession(tokenHash)
 Sessions -> SessionRepo: set revokedAt
-API --> Developer: xóa cookie; redirect /login
+API --> UI: 204; xóa cookie
+UI --> Developer: điều hướng /ui/login?reason=logged-out
 
 @enduml

@@ -31,6 +31,10 @@ khai, khôi phục mật khẩu qua email và phân quyền chi tiết chưa thu
 - [Operation contracts](../../architecture/contracts/operation-contracts.md)
 - [Auth Session state machine](../../architecture/state-machines/auth-session.puml)
 
+## Vấn đề hoãn
+
+- [D15 — Cô lập browser draft giữa các local user](../../backlog/D15-authenticated-draft-isolation.md)
+
 ## Ranh giới triển khai
 
 Chưa có source code, migration hoặc test nào hiện thực UC-06. Khi triển khai,
