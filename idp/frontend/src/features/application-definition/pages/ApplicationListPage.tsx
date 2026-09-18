@@ -30,7 +30,7 @@ export function ApplicationListPage({ api }: { api: ApplicationApi }) {
       <div className="page-header">
         <h1>Application definitions</h1>
         <a className="button" href="/ui/applications/new" onClick={linkHandler('/ui/applications/new')}>
-          {hasNewDraft ? 'Continue new application draft' : 'Create application'}
+          {hasNewDraft ? 'Continue draft' : 'Create application'}
         </a>
       </div>
       {result === null && (
