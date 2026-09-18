@@ -316,6 +316,6 @@ Mọi màu phải có token. Không viết giá trị hex trực tiếp trong ru
 4. Icon lấy từ Octicons, cỡ 16px, nhúng thẳng dưới dạng SVG nội tuyến. Không
    thêm dependency thư viện icon. Giữ hình tròn cho workload và hình thoi cho
    resource, và luôn kèm nhãn text.
-5. Chỉ một mức đổ bóng, áp cho editor shell. Phân cấp còn lại tạo bằng border
-   và khoảng cách.
+5. Không dùng đổ bóng. Primer tạo phân cấp bằng border và nền, nên một khối
+   được phân tách bằng `--line` và khoảng cách, không bằng độ cao giả.
 6. Giao diện chỉ có chế độ nền sáng. Nền tối nằm ngoài phạm vi UC-01.

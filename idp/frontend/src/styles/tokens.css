@@ -1,23 +1,100 @@
+/*
+ * Design tokens for the UC-01 web frontend.
+ *
+ * Values are inherited from Primer, GitHub's open-source design system, read
+ * from @primer/primitives 11.10.0 (MIT). The accepted set and the reason for
+ * each boundary are recorded in ADR-018 and in the Ngon ngu thi giac section
+ * of docs/use-cases/UC-01/ui/README.md.
+ *
+ * Every colour, space, radius, size and weight used anywhere in this
+ * stylesheet must resolve to a token declared here. A literal value written
+ * into a rule is a defect.
+ */
 :root {
   color-scheme: light;
-  --canvas: #f3f5f8;
-  --surface: #ffffff;
-  --surface-subtle: #f8fafc;
-  --ink: #182230;
-  --muted: #667085;
-  --line: #d8dee8;
-  --line-strong: #b9c2d0;
-  --navy: #101828;
-  --accent: #175cd3;
-  --accent-hover: #1849a9;
-  --accent-soft: #eff4ff;
-  --bad: #b42318;
-  --bad-soft: #fff4f2;
-  --ok: #067647;
-  --ok-soft: #ecfdf3;
-  --info-soft: #f0f5ff;
-  --focus: #84adff;
-  --radius: 8px;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* --- Typeface -----------------------------------------------------------
+   * The system fallback of Primer's --fontStack-sansSerif. The brand face at
+   * its head is deliberately not used and no web font is loaded (ADR-018).
+   */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* --- Type scale --- */
+  --text-xs: 12px;    /* hint, meta, caption, uppercase label, badge */
+  --text-sm: 14px;    /* section help, navigation item */
+  --text-base: 16px;  /* body text, inputs, field labels */
+  --text-lg: 20px;    /* h2, workspace title */
+  --text-xl: 24px;    /* h1, application name */
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --leading-tight: 1.2;   /* headings */
+  --leading-body: 1.5;    /* body text */
+
+  /* --- Spacing scale: Primer --base-size-* --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* --- Radius: Primer --borderRadius-* --- */
+  --radius-small: 3px;
+  --radius-medium: 6px;   /* the default for buttons, inputs, boxes, shell */
+  --radius-full: 999px;
+
+  /* --- Surfaces and text --- */
+  --canvas: #f6f8fa;              /* bgColor-muted */
+  --surface: #ffffff;             /* bgColor-default */
+  --surface-subtle: #f6f8fa;      /* bgColor-muted */
+  --ink: #1f2328;                 /* fgColor-default */
+  --muted: #59636e;               /* fgColor-muted */
+  --line: #d1d9e0;                /* borderColor-default */
+  --line-translucent: #1f232826;  /* borderColor-translucent */
+  --topbar: #25292e;              /* bgColor-emphasis */
+  --on-emphasis: #ffffff;         /* fgColor-onEmphasis */
+
+  /* --- Accent --- */
+  --accent: #0969da;              /* fgColor-accent */
+  --accent-strong: #0550ae;
+  --accent-soft: #ddf4ff;         /* bgColor-accent-muted */
+
+  /* --- Controls --- */
+  --control-bg: #f6f8fa;          /* control-bgColor-rest */
+  --control-bg-hover: #eff2f5;    /* control-bgColor-hover */
+  --control-bg-active: #e6eaef;   /* control-bgColor-active */
+  --control-fg: #25292e;          /* control-fgColor-rest */
+  --primary-bg: #1f883d;          /* bgColor-success-emphasis */
+  --primary-bg-hover: #1c8139;    /* button-primary-bgColor-hover */
+  --disabled-bg: #eff2f5;         /* bgColor-disabled */
+  --disabled-fg: #818b98;         /* fgColor-disabled */
+
+  /* --- Semantic: text, border, background for each state --- */
+  --danger-text: #d1242f;         /* fgColor-danger */
+  --danger-border: #cf222e;       /* borderColor-danger-emphasis */
+  --danger-bg: #ffebe9;           /* bgColor-danger-muted */
+  --success-text: #1a7f37;        /* fgColor-success */
+  --success-border: #1f883d;      /* borderColor-success-emphasis */
+  --success-bg: #dafbe1;          /* bgColor-success-muted */
+  --warning-text: #9a6700;        /* fgColor-attention */
+  --warning-border: #9a6700;      /* borderColor-attention-emphasis */
+  --warning-bg: #fff8c5;          /* bgColor-attention-muted */
+  --info-text: #0550ae;
+  --info-border: #0969da;         /* borderColor-accent-emphasis */
+  --info-bg: #ddf4ff;             /* bgColor-accent-muted */
+
+  /* --- Component marks: outside Primer's semantic roles --- */
+  --workload-mark: #0969da;
+  --resource-mark: #8250df;
+
+  font-family: var(--font-sans);
   font-synthesis: none;
 }

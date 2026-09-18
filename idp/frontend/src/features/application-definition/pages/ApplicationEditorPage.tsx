@@ -127,7 +127,7 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
         <h1>{phase.notFound ? 'Application not found' : 'The application could not be loaded'}</h1>
         <p>{phase.problems.map((problem) => problem.message).join(' ')}</p>
         {!phase.notFound && (
-          <button type="button" onClick={retry}>
+          <button type="button" className="secondary" onClick={retry}>
             Try again
           </button>
         )}{' '}
@@ -156,7 +156,10 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
       <header className="editor-header">
         <div className="editor-identity">
           <a href="/ui/applications" onClick={linkHandler('/ui/applications')} className="back-link">
-            ← Applications
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true" focusable="false">
+              <path d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 1 1 1.06 1.06L4.81 7h8.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z" />
+            </svg>
+            Applications
           </a>
           <div>
             <h1 id="editor-title">{draft.name || (applicationId ? 'Unnamed application' : 'New application')}</h1>

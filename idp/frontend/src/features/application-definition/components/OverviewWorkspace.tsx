@@ -15,7 +15,7 @@ export function OverviewWorkspace({ draft, dispatch, problems }: Props) {
       <div className="workspace-heading">
         <div>
           <p className="eyebrow">Application</p>
-          <h2 id="workspace-overview-title">Overview</h2>
+          <h2 id="workspace-overview-title" className="plain-title">Overview</h2>
           <p className="muted">Name this application and describe what it provides. Environments and image versions are chosen later.</p>
         </div>
       </div>

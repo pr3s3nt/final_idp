@@ -41,7 +41,7 @@ export function ApplicationListPage({ api }: { api: ApplicationApi }) {
       {result && result.kind !== 'ok' && (
         <div className="banner banner-error" role="alert">
           <p>The application list could not be loaded: {result.problems.map((p) => p.message).join(' ')}</p>
-          <button type="button" onClick={load}>
+          <button type="button" className="secondary" onClick={load}>
             Try again
           </button>
         </div>
@@ -67,9 +67,9 @@ export function ApplicationListPage({ api }: { api: ApplicationApi }) {
                 return (
                   <tr key={a.applicationId}>
                     <td>
-                      <strong>{a.name}</strong>
+                      <strong className="component-name">{a.name}</strong>
                       {a.description && <div className="muted">{a.description}</div>}
-                      {loadDraft(a.applicationId) && <span className="badge">Unsaved draft in this tab</span>}
+                      {loadDraft(a.applicationId) && <span className="badge badge-draft">Unsaved draft in this tab</span>}
                     </td>
                     <td>v{a.latestVersion}</td>
                     <td>
