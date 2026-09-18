@@ -271,7 +271,7 @@ Tất cả lấy từ theme `light` của Primer. Tên token bên trái là tên
 
 | Token | Giá trị | Token Primer |
 |---|---|---|
-| `--canvas` | `#f6f8fa` | `bgColor-muted` |
+| `--canvas` | `#ffffff` | `bgColor-default` |
 | `--surface` | `#ffffff` | `bgColor-default` |
 | `--surface-subtle` | `#f6f8fa` | `bgColor-muted` |
 | `--ink` | `#1f2328` | `fgColor-default` |

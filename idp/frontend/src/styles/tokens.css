@@ -52,7 +52,7 @@
   --radius-full: 999px;
 
   /* --- Surfaces and text --- */
-  --canvas: #f6f8fa;              /* bgColor-muted */
+  --canvas: #ffffff;              /* bgColor-default: the page ground */
   --surface: #ffffff;             /* bgColor-default */
   --surface-subtle: #f6f8fa;      /* bgColor-muted */
   --ink: #1f2328;                 /* fgColor-default */
