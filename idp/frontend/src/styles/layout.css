@@ -1,0 +1,19 @@
+.topbar { min-height: 48px; padding: 0 24px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; background: var(--navy); }
+.topbar a { color: #fff; text-decoration: none; font-weight: 650; }
+.topbar a:last-child { color: #cbd5e1; font-weight: 550; }
+.topbar a[aria-current='page'] { color: #fff; }
+
+.page { width: min(100%, 88rem); margin: 0 auto; padding: 24px; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+h1, h2, h3, h4, p { overflow-wrap: anywhere; }
+h1 { margin: 0; font-size: 22px; line-height: 1.25; letter-spacing: -0.02em; }
+h2 { margin: 0; font-size: 20px; line-height: 1.3; }
+h3 { margin: 0 0 14px; font-size: 15px; }
+h4 { margin: 0; font-size: 14px; }
+.muted { color: var(--muted); }
+.hint { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+.loading-state { padding: 48px 0; text-align: center; }
+
+.card { margin-bottom: 16px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.table-wrap { width: 100%; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }

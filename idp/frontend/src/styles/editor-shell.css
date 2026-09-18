@@ -1,0 +1,14 @@
+.editor-shell { overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 1px 3px rgb(16 24 40 / 8%); }
+.editor-header { min-height: 82px; padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 20px; background: var(--surface); }
+.editor-identity { min-width: 0; display: flex; align-items: center; gap: 18px; }
+.editor-identity > div { min-width: 0; }
+.editor-identity h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.back-link { flex: none; text-decoration: none; font-weight: 600; }
+.editor-meta { margin: 4px 0 0; display: flex; gap: 7px 16px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+.status-dirty { color: #b54708; font-weight: 650; }
+.status-saved { color: var(--ok); font-weight: 650; }
+.header-actions { flex: none; display: flex; gap: 8px; }
+.editor-notices { padding: 14px 14px 0; background: var(--canvas); }
+.editor-notices:empty { display: none; }
+.conflict-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.copy-status { color: var(--muted); font-size: 12px; }
