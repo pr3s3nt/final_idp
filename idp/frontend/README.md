@@ -10,9 +10,11 @@ last_reviewed: 2026-09-18
 React + TypeScript web frontend built with Vite. The technology, API
 integration, build and delivery approach are decided in
 [ADR-017](../../docs/decisions/ADR-017-react-web-frontend.md). It currently
-implements the [UC-01](../../docs/use-cases/UC-01/README.md) editor.
-Its accepted information architecture, states and interaction rules are in the
-[UC-01 Application Builder UI design](../../docs/use-cases/UC-01/ui/README.md).
+implements the [UC-01](../../docs/use-cases/UC-01/README.md) editor and the
+[UC-06](../../docs/use-cases/UC-06/README.md) login/logout flow. Their accepted
+information architecture, states and interaction rules are in the
+[UC-01 Application Builder UI design](../../docs/use-cases/UC-01/ui/README.md)
+and [UC-06 login UI design](../../docs/use-cases/UC-06/ui/README.md).
 
 The server-rendered pages for UC-03 to UC-05 stay in
 [`../backend/internal/web/templates/`](../backend/internal/web/templates/).
@@ -42,6 +44,8 @@ server (`idp serve`) serves `dist/` under `/ui/`; see the
 |---|---|
 | `src/app/` | `App` shell and the minimal History API router for `/ui/` paths |
 | `src/features/application-definition/` | Everything that realizes UC-01, mirroring [`docs/use-cases/UC-01/`](../../docs/use-cases/UC-01/README.md) |
+| `src/features/authentication/` | UC-06 login context/API client and `/ui/login` page states |
+| `src/shared/api/http.ts` | Same-origin transport that attaches session CSRF and handles protected API `401` |
 | `  api/` | JSON DTO types and the API client (list, load for edit, Save) |
 | `  draft/model.ts`, `reducer.ts` | `ApplicationDefinitionDraft` in the browser and its local edit actions |
 | `  draft/storage.ts` | `sessionStorage` adapter with schema version and shape checks |

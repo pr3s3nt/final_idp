@@ -46,7 +46,7 @@ func (f *fakeApps) SaveApplicationDefinition(_ context.Context, id string, d ser
 
 func do(t *testing.T, apps *fakeApps, method, path, body string) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
-	h := (&Server{Apps: apps}).Handler()
+	h := (&Server{Apps: apps, disableAuthenticationForTests: true}).Handler()
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(method, path, strings.NewReader(body)))
 	var out map[string]any

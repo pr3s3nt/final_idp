@@ -1,7 +1,10 @@
 .topbar { min-height: var(--space-12); padding: 0 var(--space-6); display: flex; align-items: center; gap: var(--space-6); flex-wrap: wrap; background: var(--topbar); }
 .topbar a { color: var(--on-emphasis); text-decoration: none; font-weight: var(--weight-semibold); }
-.topbar a:last-child { color: var(--disabled-fg); font-weight: var(--weight-medium); }
+.topbar .topbar-nav { color: var(--disabled-fg); font-weight: var(--weight-medium); }
 .topbar a[aria-current='page'] { color: var(--on-emphasis); }
+.topbar-signout { min-height: var(--space-7); margin-left: auto; color: var(--on-emphasis); border-color: var(--disabled-fg); background: transparent; }
+.topbar-signout:hover:not(:disabled) { border-color: var(--on-emphasis); background: var(--control-fg); }
+.shell-message { margin: var(--space-4) var(--space-6) 0; }
 
 .page { width: 100%; padding: var(--space-6); }
 .page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-5); }

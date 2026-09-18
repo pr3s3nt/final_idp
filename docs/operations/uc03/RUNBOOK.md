@@ -40,7 +40,13 @@ Internet cần tới: registry.terraform.io, argoproj.github.io và rancher.gith
 | `IDP_AWS_ECR_REGISTRY` | import | registry ECR của account, điền vào `eks-cluster.image_registry_mirror`. Phải đặt **trước** `import-fixtures`: phiên bản catalog đã tạo không sửa được |
 | `IDP_HEALTH_TIMEOUT` | không | thời gian chờ sync/rollout, mặc định 6m |
 | `IDP_LISTEN` | không | mặc định `127.0.0.1:8088` |
-| `IDP_FRONTEND_DIR` | không | thư mục bundle React (UC-01) được phục vụ dưới `/ui/`, mặc định `../frontend/dist` |
+| `IDP_FRONTEND_DIR` | không | thư mục bundle React (UC-01/UC-06) được phục vụ dưới `/ui/`, mặc định `../frontend/dist` |
+| `IDP_RUNTIME_PROFILE` | không | `production` (mặc định) hoặc `development`; cookie HTTP development chỉ được chấp nhận ở profile `development` |
+| `IDP_AUTH_COOKIE_MODE` | không | `secure` (mặc định) dùng cookie `__Host-*` trên HTTPS; đặt rõ `development` chỉ khi chạy local HTTP để dùng cookie không `Secure` |
+| `IDP_AUTH_HMAC_KEY` | không | secret dùng HMAC key của login rate-limit; mặc định dùng `IDP_SECRET_KEY`, production nên cấp secret riêng |
+| `IDP_AUTH_ACCOUNT_LIMIT` | không | số lần credential sai tối đa theo username trong cửa sổ, mặc định 5 |
+| `IDP_AUTH_SOURCE_LIMIT` | không | số lần credential sai tối đa theo nguồn request trong cửa sổ, mặc định 20 |
+| `IDP_AUTH_ATTEMPT_WINDOW` | không | cửa sổ và thời gian chặn tạm, mặc định `15m` |
 
 Mỗi application có một delivery repository riêng: IDP tạo repo theo `IDP_DELIVERY_REPO_PATTERN` ở lần deploy đầu tiên của application, sinh một cặp khóa chỉ dùng cho application đó (khóa ghi cho IDP, khóa đọc cho hệ thống CD — Fleet hoặc Argo CD tùy `IDP_CD_PROVIDER`) và lưu cả hai vào Secret Store. Database chỉ giữ secret reference. Gỡ application khỏi một environment chỉ xóa thư mục của environment đó, repo và cặp khóa được giữ lại.
 
@@ -56,8 +62,11 @@ docker exec idp-uc03-db psql -U idp -d idp -c "CREATE DATABASE idp_test"
 docker run -d --name idp-uc03-registry --restart unless-stopped -p 127.0.0.1:5055:5000 registry:2
 docker network connect kind idp-uc03-registry   # tạo mạng bằng `docker network create kind` nếu chưa có
 
-# Khóa Secret Store: giữ trong idp/backend/.env (0600, đã gitignore) để không mất giữa các phiên
-umask 077; printf 'IDP_SECRET_KEY=%s\n' "$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" > .env
+# Khóa Secret Store và profile cookie local: giữ trong idp/backend/.env (0600,
+# đã gitignore) để không mất giữa các phiên. Không dùng development ở production.
+umask 077
+printf 'IDP_SECRET_KEY=%s\nIDP_RUNTIME_PROFILE=development\nIDP_AUTH_COOKIE_MODE=development\n' \
+  "$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" > .env
 set -a; . ./.env; set +a
 
 go build -o bin/idp ./cmd/idp
@@ -72,6 +81,7 @@ export IDP_AWS_ECR_REGISTRY=<account>.dkr.ecr.ap-southeast-1.amazonaws.com
 export IDP_DELIVERY_REPO_PATTERN='pr3s3nt/idp-<app>-gitops'   # nháy đơn: `<app>` là ký tự chuyển hướng của shell
 
 ./bin/idp migrate
+./bin/idp user create developer "Local Developer"  # nhập/xác nhận password bằng prompt ẩn
 ./bin/idp import-fixtures              # catalog v1, v2; shop-app v1–v3, reporting-app v1–v2; configuration
 ./prerequisites/build-push-images.sh localhost:5055
 ./prerequisites/shared-postgres.sh     # PostgreSQL dùng chung cho definition EXISTING
@@ -92,9 +102,13 @@ Catalog có phiên bản (`fixtures/catalog/v<N>.yaml`, bất biến). Muốn s�
 ./bin/idp worker   # Deployment Worker (một tiến trình)
 ```
 
-### Web frontend (UC-01)
+### Web frontend (UC-01 và UC-06)
 
-Editor UC-01 là ứng dụng React trong `idp/frontend/` ([ADR-017](../../decisions/ADR-017-react-web-frontend.md)). Các trang Go của UC-03 đến UC-05 không cần bước này.
+Editor UC-01 và login UC-06 là ứng dụng React trong `idp/frontend/`
+([ADR-017](../../decisions/ADR-017-react-web-frontend.md)). Các trang Go của
+UC-03 đến UC-05 không cần build riêng nhưng vẫn được middleware UC-06 bảo vệ.
+Khi chạy URL HTTP bên dưới, phải nạp `IDP_AUTH_COOKIE_MODE=development` từ
+`.env`; production HTTPS giữ mặc định `secure`.
 
 ```bash
 # Build một lần; `idp serve` phục vụ bundle tại http://127.0.0.1:8088/ui/applications
@@ -134,8 +148,8 @@ Theo dõi: UI trang `/deployments/<id>`, hoặc `scripts/idpctl.sh show <id>`; l
 
 ```bash
 go test ./...                                   # unit, gồm pipeline với score-k8s thật
-go test -tags integration ./internal/service/   # Postgres thật (idp_test), adapter hạ tầng giả lập
-(cd ../frontend && npm run lint && npm test && npm run build)             # web frontend UC-01
+go test -tags integration ./internal/service/   # Postgres thật (idp_test), gồm lifecycle account/session
+(cd ../frontend && npm run lint && npm test && npm run build)             # web frontend UC-01/UC-06
 ```
 
 ## 6. Sự cố thường gặp
@@ -149,6 +163,8 @@ go test -tags integration ./internal/service/   # Postgres thật (idp_test), ad
 | Fleet không sync | `kubectl -n fleet-local get gitrepo` xem `COMMIT` và cột trạng thái; `kubectl -n fleet-local get gitrepo <app>-<env> -o jsonpath='{.status.summary}'`. Báo `Modified` nghĩa là object trong cụm lệch Git — thường do manifest giành một nhãn mà Fleet/Helm tự đặt (xem `idp.dev/managed-by` trong `manifest/pipeline.go`) |
 | `PARTIAL_DEPLOYMENT_CATALOG_VERSION_MISMATCH` | Deploy một phần phải dùng phiên bản catalog đang chạy; muốn đổi thì deploy toàn bộ app |
 | Đổi thông tin kết nối cụm nội bộ | Chạy lại `kind-internal-cluster.sh` (ghi đè bản ghi trong Secret Store). Lần deploy sau, output của `k8s-cluster` đổi nên Postgres/Redis được apply lại và workload trên cụm được deploy lại |
+| Login local HTTP lặp lại hoặc không giữ session | Bảo đảm backend được chạy với `IDP_AUTH_COOKIE_MODE=development`; mặc định `secure` chỉ hoạt động qua HTTPS |
+| Cần reset hoặc vô hiệu hóa local user | `./bin/idp user reset-password <username>` hoặc `./bin/idp user set-status <username> DISABLED`; cả hai thao tác thu hồi session theo quy tắc UC-06 |
 
 ## 7. Dọn dẹp
 

@@ -14,8 +14,8 @@ Implemented and verified by automated tests on 2026-09-18. The
 the original end-to-end implementation checks; the
 [Application Builder record](../../verification/2026-09-18-uc01-application-builder.md)
 covers the accepted component-focused presentation. The React editor under
-`/ui/applications` covers the main flow, A1 and A2. Known limits are listed as
-IMP-013 and IMP-014 in
+`/ui/applications` covers the main flow, A1 and A2. Routes are protected by the
+implemented UC-06 middleware. The remaining known limit is IMP-014 in
 [implementation deviations](../../implementation/deviations.md).
 
 ## Read in this order

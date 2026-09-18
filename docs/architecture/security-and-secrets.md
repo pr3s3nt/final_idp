@@ -7,10 +7,9 @@ last_reviewed: 2026-09-18
 
 # Security, Authentication and Secret architecture
 
-This document owns the shared security architecture: the designed UC-06 local
-authentication boundary and the current storage/materialization rules for
-secret values in the UC-03 implementation. Authentication is designed but not
-implemented; the Secret Store rules below describe current code.
+This document owns the shared security architecture: the implemented UC-06
+local authentication boundary and the current storage/materialization rules
+for secret values in the UC-03 implementation.
 
 ## Authentication boundary
 
@@ -117,6 +116,10 @@ The target namespace owns the materialized Kubernetes Secret. Cleanup follows wo
 
 ## Implementation anchors
 
+- Authentication service and password hashing: `idp/backend/internal/authentication/`
+- Authentication persistence: `idp/backend/internal/persistence/authentication_repository.go`
+- HTTP middleware and login/logout API: `idp/backend/internal/web/authentication.go`
+- React login and shared transport: `idp/frontend/src/features/authentication/`, `idp/frontend/src/shared/api/http.ts`
 - Encrypted store: `idp/backend/internal/integration/secretstore/secretstore.go`
 - Manifest references and HMAC: `idp/backend/internal/domain/manifest/pipeline.go`
 - Kubernetes write path: the selected CD/Kubernetes adapter invoked by `idp/backend/internal/service/worker.go`

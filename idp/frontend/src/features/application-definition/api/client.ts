@@ -1,4 +1,5 @@
 import type { ApplicationDefinitionDto, ApplicationListItem, Problem } from './types';
+import { apiFetch } from '../../../shared/api/http';
 
 export type ApiResult<T> =
   | { kind: 'ok'; data: T }
@@ -19,7 +20,7 @@ const base = '/api/application-definitions';
 async function call<T>(input: string, init?: RequestInit): Promise<ApiResult<T>> {
   let response: Response;
   try {
-    response = await fetch(input, { ...init, headers: { Accept: 'application/json', ...init?.headers } });
+    response = await apiFetch(input, init);
   } catch {
     return { kind: 'error', problems: [{ code: 'NETWORK_ERROR', message: 'The IDP backend could not be reached.' }] };
   }

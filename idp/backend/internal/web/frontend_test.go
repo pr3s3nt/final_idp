@@ -25,6 +25,7 @@ func TestFrontendHandlerServesAssetsAndFallsBackToIndex(t *testing.T) {
 	}{
 		{"/ui/assets/app.js", 200, "console.log(1)"},
 		{"/ui/applications", 200, "<div id=root>"},
+		{"/ui/login", 200, "<div id=root>"},
 		{"/ui/applications/7d9e/", 200, "<div id=root>"},
 		{"/ui/assets/missing.js", 404, ""},
 	}
@@ -59,7 +60,7 @@ func TestFrontendHandlerWithoutBundle(t *testing.T) {
 }
 
 func TestGoPagesStillRouteBesideUI(t *testing.T) {
-	s := &Server{FrontendDir: t.TempDir()}
+	s := &Server{FrontendDir: t.TempDir(), disableAuthenticationForTests: true}
 	h := s.Handler()
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ui", nil))

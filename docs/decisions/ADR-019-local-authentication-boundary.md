@@ -4,15 +4,16 @@ artifact: architecture-decision-record
 status: current
 outcome: accepted
 last_reviewed: 2026-09-18
-related: ADR-016, ADR-017, ADR-018, UC-06, IMP-013, D15
+related: ADR-016, ADR-017, ADR-018, UC-06, D15
 ---
 
 # ADR-019 — Xác thực bằng tài khoản nội bộ sau một boundary trung lập
 
 ## Bối cảnh
 
-UC-01 đến UC-05 đều giả định Developer đã đăng nhập, nhưng backend hiện không
-xác thực hoặc phân quyền bất kỳ page/API nào (IMP-013). UC-02 sẽ xử lý Secret;
+Tại thời điểm quyết định, UC-01 đến UC-05 đều giả định Developer đã đăng nhập,
+nhưng backend chưa xác thực hoặc phân quyền bất kỳ page/API nào (IMP-013).
+UC-02 sẽ xử lý Secret;
 UC-03 và UC-05 có action tạo hoặc hủy tài nguyên, nên tiếp tục phát triển các
 use case này trên endpoint công khai làm tăng rủi ro và khiến authentication
 phải được chèn vào sau ở nhiều nơi.
@@ -73,5 +74,6 @@ không buộc domain service phụ thuộc lâu dài vào username/password nộ
 - Khi thêm OIDC, adapter mới ánh xạ external identity sang cùng user identity và
   tạo cùng `Principal`; các use case nghiệp vụ và middleware contract không cần
   đổi. Việc thiết kế external identity vẫn cần một quyết định riêng.
-- IMP-013 chỉ được đóng khi middleware, route policy, CSRF và tests đã được triển
-  khai; tài liệu thiết kế này chưa tự giải quyết deviation.
+- Điều kiện đóng IMP-013 là middleware, route policy, CSRF và tests phải được
+  triển khai. Điều kiện này đã được đáp ứng khi UC-06 được hiện thực; D15 vẫn là
+  phần hoãn riêng và không ngăn việc bảo vệ route.

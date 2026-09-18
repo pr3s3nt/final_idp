@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"idp/internal/authentication"
 	"idp/internal/domain"
 	"idp/internal/domain/targetadapter"
 	"idp/internal/integration/imageregistry"
@@ -30,7 +31,12 @@ type Server struct {
 	Apps ApplicationDefinitions
 	// FrontendDir is the built React bundle served under /ui/ (ADR-017).
 	FrontendDir string
-	tmpl        *template.Template
+	// Auth is the UC-06 local authentication service. A nil service fails closed;
+	// focused handler tests explicitly enable the unexported bypass below.
+	Auth                          *authentication.Service
+	AuthDevelopmentCookies        bool
+	disableAuthenticationForTests bool
+	tmpl                          *template.Template
 }
 
 func (s *Server) Handler() http.Handler {
@@ -59,6 +65,10 @@ func (s *Server) Handler() http.Handler {
 	}).ParseFS(templatesFS, "templates/*.html"))
 
 	mux := http.NewServeMux()
+	// UC-06 public login context/action and protected logout action.
+	mux.HandleFunc("GET /api/auth/login-context", s.apiLoginContext)
+	mux.HandleFunc("POST /api/auth/login", s.apiLogin)
+	mux.HandleFunc("POST /api/auth/logout", s.apiLogout)
 	// JSON API
 	mux.HandleFunc("GET /api/applications", s.apiApplications)
 	mux.HandleFunc("GET /api/applications/{app}/deployment-form", s.apiForm)
@@ -80,10 +90,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /apps/{app}/teardown", s.submitTeardown)
 	mux.HandleFunc("GET /deployments/{id}", s.pageDeployment)
 	mux.HandleFunc("POST /deployments/{id}/confirm", s.submitConfirm)
-	// React web frontend (UC-01)
+	// React web frontend (UC-01 and UC-06)
 	mux.Handle("GET /ui/", frontendHandler(s.FrontendDir))
 	mux.Handle("GET /ui", http.RedirectHandler("/ui/applications", http.StatusSeeOther))
-	return logRequests(mux)
+	return logRequests(s.authenticationMiddleware(mux))
 }
 
 func logRequests(h http.Handler) http.Handler {

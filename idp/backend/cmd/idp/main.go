@@ -24,6 +24,10 @@ commands:
   import-fixtures [dir]        import catalog, application versions and configurations
   serve                        run the web UI and JSON API
   worker                       run the background Deployment Worker
+  user create <name> <display> create an ACTIVE local user (password prompt)
+  user reset-password <name>   replace password and revoke all sessions
+  user set-status <name> <status>
+                               set ACTIVE or DISABLED
   fail-orphaned-job <id> <msg> mark a deployment whose worker died as FAILED`
 
 func main() {
@@ -92,6 +96,8 @@ func run(ctx context.Context, cmd string, args []string) error {
 			fmt.Println(ref)
 		}
 		return err
+	case "user":
+		return runUser(ctx, cfg, db, args)
 	case "serve", "worker", "fail-orphaned-job":
 		return runPlatform(ctx, cfg, db, cmd, args)
 	default:

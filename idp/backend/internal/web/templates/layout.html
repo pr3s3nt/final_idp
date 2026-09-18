@@ -4,7 +4,7 @@
 <style>
 :root{--bg:#f6f7f9;--fg:#1d2330;--muted:#6b7280;--line:#dfe3ea;--card:#fff;--ok:#1f7a4d;--bad:#b42318;--busy:#b25e09;--accent:#2f5bd3}
 *{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
-header{background:#1d2330;color:#fff;padding:10px 20px;display:flex;gap:20px;align-items:center}header a{color:#fff;text-decoration:none;font-weight:600}
+header{background:#1d2330;color:#fff;padding:10px 20px;display:flex;gap:20px;align-items:center}header a{color:#fff;text-decoration:none;font-weight:600}header .signout{margin-left:auto;background:transparent;border:1px solid #fff;padding:5px 10px}
 main{max-width:1100px;margin:0 auto;padding:20px}
 h1{font-size:20px;margin:0 0 12px}h2{font-size:16px;margin:22px 0 8px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:14px}
@@ -20,6 +20,11 @@ button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:7p
 .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}.muted{color:var(--muted)}.wave{font-weight:700;white-space:nowrap}
 .action-CREATE,.action-DEPLOY,.action-LINK{color:var(--ok);font-weight:700}.action-UPDATE{color:var(--busy);font-weight:700}.action-REUSE{color:var(--muted);font-weight:700}
 .action-DESTROY,.action-REMOVE,.action-UNLINK{color:var(--bad);font-weight:700}
-</style></head><body><header><a href="/">IDP · Deploy Application</a><a href="/ui/applications">Application definitions</a></header><main>{{end}}
-{{define "foot"}}</main></body></html>{{end}}
+</style></head><body><header><a href="/">IDP · Deploy Application</a><a href="/ui/applications">Application definitions</a><button type="button" class="signout" data-sign-out>Sign out</button></header><main>{{end}}
+{{define "foot"}}</main><script>
+function idpCookie(name){const prefix=name+'=';for(const part of document.cookie.split(';')){const value=part.trim();if(value.startsWith(prefix))return decodeURIComponent(value.slice(prefix.length));}return '';}
+function idpCSRF(){return idpCookie('__Host-idp_csrf')||idpCookie('idp_csrf');}
+document.addEventListener('submit',function(event){const form=event.target;if(!(form instanceof HTMLFormElement)||form.method.toLowerCase()!=='post')return;let input=form.querySelector('input[name="csrf_token"]');if(!input){input=document.createElement('input');input.type='hidden';input.name='csrf_token';form.appendChild(input);}input.value=idpCSRF();});
+const signOut=document.querySelector('[data-sign-out]');if(signOut)signOut.addEventListener('click',async function(){signOut.disabled=true;try{const response=await fetch('/api/auth/logout',{method:'POST',headers:{'X-CSRF-Token':idpCSRF()}});if(response.ok){window.location.assign('/ui/login?reason=logged-out');return;}if(response.status===401||response.status===403){window.location.assign('/ui/login?reason=session-expired');return;}window.alert('Sign out failed. Try again.');}catch(_){window.alert('The IDP backend could not be reached.');}finally{signOut.disabled=false;}});
+</script></body></html>{{end}}
 {{define "problems"}}{{if .}}<div class="card problems"><strong>The request was rejected</strong><ul>{{range .}}<li><code>{{.Code}}</code> {{.Message}}</li>{{end}}</ul></div>{{end}}{{end}}

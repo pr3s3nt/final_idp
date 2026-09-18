@@ -9,7 +9,7 @@ last_reviewed: 2026-09-18
 
 ## Trạng thái bàn giao
 
-Đã thiết kế, chưa triển khai. UC-06 tạo lớp xác thực tối thiểu trước UC-02:
+Đã triển khai và có kiểm thử tự động. UC-06 tạo lớp xác thực tối thiểu trước UC-02:
 tài khoản nội bộ do Platform Operator cấp qua CLI, đăng nhập/đăng xuất trên web,
 session phía server và middleware bảo vệ UI/API. OIDC, SSO, MFA, đăng ký công
 khai, khôi phục mật khẩu qua email và phân quyền chi tiết chưa thuộc phạm vi.
@@ -37,6 +37,15 @@ khai, khôi phục mật khẩu qua email và phân quyền chi tiết chưa thu
 
 ## Ranh giới triển khai
 
-Chưa có source code, migration hoặc test nào hiện thực UC-06. Khi triển khai,
-mọi use case nghiệp vụ chỉ nhận `Principal` từ middleware; chúng không tự đọc
-mật khẩu, cookie hoặc phụ thuộc trực tiếp vào cơ chế local/OIDC.
+Backend hiện có migration cho account/credential/session/login-attempt,
+Argon2id password service, repository PostgreSQL, middleware bảo vệ route,
+login/logout API và CLI quản trị local user. Frontend React hiện có route
+`/ui/login`, shared CSRF-aware API transport và action đăng xuất trong shell.
+Middleware gắn `Principal` trung lập vào request; các use case nghiệp vụ không
+đọc mật khẩu, cookie hoặc phụ thuộc trực tiếp vào cơ chế local/OIDC.
+
+Kiểm thử unit/component bao phủ password policy, session, rate limit, CSRF,
+route policy, login states và shared frontend transport. Kiểm thử integration
+PostgreSQL bao phủ create/sign-in/reset/disable và session revocation. Chưa có
+kiểm chứng real-browser hoặc môi trường triển khai; xem
+[bằng chứng UC-06](../../verification/2026-09-18-uc06-local-authentication.md).

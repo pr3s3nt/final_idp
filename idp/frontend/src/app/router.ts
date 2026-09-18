@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 
-// A minimal History API router for the three UC-01 pages under /ui/.
+// A minimal History API router for the public UC-06 login route and UC-01 pages under /ui/.
 
 export type Route =
+  | { name: 'login' }
   | { name: 'list' }
   | { name: 'new' }
   | { name: 'edit'; applicationId: string }
@@ -23,6 +24,7 @@ export interface Location {
 
 export function parseRoute(pathname: string): Route {
   const path = pathname.replace(/\/+$/, '');
+  if (path === '/ui/login') return { name: 'login' };
   if (path === '/ui' || path === '/ui/applications') return { name: 'list' };
   if (path === '/ui/applications/new') return { name: 'new' };
   const match = /^\/ui\/applications\/([^/]+)$/.exec(path);

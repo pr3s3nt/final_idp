@@ -7,7 +7,7 @@ last_reviewed: 2026-09-17
 
 # IDP backend
 
-Go backend implementation of UC-03 and UC-05, and the JSON API of UC-01. Start from the repository [documentation index](../../docs/INDEX.md); current decisions and deviations are indexed under [`docs/decisions`](../../docs/decisions/README.md) and [`docs/implementation`](../../docs/implementation/README.md). The original implementation plan is archived and non-normative.
+Go backend implementation of UC-03, UC-05 and UC-06, and the JSON API of UC-01. Start from the repository [documentation index](../../docs/INDEX.md); current decisions and deviations are indexed under [`docs/decisions`](../../docs/decisions/README.md) and [`docs/implementation`](../../docs/implementation/README.md). The original implementation plan is archived and non-normative.
 
 - How to run: [`docs/operations/uc03/RUNBOOK.md`](../../docs/operations/uc03/RUNBOOK.md)
 - Demo script: [`docs/operations/uc03/DEMO.md`](../../docs/operations/uc03/DEMO.md)
@@ -25,6 +25,15 @@ Go backend implementation of UC-03 and UC-05, and the JSON API of UC-01. Start f
 | Application Specification Generator | `internal/domain/appspec` |
 | Application Repository (`saveNewVersionIfBaseMatches`, `findLatestVersion`) | `internal/persistence/application_save.go` |
 | Specification Repository | `internal/persistence/specification_repository.go` |
+
+| Design (VOPC UC-06) | Code |
+|---|---|
+| Authentication API / Controller and Middleware | `internal/web/authentication.go` |
+| Authentication Service, Password Hasher and Session Manager | `internal/authentication` |
+| User Account, Auth Session and Login Attempt repositories | `internal/persistence/authentication_repository.go` |
+| Local User CLI | `cmd/idp/user.go` |
+| Authentication Web UI | React feature in [`idp/frontend`](../frontend/README.md) at `/ui/login` |
+| Schema | `migrations/0004_local_authentication.sql` |
 
 | Design (VOPC UC-03) | Code |
 |---|---|
@@ -53,7 +62,7 @@ Go backend implementation of UC-03 and UC-05, and the JSON API of UC-01. Start f
 ## Layout
 
 ```
-cmd/idp/                 migrate | import-fixtures | secret-put | serve | worker | fail-orphaned-job
+cmd/idp/                 migrate | import-fixtures | secret-put | user | serve | worker | fail-orphaned-job
 terraform/modules/       postgres-k8s, redis-k8s, aws-network, eks-cluster, aurora-postgresql, redis-elasticache
 prerequisites/           internal kind cluster (EXISTING k8s-cluster), image build/push (CI stand-in), shared PostgreSQL for EXISTING, ECR repositories
 scripts/idpctl.sh        API client used by the demo
@@ -61,5 +70,5 @@ scripts/idpctl.sh        API client used by the demo
 
 The server-rendered HTML UI for UC-03 to UC-05 remains in
 `internal/web/templates/` because it is embedded in and served by the Go
-backend. The UC-01 editor is the React app in `idp/frontend/`
+backend. The UC-01 editor and UC-06 login are the React app in `idp/frontend/`
 ([ADR-017](../../docs/decisions/ADR-017-react-web-frontend.md)).

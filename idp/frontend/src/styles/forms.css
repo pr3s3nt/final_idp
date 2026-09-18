@@ -31,7 +31,7 @@
 .field { min-width: 0; display: flex; flex-direction: column; }
 .field.wide { grid-column: 1 / -1; }
 label { margin-bottom: var(--space-1); color: var(--ink); font-size: var(--text-base); font-weight: var(--weight-semibold); }
-input[type='text'], textarea, select { width: 100%; min-height: var(--space-8); padding: var(--space-1) var(--space-3); border: 1px solid var(--control-border); border-radius: var(--radius-medium); color: var(--ink); background: var(--surface); }
+input[type='text'], input[type='password'], textarea, select { width: 100%; min-height: var(--space-8); padding: var(--space-1) var(--space-3); border: 1px solid var(--control-border); border-radius: var(--radius-medium); color: var(--ink); background: var(--surface); }
 /* An input holds an identifier the Developer types; a textarea holds prose. */
 input[type='text'], select { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 textarea { min-height: calc(var(--space-10) * 2); max-width: 48rem; resize: vertical; }

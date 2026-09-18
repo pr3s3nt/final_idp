@@ -169,9 +169,9 @@ Quy ước đọc matrix:
 
 | Persistent domain object(s) | Table/mapping | Operation ghi | Kết quả |
 |---|---|---|---|
-| Local User Account; Local Credential | `user_account`, `local_credential` | `createLocalUser()`; `resetLocalPassword()`; `setLocalUserStatus()` | PASS (designed, not implemented) |
-| Auth Session | `auth_session` | `signIn()`, `authenticateRequest()` (`last_seen_at`), `signOut()`; reset/disable revoke all | PASS (designed, not implemented) |
-| Login Attempt | `login_attempt` | `signIn()` qua Login Rate Limiter | PASS (designed, not implemented) |
+| Local User Account; Local Credential | `user_account`, `local_credential` | `createLocalUser()`; `resetLocalPassword()`; `setLocalUserStatus()` | PASS (implemented) |
+| Auth Session | `auth_session` | `signIn()`, `authenticateRequest()` (`last_seen_at`), `signOut()`; reset/disable revoke all | PASS (implemented) |
+| Login Attempt | `login_attempt` | `signIn()` qua Login Rate Limiter | PASS (implemented) |
 | Application Definition; Application Definition Version; Workload; Resource Requirement; Environment Variable Definition; Secret Definition; Dependency | `application_definition`, `application_definition_version`, `application_component`, `workload`, `resource_requirement`, `environment_variable_definition`, `secret_definition`, `dependency` | `saveApplicationDefinition()` (insert phiên bản mới) | PASS |
 | Platform Requirement | `application_component` (`component_type = PLATFORM_REQUIREMENT`) | Deployment Worker qua internal repository message `ensurePlatformRequirements()` trước `reconcileInfrastructure()` | PASS |
 | Delivery Repository | `delivery_repository` | `publishDesiredDeploymentState()` qua `ensureDeliveryRepository()` + `saveDeliveryRepository()` ở lần deploy đầu của application | PASS |
@@ -191,9 +191,9 @@ Quy ước đọc matrix:
 
 | Table(s) | Operation đọc/ghi đại diện | Kết quả |
 |---|---|---|
-| `user_account`, `local_credential` | W: `createLocalUser()`, `resetLocalPassword()`, `setLocalUserStatus()`; R: `signIn()`, `authenticateRequest()` | PASS (designed) |
-| `auth_session` | W: `signIn()`, `authenticateRequest()`, `signOut()`, reset/disable; R: `authenticateRequest()` | PASS (designed) |
-| `login_attempt` | R/W: `signIn()` qua Login Rate Limiter; cleanup theo `expires_at` | PASS (designed) |
+| `user_account`, `local_credential` | W: `createLocalUser()`, `resetLocalPassword()`, `setLocalUserStatus()`; R: `signIn()`, `authenticateRequest()` | PASS (implemented) |
+| `auth_session` | W: `signIn()`, `authenticateRequest()`, `signOut()`, reset/disable; R: `authenticateRequest()` | PASS (implemented) |
+| `login_attempt` | R/W: `signIn()` qua Login Rate Limiter; cleanup theo `expires_at` | PASS (implemented) |
 | `application_definition` | W: `saveApplicationDefinition()`; R: `updateApplication()`, `createDeployment()` | PASS |
 | `application_definition_version`, `application_component` | W: `saveApplicationDefinition()` (insert phiên bản mới, thành phần mới), `ensurePlatformRequirements()` (Platform Requirement); R: `updateApplication()`, `loadConfigurationRequirements()`, `createDeployment()`, `confirmDeployment()` | PASS |
 | `workload` | W: `saveApplicationDefinition()`; R: `loadConfigurationRequirements()`, `createDeployment()` | PASS |
@@ -212,7 +212,7 @@ Quy ước đọc matrix:
 | `deployment_step` | W: writer chưa chốt (D4); R: `getDeploymentProgress()`, `getDeploymentFailureDetail()` | PASS cho tiêu chí read-or-write (writer: D4) |
 | `deployment_record_resource_instance` | W: `saveDeploymentRecord()`; R: detail/infrastructure status path của UC-04 | PASS |
 
-**Kết luận B4: PASS.** Cả 29 table trong ERD đều có ít nhất một read hoặc write path. Bốn bảng authentication mới có path đã thiết kế nhưng chưa triển khai. `catalog_version` và `resource_definition` chỉ có read path, được ghi nhận riêng là GAP ở tiêu chí B3; writer của `deployment_step` thuộc D4.
+**Kết luận B4: PASS.** Cả 29 table trong ERD đều có ít nhất một read hoặc write path. Bốn bảng authentication có migration và repository hiện thực các path tương ứng. `catalog_version` và `resource_definition` chỉ có read path, được ghi nhận riêng là GAP ở tiêu chí B3; writer của `deployment_step` thuộc D4.
 
 ### B5. Mọi Operation Contract tương ứng một Step-2 operation có thật
 
@@ -237,7 +237,7 @@ Quy ước đọc matrix:
 | 17 | `resetLocalPassword()` | PASS |
 | 18 | `setLocalUserStatus()` | PASS |
 
-**Kết luận B5: PASS.** Có 18/18 contract, tất cả đều cross-reference đúng một operation trong Step 2; không có contract “mồ côi”. Contract 13–18 thuộc UC-06 và đang ở trạng thái thiết kế, chưa phải bằng chứng implementation.
+**Kết luận B5: PASS.** Có 18/18 contract, tất cả đều cross-reference đúng một operation trong Step 2; không có contract “mồ côi”. Contract 13–18 thuộc UC-06 đã có code và kiểm thử được ánh xạ trong mục E.
 
 ### B6. Bốn state machine được drive bởi operation có trong matrix
 
@@ -283,6 +283,21 @@ This section links UC-01 design operations to code and tests. Code paths are rel
 | `generateApplicationSpecification()` | `backend/internal/domain/appspec`, `backend/internal/persistence/specification_repository.go` | `appspec/generator_test.go`; `TestUC01CreateApplication` (integration) |
 | HTTP status and problem contract (200, 201, 404, 409, 422) | `backend/internal/web/applications.go`, `writeError` in `server.go` | `backend/internal/web/applications_test.go` |
 
+## E. UC-06 implementation and automated tests
+
+Code paths dưới đây tương đối với `idp/`; bằng chứng thực thi chi tiết nằm trong
+[verification record UC-06](../verification/2026-09-18-uc06-local-authentication.md).
+
+| Operation or rule | Implementation | Automated tests |
+|---|---|---|
+| `signIn()`, Argon2id, dummy-hash verification, password/user policy và rate limit | `backend/internal/authentication/password.go`, `backend/internal/authentication/service.go` | `password_test.go`, `service_test.go` |
+| `authenticateRequest()`, provider-neutral `Principal`, browser redirect/API `401`, session CSRF | `backend/internal/web/authentication.go` | `backend/internal/web/authentication_test.go` |
+| Login context, pre-auth CSRF/Origin, login/logout cookie contract và safe `returnTo` | `backend/internal/web/authentication.go`, `backend/internal/authentication/service.go` | `authentication_test.go`; `service_test.go` |
+| `createLocalUser()`, `resetLocalPassword()`, `setLocalUserStatus()` và session revocation | `backend/cmd/idp/user.go`, `backend/internal/persistence/authentication_repository.go` | `backend/internal/service/authentication_integration_test.go` với PostgreSQL thật |
+| Account, credential, session và rate-limit persistence | `backend/migrations/0004_local_authentication.sql`, `backend/internal/persistence/authentication_repository.go` | PostgreSQL integration test trên migration mới |
+| React login states, password clearing, rate-limit/expired-form presentation | `frontend/src/features/authentication/` | `frontend/src/features/authentication/pages/LoginPage.test.tsx` |
+| Shared session-CSRF transport và authenticated shell logout | `frontend/src/shared/api/http.ts`, `frontend/src/app/App.tsx` | `frontend/src/shared/api/http.test.ts`; toàn bộ frontend tests tiếp tục chạy qua `App` shell |
+
 ## Overall acceptance
 
-**Kết quả tổng thể: PASS có điều kiện.** Design hiện trace được 55/55 Step-2 operations, 65/65 VOPC classes, 29/29 tables theo tiêu chí read-or-write, 18/18 operation contracts và 4/4 state machines. UC-06 mới chỉ là thiết kế, không phải bằng chứng implementation; IMP-013 vẫn mở. Gap 2 vẫn cố ý không giải quyết vì writer của `Catalog Version`/`Resource Definition` thuộc platform administration ngoài phạm vi hiện tại. Các mục backlog còn lại vẫn phải được giải quyết theo phạm vi tương ứng.
+**Kết quả tổng thể: PASS có điều kiện.** Design hiện trace được 55/55 Step-2 operations, 65/65 VOPC classes, 29/29 tables theo tiêu chí read-or-write, 18/18 operation contracts và 4/4 state machines. UC-06 đã có code, unit/component test và PostgreSQL integration test; real-browser/deployed-environment verification chưa chạy. Gap 2 vẫn cố ý không giải quyết vì writer của `Catalog Version`/`Resource Definition` thuộc platform administration ngoài phạm vi hiện tại. Các mục backlog còn lại, gồm D15 về cô lập draft giữa user, vẫn phải được giải quyết theo phạm vi tương ứng.
