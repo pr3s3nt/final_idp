@@ -9,6 +9,7 @@ export type BindingKind = 'variable' | 'secret';
 
 export type DraftAction =
   | { type: 'replace'; draft: ConfigurationDraft }
+  | { type: 'saved'; revision: string }
   | { type: 'catalog-version'; value: string }
   | { type: 'deployment-target'; value: string }
   | { type: 'source'; kind: BindingKind; key: string; source: ValueSource | '' }
@@ -29,6 +30,11 @@ export function draftReducer(draft: ConfigurationDraft, action: DraftAction): Co
   switch (action.type) {
     case 'replace':
       return action.draft;
+
+    // A successful Save makes the submitted draft the current durable state,
+    // so the next Save starts from the revision the backend just returned.
+    case 'saved':
+      return { ...draft, baseConfigurationRevision: action.revision };
 
     // Changing either selection can change which outputs exist, so bindings to
     // a Resource Output are cleared rather than silently kept.

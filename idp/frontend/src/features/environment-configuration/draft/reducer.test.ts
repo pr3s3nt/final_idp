@@ -1,4 +1,5 @@
-import { bindingKey, draftFromRequirements, draftToDto, pendingSecrets, unsetRequired } from './model';
+import { bindingKey, draftFromRequirements, draftToDto } from './model';
+import { validateDraft } from './validation';
 import { draftReducer } from './reducer';
 import { requirementsDto, BACKEND_ID, DB_HOST_ID, DB_ID, SECRET_ID } from '../../../test/configuration-fixtures';
 
@@ -14,7 +15,7 @@ describe('UC-02 draft', () => {
     const d = draft();
     expect(d.variables.map((b) => b.name)).toEqual(['DB_HOST', 'BACKEND_URL']);
     expect(d.secrets.map((b) => b.name)).toEqual(['DB_PASSWORD']);
-    expect(unsetRequired(d)).toHaveLength(3);
+    expect(validateDraft(d).filter((problem) => problem.code === 'MISSING_REQUIRED_CONFIGURATION')).toHaveLength(3);
   });
 
   test('prefills the values already stored for the environment', () => {
@@ -68,10 +69,10 @@ describe('UC-02 draft', () => {
   test('a typed Secret counts as pending until it is staged', () => {
     let d = draftReducer(draft(), { type: 'source', kind: 'secret', key: secretKey, source: 'SECRET_REF' });
     d = draftReducer(d, { type: 'direct-value', kind: 'secret', key: secretKey, value: 'hunter2' });
-    expect(pendingSecrets(d)).toHaveLength(1);
+    expect(validateDraft(d).filter((problem) => problem.code === 'SECRET_NOT_STORED')).toHaveLength(1);
 
     d = draftReducer(d, { type: 'secret-reference', key: secretKey, secretRef: 'idpsecret://x' });
-    expect(pendingSecrets(d)).toHaveLength(0);
+    expect(validateDraft(d).filter((problem) => problem.code === 'SECRET_NOT_STORED')).toHaveLength(0);
     expect(d.secrets.find((b) => b.definitionId === SECRET_ID)?.value).toBe('');
   });
 

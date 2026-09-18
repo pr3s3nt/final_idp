@@ -41,6 +41,20 @@ export interface ConfigurationDraft {
   secrets: BindingDraft[];
 }
 
+/** Placeholder draft used before the environment has been loaded. */
+export function emptyDraft(environment: Environment): ConfigurationDraft {
+  return {
+    applicationId: '',
+    environment,
+    baseApplicationDefinitionVersion: 0,
+    baseConfigurationRevision: '',
+    catalogVersion: '',
+    deploymentTarget: '',
+    variables: [],
+    secrets: [],
+  };
+}
+
 export function isEnvironment(value: string): value is Environment {
   return (ENVIRONMENTS as readonly string[]).includes(value.toUpperCase());
 }
@@ -123,14 +137,4 @@ export function draftToDto(draft: ConfigurationDraft): EnvironmentConfigurationD
     variables: draft.variables.filter((b) => b.source !== '').map(bindingToDto),
     secrets: draft.secrets.filter((b) => b.source !== '').map(bindingToDto),
   };
-}
-
-/** Requirements that still have no value source, in display order. */
-export function unsetRequired(draft: ConfigurationDraft): BindingDraft[] {
-  return [...draft.variables, ...draft.secrets].filter((b) => b.required && b.source === '');
-}
-
-/** A Secret whose value was typed but not staged yet cannot be saved. */
-export function pendingSecrets(draft: ConfigurationDraft): BindingDraft[] {
-  return draft.secrets.filter((b) => b.source === 'SECRET_REF' && b.secretRef === '');
 }
