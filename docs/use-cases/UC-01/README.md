@@ -22,7 +22,7 @@ IMP-013 and IMP-014 in
 
 1. [Specification](specification.md)
 2. [Use Case Realization](realization.md)
-3. [Application Builder UI design](ui-design.md)
+3. [Application Builder UI design](ui/README.md)
 4. [Sequence diagram](sequence.puml)
 5. [VOPC](vopc.puml)
 

@@ -1,0 +1,32 @@
+@startuml
+title UC-01 desktop web — Component workspace
+
+skinparam backgroundColor #F3F5F8
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #D8DEE8
+  FontColor #182230
+}
+
+rectangle "React web route\n/ui/applications/{applicationId}" as Browser {
+  rectangle "Header\n← Applications  |  shop-app  |  Version 2 · Unsaved  |  Discard  |  Save application" as Header
+
+  rectangle "Builder navigation\n\nAPPLICATION\n  Overview\n\nWORKLOADS\n  ● backend    2 problems\n  ○ frontend\n  + Add workload\n\nRESOURCES\n  ◆ postgresql\n  + Add resource\n\nREVIEW\n  Review       2 problems" as Navigation
+
+  rectangle "Focused Workload workspace\n\nWorkload / backend                         Remove workload\n─────────────────────────────────────────────────────────\nGeneral\n  Name · Type · Image repository · Application port\n\nOutputs\n  endpoint                                      Remove\n\nConfiguration requirements\n  Environment variables             Secrets\n  DB_HOST · Required                DB_PASSWORD · Required\n\nDependencies\n  backend depends on postgresql" as Workspace
+
+  Header -[hidden]down- Navigation
+  Navigation -[hidden]right- Workspace
+}
+
+note right of Workspace
+  Component ID, not its editable name,
+  owns selection and React identity.
+
+  Field and navigation edits update the
+  browser-owned draft without an API call.
+end note
+
+@enduml

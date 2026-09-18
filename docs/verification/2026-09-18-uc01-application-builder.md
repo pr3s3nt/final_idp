@@ -18,7 +18,7 @@ database, backend process, cloud environment or Kubernetes cluster was used.
 ## Scope
 
 This execution followed the presentation refactor described by
-[UC-01 Application Builder UI design](../use-cases/UC-01/ui-design.md). The
+[UC-01 Application Builder UI design](../use-cases/UC-01/ui/README.md). The
 backend API, persistence and domain implementation did not change.
 
 ## Automated checks

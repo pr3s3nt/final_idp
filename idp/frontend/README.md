@@ -12,7 +12,7 @@ integration, build and delivery approach are decided in
 [ADR-017](../../docs/decisions/ADR-017-react-web-frontend.md). It currently
 implements the [UC-01](../../docs/use-cases/UC-01/README.md) editor.
 Its accepted information architecture, states and interaction rules are in the
-[UC-01 Application Builder UI design](../../docs/use-cases/UC-01/ui-design.md).
+[UC-01 Application Builder UI design](../../docs/use-cases/UC-01/ui/README.md).
 
 The server-rendered pages for UC-03 to UC-05 stay in
 [`../backend/internal/web/templates/`](../backend/internal/web/templates/).

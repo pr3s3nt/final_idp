@@ -41,7 +41,7 @@ Các operation chỉnh field/component là interaction operation của Web UI v�
 - **Web UI** - React web application theo [ADR-017](../../decisions/ADR-017-react-web-frontend.md). Sở hữu `ApplicationDefinitionDraft`, cho Developer khai báo application, workload, resource, dependency và configuration requirement, serialize/restore phần không nhạy cảm trong `sessionStorage`, rồi gửi toàn bộ draft khi Save.
 
   Editor sử dụng cấu trúc Application Builder đã chốt trong
-  [UI design](ui-design.md): navigation theo từng component, form tập trung cho
+  [UI design](ui/README.md): navigation theo từng component, form tập trung cho
   component đang chọn và Review topology chỉ đọc. Đây là cách trình bày các
   operation client-owned ở trên, không tạo thêm API operation.
 
@@ -69,7 +69,7 @@ UC-01 chưa cần Deployment Orchestrator, Resource Definition Resolver, Infrast
 
 ## Detailed design artifacts
 
-- [Application Builder UI design](ui-design.md)
+- [Application Builder UI design](ui/README.md)
 - [Sequence diagram](sequence.puml)
 - [VOPC](vopc.puml)
 - [Operation contracts](../../architecture/contracts/operation-contracts.md)

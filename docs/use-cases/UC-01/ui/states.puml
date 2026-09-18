@@ -1,0 +1,42 @@
+@startuml
+title UC-01 desktop web — Editor state and recovery
+
+hide empty description
+
+[*] --> Loading : open existing application
+[*] --> Clean : open new application
+
+Loading --> Clean : latest definition loaded
+Loading --> Restored : tab-local draft restored
+Loading --> LoadFailed : request failed
+LoadFailed --> Loading : Try again
+
+Clean --> Dirty : edit field or component
+Restored --> Dirty : continue editing
+Dirty --> Dirty : edit / copy or download draft JSON
+Dirty --> ReviewWithProblems : Save [client validation fails]
+Dirty --> Saving : Save [client validation passes]
+
+ReviewWithProblems --> Dirty : correct a problem
+ReviewWithProblems --> Saving : Save [valid]
+
+Saving --> Clean : Save succeeded / clear local draft
+Saving --> Dirty : Save failed / preserve draft
+Saving --> Conflict : DRAFT_CONFLICT / preserve draft
+Saving --> ReviewWithProblems : backend validation failed
+
+Conflict --> Dirty : Copy or Download draft JSON
+Conflict --> Loading : confirm Load latest
+
+Dirty --> Clean : confirm Discard / new application
+Dirty --> Loading : confirm Discard / existing application
+Clean --> [*] : leave editor
+
+note right of Conflict
+  No automatic merge.
+  Load latest is destructive only after
+  explicit confirmation; recovery export
+  does not change browser draft state.
+end note
+
+@enduml

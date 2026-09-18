@@ -11,13 +11,17 @@ related: UC-01, ADR-016, ADR-017
 ## Purpose and boundary
 
 This document defines the accepted interaction and screen design for the
-UC-01 React editor. The [UC-01 specification](specification.md) remains the
+UC-01 React editor. The [UC-01 specification](../specification.md) remains the
 owner of required product behaviour; this document turns that behaviour into
 a reviewable interface contract for humans and coding agents.
 
 The editor is a **structured application builder**. Developers edit real
 components in focused forms and use a read-only review topology to verify the
 result. The topology is not a drag-and-drop authoring surface.
+
+UC-01 targets a desktop web browser. There is no mobile application, React
+Native client, phone/tablet-specific layout or separate mobile workflow in
+scope.
 
 ## Design principles
 
@@ -54,68 +58,27 @@ summary and component/configuration summary.
 Changing a component name must not change navigation identity: React keys and
 selection use stable component IDs, while visible labels update immediately.
 
-## Desktop wireframes
+## Desktop web diagrams
 
-### Component editor
+- [Component workspace](application-builder.puml) defines the persistent
+  header, component navigation and focused editor workspace.
+- [Review workspace](review.puml) defines validation, read-only topology and
+  component summary.
+- [Editor state and recovery](states.puml) defines load, draft, validation,
+  Save, failure and conflict transitions.
 
-```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ ← Applications   shop-app   Version 2 · Unsaved       Discard   Save app   │
-├──────────────────────┬───────────────────────────────────────────────────────┤
-│ APPLICATION          │ Workload / backend                    Remove workload │
-│   Overview           │                                                       │
-│                      │ General                                               │
-│ WORKLOADS            │ Name       [backend                ]                  │
-│ ● backend        2 ! │ Type       [Backend Service        ]                  │
-│ ○ frontend           │ Repository [registry/.../backend   ]  Port [8080]     │
-│ + Add workload       │                                                       │
-│                      │ Outputs                                               │
-│ RESOURCES            │ [endpoint                              ] [Remove]     │
-│ ◇ postgresql         │ + Add output                                          │
-│ + Add resource       │                                                       │
-│                      │ Configuration requirements                            │
-│                      │ Environment variables        Secrets                  │
-│ REVIEW               │ [DB_HOST] [Required]         [DB_PASSWORD] [Required]│
-│   Review         2 ! │                                                       │
-│                      │ Dependencies                                          │
-│                      │ backend depends on [postgresql ▼]                     │
-└──────────────────────┴───────────────────────────────────────────────────────┘
-```
+The Review topology may use a deterministic CSS/HTML layout. It does not need
+to be a general graph canvas. Every relationship must also be available as
+text so the view remains understandable to assistive technology and for large
+graphs.
 
-### Review
+## Desktop web boundary
 
-```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ ← Applications   shop-app   Version 2 · Unsaved       Discard   Save app   │
-├──────────────────────┬───────────────────────────────────────────────────────┤
-│ Overview             │ Review application                                    │
-│ Workloads            │ 2 problems must be fixed before saving                │
-│ ● backend        1 ! │                                                       │
-│ ○ frontend       1 ! │ Topology (read only)                                  │
-│ Resources            │ [frontend] ──depends on──▶ [backend]                  │
-│ ◇ postgresql         │                              │                        │
-│                      │                              └──▶ [postgresql]        │
-│ Review           2 ! │                                                       │
-│                      │ Components                                            │
-│                      │ 2 workloads · 1 resource · 2 dependencies             │
-│                      │ backend: 1 output · 1 variable · 1 secret             │
-└──────────────────────┴───────────────────────────────────────────────────────┘
-```
-
-The topology may use a deterministic CSS/HTML layout. It does not need to be a
-general graph canvas. Every relationship must also be available as text so the
-view remains understandable to assistive technology and for large graphs.
-
-## Responsive behavior
-
-At narrow widths the header wraps, actions remain reachable, and builder
-navigation becomes a horizontally scrollable component selector above the
-workspace. The selected item stays visually and programmatically identified.
-Forms become one column. Tables or topology content may scroll inside their
-own region, but the whole page must not require horizontal scrolling.
-
-The responsive layout keeps the same sections and actions; it does not hide
-fields or create a separate mobile workflow.
+The header, navigation and workspace are designed as one desktop-browser
+surface. A narrower desktop window may wrap controls or scroll a contained
+table as defensive behavior, but this is not a separate mobile layout and is
+not a mobile acceptance target. Fields and actions must not disappear when the
+window is resized.
 
 ## Interaction rules
 

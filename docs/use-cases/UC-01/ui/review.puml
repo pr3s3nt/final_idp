@@ -1,0 +1,37 @@
+@startuml
+title UC-01 desktop web — Read-only Review workspace
+
+skinparam backgroundColor #F3F5F8
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #D8DEE8
+  FontColor #182230
+}
+
+rectangle "React web route\n/ui/applications/{applicationId}" as Browser {
+  rectangle "Header\n← Applications  |  shop-app  |  Version 2 · Unsaved  |  Discard  |  Save application" as Header
+
+  rectangle "Builder navigation\n\nOverview\n● backend       1 problem\n○ frontend      1 problem\n◆ postgresql\n\nReview          2 problems" as Navigation
+
+  rectangle "Review application" as Review {
+    rectangle "Validation summary\n2 problems must be fixed before saving\nEach item navigates to its owning workspace and field" as Validation
+    rectangle "Topology · Read only\n\nfrontend ──depends on──▶ backend\n                            │\n                            └──depends on──▶ postgresql\n\nEvery relation is also available as text" as Topology
+    rectangle "Component summary\n2 workloads · 1 resource · 2 dependencies\nbackend · 1 output · 1 variable · 1 secret" as Summary
+
+    Validation -[hidden]down- Topology
+    Topology -[hidden]down- Summary
+  }
+
+  Header -[hidden]down- Navigation
+  Navigation -[hidden]right- Review
+}
+
+note right of Review
+  Review never mutates the draft.
+  The topology is verification, not
+  a drag-and-drop authoring surface.
+end note
+
+@enduml
