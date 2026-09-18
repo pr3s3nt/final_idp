@@ -2,7 +2,7 @@
 id: UC-01-CONTEXT
 artifact: use-case-context
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # UC-01 context — Create / Configure Application
@@ -15,8 +15,9 @@ Implemented and verified by automated tests on 2026-09-18 ([verification record]
 
 1. [Specification](specification.md)
 2. [Use Case Realization](realization.md)
-3. [Sequence diagram](sequence.puml)
-4. [VOPC](vopc.puml)
+3. [Application Builder UI design](ui-design.md)
+4. [Sequence diagram](sequence.puml)
+5. [VOPC](vopc.puml)
 
 ## Shared artifacts
 

@@ -2,7 +2,7 @@
 id: IDP-FRONTEND-README
 artifact: code-area-readme
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # IDP frontend
@@ -11,6 +11,8 @@ React + TypeScript web frontend built with Vite. The technology, API
 integration, build and delivery approach are decided in
 [ADR-017](../../docs/decisions/ADR-017-react-web-frontend.md). It currently
 implements the [UC-01](../../docs/use-cases/UC-01/README.md) editor.
+Its accepted information architecture, states and interaction rules are in the
+[UC-01 Application Builder UI design](../../docs/use-cases/UC-01/ui-design.md).
 
 The server-rendered pages for UC-03 to UC-05 stay in
 [`../backend/internal/web/templates/`](../backend/internal/web/templates/).

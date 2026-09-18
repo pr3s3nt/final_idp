@@ -3,7 +3,7 @@ id: UC-01-REALIZATION
 artifact: use-case-realization
 status: current
 use_case: UC-01
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # UC-01 — Create / Configure Application: Use Case Realization
@@ -40,6 +40,11 @@ Các operation chỉnh field/component là interaction operation của Web UI v�
 
 - **Web UI** - React web application theo [ADR-017](../../decisions/ADR-017-react-web-frontend.md). Sở hữu `ApplicationDefinitionDraft`, cho Developer khai báo application, workload, resource, dependency và configuration requirement, serialize/restore phần không nhạy cảm trong `sessionStorage`, rồi gửi toàn bộ draft khi Save.
 
+  Editor sử dụng cấu trúc Application Builder đã chốt trong
+  [UI design](ui-design.md): navigation theo từng component, form tập trung cho
+  component đang chọn và Review topology chỉ đọc. Đây là cách trình bày các
+  operation client-owned ở trên, không tạo thêm API operation.
+
 - **Application API / Controller** - Tải phiên bản mới nhất cho edit; khi Save, nhận toàn bộ draft, validate ở mức request và điều phối sang application service. Không cung cấp endpoint cho từng field/component edit.
 
 ### Application services
@@ -64,6 +69,7 @@ UC-01 chưa cần Deployment Orchestrator, Resource Definition Resolver, Infrast
 
 ## Detailed design artifacts
 
+- [Application Builder UI design](ui-design.md)
 - [Sequence diagram](sequence.puml)
 - [VOPC](vopc.puml)
 - [Operation contracts](../../architecture/contracts/operation-contracts.md)
