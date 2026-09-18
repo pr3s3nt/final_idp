@@ -1,4 +1,5 @@
 import { httpApplicationApi, type ApplicationApi } from './api/client';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ApplicationEditorPage } from './pages/ApplicationEditorPage';
 import { ApplicationListPage } from './pages/ApplicationListPage';
 import { linkHandler, parseRoute, useLocation } from './router';
@@ -35,7 +36,9 @@ export function App({ api = httpApplicationApi }: { api?: ApplicationApi }) {
           Application definitions
         </a>
       </header>
-      <main className="page">{page}</main>
+      <main className="page">
+        <ErrorBoundary>{page}</ErrorBoundary>
+      </main>
     </>
   );
 }
