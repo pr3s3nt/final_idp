@@ -4,6 +4,15 @@ import type { ConfigGroup, DraftAction } from '../draft/reducer';
 import { fieldDomId, RowErrors, SelectField, TextField, type ProblemsByField } from '../../../shared/ui/Field';
 import { labelOf } from './labels';
 
+/** Octicon trash-16 (MIT, github/octicons). The button carries an aria-label. */
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z" />
+    </svg>
+  );
+}
+
 interface Props {
   draft: ApplicationDraft;
   workload: WorkloadDraft;
@@ -45,7 +54,7 @@ function ConfigList({ workload, group, dispatch, problems }: { workload: Workloa
               Required
             </label>
             <button type="button" className="icon-button danger" aria-label={`Remove ${kind} ${requirement.name || 'unnamed'}`} onClick={() => dispatch({ type: 'removeConfig', workloadId: workload.id, group, id: requirement.id })}>
-              Remove
+              <TrashIcon />
             </button>
           </li>
         ))}
@@ -82,7 +91,7 @@ function WorkloadDependencies({ draft, workload, dispatch, problems }: { draft: 
               onChange={(targetId) => dispatch({ type: 'updateDependency', id: dependency.id, targetId })}
             />
             <button type="button" className="icon-button danger" aria-label={`Remove dependency ${componentLabel(draft, dependency.sourceId)} to ${componentLabel(draft, dependency.targetId)}`} onClick={() => dispatch({ type: 'removeDependency', id: dependency.id })}>
-              Remove
+              <TrashIcon />
             </button>
             <RowErrors field={`dependencies.${dependency.id}`} problems={problems} />
           </li>
@@ -147,7 +156,7 @@ export function WorkloadWorkspace({ draft, workload, dispatch, problems, onRemov
             <li key={output.id} className="definition-row">
               <TextField field={`${base}.outputs.${index}`} label={`Output ${index + 1} name`} value={output.name} problems={problems} onChange={(name) => dispatch({ type: 'updateOutput', workloadId: workload.id, outputId: output.id, name })} />
               <button type="button" className="icon-button danger" aria-label={`Remove output ${output.name || index + 1}`} onClick={() => dispatch({ type: 'removeOutput', workloadId: workload.id, outputId: output.id })}>
-                Remove
+                <TrashIcon />
               </button>
             </li>
           ))}

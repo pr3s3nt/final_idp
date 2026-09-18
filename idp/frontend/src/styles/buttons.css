@@ -13,18 +13,23 @@ button, .button {
 }
 button:hover:not(:disabled), .button:hover { background: var(--primary-bg-hover); }
 
-button.secondary { color: var(--control-fg); border-color: var(--line); background: var(--control-bg); }
+button.secondary { color: var(--control-fg); border-color: var(--control-border); background: var(--control-bg); }
 button.secondary:hover:not(:disabled) { background: var(--control-bg-hover); }
 button.secondary:active:not(:disabled) { background: var(--control-bg-active); }
 
-button.danger { color: var(--danger-text); border-color: var(--line); background: var(--control-bg); }
+button.danger { color: var(--danger-text); border-color: var(--control-border); background: var(--control-bg); }
 button.danger:hover:not(:disabled) { color: var(--on-emphasis); border-color: var(--danger-border); background: var(--danger-border); }
 
 button:disabled { color: var(--disabled-fg); background: var(--disabled-bg); border-color: var(--line); cursor: not-allowed; }
 button.secondary:disabled, button.danger:disabled { color: var(--disabled-fg); background: var(--disabled-bg); }
 
 button.compact { min-height: var(--space-7); padding: var(--space-1) var(--space-2); font-size: var(--text-sm); }
-button.icon-button { min-height: auto; padding: var(--space-1) var(--space-2); color: var(--muted); border-color: transparent; background: transparent; font-size: var(--text-xs); font-weight: var(--weight-normal); }
-button.icon-button:hover:not(:disabled) { color: var(--danger-text); border-color: var(--line); background: var(--danger-bg); }
+/*
+ * A row action is still a button, so it keeps a boundary at rest. It carries
+ * the trash Octicon rather than the word Remove, because a row can hold three
+ * of them and the accessible name already says what is removed.
+ */
+button.icon-button { width: var(--space-7); height: var(--space-7); min-height: 0; padding: 0; flex: none; color: var(--control-fg); border-color: var(--control-border); background: var(--control-bg); }
+button.icon-button:hover:not(:disabled) { color: var(--on-emphasis); border-color: var(--danger-border); background: var(--danger-border); }
 button.link { min-height: 0; padding: 0; border: 0; color: var(--danger-text); background: none; display: inline; font-weight: var(--weight-normal); text-align: left; text-decoration: underline; }
 button.link:hover:not(:disabled) { color: var(--danger-border); border: 0; background: none; }

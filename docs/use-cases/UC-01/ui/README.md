@@ -173,6 +173,9 @@ cụ phục hồi, không phải import contract hoặc public API contract.
   di chuyển sau action Save hoặc phục hồi do người dùng chủ động thực hiện.
 - Accessible name của action thêm/xóa chứa tên component hoặc requirement bị
   ảnh hưởng.
+- Đường biên của control tương tác dùng `--control-border`, đạt khoảng 3.5:1
+  trên nền trắng theo WCAG 1.4.11. `--line` nhạt hơn nhiều nên chỉ dùng cho
+  đường phân cách cấu trúc, không dùng cho viền ô nhập hay nút.
 - Mọi action chỉnh sửa, điều hướng, xác nhận và phục hồi conflict hoạt động bằng
   bàn phím.
 - Giao diện tôn trọng thiết lập giảm chuyển động, duy trì focus rõ ràng và độ
@@ -277,6 +280,7 @@ Tất cả lấy từ theme `light` của Primer. Tên token bên trái là tên
 | `--ink` | `#1f2328` | `fgColor-default` |
 | `--muted` | `#59636e` | `fgColor-muted` |
 | `--line` | `#d1d9e0` | `borderColor-default` |
+| `--control-border` | `#818b98` | `borderColor-emphasis` |
 | `--line-translucent` | `#1f232826` | `borderColor-translucent` |
 | `--topbar` | `#25292e` | `bgColor-emphasis` |
 | `--accent` | `#0969da` | `fgColor-accent` |

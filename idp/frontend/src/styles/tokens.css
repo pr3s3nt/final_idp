@@ -57,7 +57,11 @@
   --surface-subtle: #f6f8fa;      /* bgColor-muted */
   --ink: #1f2328;                 /* fgColor-default */
   --muted: #59636e;               /* fgColor-muted */
-  --line: #d1d9e0;                /* borderColor-default */
+  --line: #d1d9e0;                /* borderColor-default: structural dividers */
+  --control-border: #818b98;      /* borderColor-emphasis: interactive outlines.
+                                     #d1d9e0 gives only ~1.4:1 on white, below
+                                     the 3:1 that WCAG 1.4.11 requires for the
+                                     boundary of a control. This gives ~3.5:1. */
   --line-translucent: #1f232826;  /* borderColor-translucent */
   --topbar: #25292e;              /* bgColor-emphasis */
   --on-emphasis: #ffffff;         /* fgColor-onEmphasis */
