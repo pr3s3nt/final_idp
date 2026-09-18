@@ -9,12 +9,13 @@ last_reviewed: 2026-09-18
 
 ## Lifecycle position
 
-The project follows UP. UC-03 and UC-05 are in a late Construction/verification state: executable software exists and has been exercised on local Kubernetes and AWS. UC-01 is implemented with a React web editor and verified by automated tests. The whole product is not in Transition because UC-02 and the complete UC-04 experience are not implemented as full product use cases.
+The project follows UP. UC-03 and UC-05 are in a late Construction/verification state: executable software exists and has been exercised on local Kubernetes and AWS. UC-01 is implemented with a React web editor and verified by automated tests. The whole product is not in Transition because UC-02, the complete UC-04 experience and UC-06 authentication are not implemented as full product use cases.
 
-This status was reviewed on branch `uc03-impl` against commit `ab74aa2`; the
-UC-01 implementation and component-focused Application Builder were reviewed
-through commit `1417b5e` on 2026-09-18. Later changes must update this document
-when they change the baseline.
+This status was reviewed on branch `uc03-impl` on 2026-09-18. The UC-01
+implementation and component-focused Application Builder were reviewed through
+commit `1417b5e`; UC-06 is an accepted documentation/design baseline only.
+Source inspection still confirms that no authentication middleware, session
+store, local-user migration or login UI has been implemented.
 
 ## Documentation layout
 
@@ -29,6 +30,7 @@ The AI-facing layout is complete. Sequence diagrams and per-use-case VOPCs live 
 | UC-03 | Implemented and E2E verified | Verified with an existing internal kind cluster and with AWS infrastructure. Fleet is the default CD provider for `kind-local`; AWS continues to use Argo CD. |
 | UC-04 | Partially implemented | The implementation exposes the execution status/query path required to observe UC-03. Treat the full UC-04 specification as design scope, not as fully delivered scope. |
 | UC-05 | Implemented and E2E verified | Verified on `kind-local` and AWS; unresolved teardown edge cases remain in D13 and D14. |
+| UC-06 | Designed | Local account, Argon2id credential, server-side session, login/logout, CSRF and CLI provisioning are specified but not implemented. All current pages and APIs remain unauthenticated under IMP-013. |
 
 ## Current architectural baseline
 
@@ -39,6 +41,7 @@ The AI-facing layout is complete. Sequence diagrams and per-use-case VOPCs live 
 - The CD integration is provider-neutral. Fleet is the default on `kind-local`; Argo CD remains supported and is used on AWS.
 - UC-05 reuses deployment orchestration primitives to remove an application from one environment and target.
 - UC-01 drafts are owned by the browser tab and saved with optimistic concurrency (ADR-016). The UC-01 editor is a React app in `idp/frontend`, served by the Go backend under `/ui/`; UC-03 to UC-05 keep their Go templates (ADR-017).
+- UC-06 will place local username/password authentication behind middleware that exposes a provider-neutral `Principal`; OIDC/SSO and detailed authorization remain out of scope (ADR-019).
 
 The accepted rationale is indexed in [decisions/README.md](decisions/README.md).
 

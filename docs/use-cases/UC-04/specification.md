@@ -3,7 +3,7 @@ id: UC-04
 artifact: use-case-specification
 status: current
 delivery_status: partially-implemented
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # UC-04 — View Deployment Result
@@ -18,6 +18,8 @@ Cho phép Developer xem tiến trình và kết quả của deployment, bao gồ
 **Primary Actor:** Developer
 
 ## Tiền điều kiện
+
+Developer có Auth Session hợp lệ và Local User Account còn `ACTIVE` theo UC-06.
 
 Application có ít nhất một deployment.
 

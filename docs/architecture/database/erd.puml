@@ -5,6 +5,48 @@ hide circle
 skinparam linetype ortho
 skinparam packageStyle rectangle
 
+package "Authentication Repositories" {
+  entity "user_account" as user_account {
+    * user_id : UUID <<PK>>
+    --
+    * username : VARCHAR(64) <<NOT NULL, UNIQUE>>
+    * display_name : VARCHAR(255) <<NOT NULL>>
+    * status : ENUM(ACTIVE, DISABLED) <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * updated_at : TIMESTAMP <<NOT NULL>>
+  }
+
+  entity "local_credential" as local_credential {
+    * user_id : UUID <<PK, FK>>
+    --
+    * password_hash : TEXT <<NOT NULL>>
+    * password_changed_at : TIMESTAMP <<NOT NULL>>
+  }
+
+  entity "auth_session" as auth_session {
+    * session_id : UUID <<PK>>
+    --
+    * user_id : UUID <<FK, NOT NULL>>
+    * token_hash : BYTEA <<NOT NULL, UNIQUE>>
+    * csrf_token_hash : BYTEA <<NOT NULL>>
+    * created_at : TIMESTAMP <<NOT NULL>>
+    * last_seen_at : TIMESTAMP <<NOT NULL>>
+    * expires_at : TIMESTAMP <<NOT NULL>>
+    revoked_at : TIMESTAMP
+  }
+
+  entity "login_attempt" as login_attempt {
+    * login_attempt_id : UUID <<PK>>
+    --
+    * scope : ENUM(ACCOUNT, SOURCE) <<NOT NULL>>
+    * key_hash : BYTEA <<NOT NULL>>
+    * window_started_at : TIMESTAMP <<NOT NULL>>
+    * failure_count : INT <<NOT NULL>>
+    blocked_until : TIMESTAMP
+    * expires_at : TIMESTAMP <<NOT NULL>>
+  }
+}
+
 package "Application Repository" {
   entity "application_definition" as application_definition {
     * application_id : UUID <<PK>>
@@ -301,6 +343,9 @@ package "Deployment Repository" {
     * resource_instance_id : UUID <<FK, NOT NULL>>
   }
 }
+
+user_account ||--|| local_credential : authenticates with
+user_account ||--o{ auth_session : owns
 
 application_definition ||--|{ application_definition_version : immutable versions
 application_definition ||--o{ application_component : stable component ids

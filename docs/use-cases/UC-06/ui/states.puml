@@ -1,0 +1,39 @@
+@startuml
+title UC-06 - Trạng thái giao diện đăng nhập
+
+[*] --> Ready : GET /login
+Ready --> Submitting : Submit hợp lệ ở client
+Submitting --> Authenticated : Credential hợp lệ\nsession đã persist
+Authenticated --> [*] : Redirect safe return_to
+
+Submitting --> InvalidCredentials : 401 lỗi chung
+InvalidCredentials --> Submitting : Sửa thông tin và thử lại
+
+Submitting --> RateLimited : 429 + Retry-After
+RateLimited --> Ready : Hết thời gian chờ
+
+Submitting --> FormExpired : 403 pre-auth CSRF/Origin bị từ chối
+FormExpired --> Ready : Reload login form
+
+Submitting --> ServiceError : Lỗi hệ thống/network
+ServiceError --> Submitting : Thử lại
+
+Ready --> Ready : Hiển thị session-expired\nhoặc logged-out message
+
+note right of InvalidCredentials
+  Giữ username, xóa password.
+  Không nói account có tồn tại,
+  bị disable hay password sai.
+end note
+
+note right of Submitting
+  Chỉ một request đang chạy.
+  Button: Đang đăng nhập…
+end note
+
+note right of FormExpired
+  Không tự submit lại password.
+  Reload để nhận pre-auth CSRF nonce mới.
+end note
+
+@enduml

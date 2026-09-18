@@ -2,13 +2,17 @@
 id: PROJECT-GLOSSARY
 artifact: glossary
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Glossary
 
 | Term | Meaning |
 |---|---|
+| Local User Account | Application-managed user identity with a normalized username, display name, and `ACTIVE`/`DISABLED` status; it has no role in the initial UC-06 scope. |
+| Local Credential | Argon2id encoded password hash owned by one Local User Account; plaintext passwords are never persisted. |
+| Auth Session | Server-side login session identified in the browser by an opaque cookie token whose hash, expiry, activity, revocation, and CSRF binding are persisted. |
+| Principal | Request-scoped, provider-neutral identity created after authentication and consumed by business use cases instead of credentials or session tokens. |
 | Application Definition | Versioned logical definition of an application, its workloads, requirements, configuration definitions, and dependencies. |
 | Application Definition Version | Immutable version selected for deployment into an environment. Components retain stable identities across versions. |
 | Application Specification | Generated, unresolved application artifact derived from an Application Definition Version, such as `score.yaml`. |

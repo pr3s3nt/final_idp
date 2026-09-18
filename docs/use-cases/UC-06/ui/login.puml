@@ -1,0 +1,28 @@
+@startuml
+title UC-06 desktop web — Trang đăng nhập
+
+skinparam backgroundColor #F3F5F8
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #D8DEE8
+  FontColor #182230
+}
+
+rectangle "IDP" as Header
+
+rectangle "Đăng nhập vào IDP\n\nSử dụng tài khoản nội bộ do Platform Operator cấp.\n\n[Thông báo phiên hết hạn hoặc đã đăng xuất]\n\nTên đăng nhập\n┌──────────────────────────────────┐\n│ username                         │\n└──────────────────────────────────┘\n\nMật khẩu\n┌──────────────────────────────────┐\n│ ••••••••••••••••                 │\n└──────────────────────────────────┘\n\n[ Đăng nhập ]" as LoginPanel
+
+Header -[hidden]down- LoginPanel
+
+note right of LoginPanel
+  Panel tối đa khoảng 28rem.
+  Không có đăng ký, quên mật khẩu,
+  ghi nhớ đăng nhập hoặc SSO.
+
+  Lỗi credential luôn là lỗi chung;
+  giữ username và xóa password.
+end note
+
+@enduml

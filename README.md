@@ -1,6 +1,6 @@
 # Internal Developer Platform — design and UC-03/UC-05 implementation
 
-This repository applies the Unified Process (UP): development is use-case-driven, architecture-centric, iterative, and risk-driven. It contains the use-case model and design for UC-01 through UC-05, plus a working Go implementation and end-to-end evidence for UC-03 and UC-05.
+This repository applies the Unified Process (UP): development is use-case-driven, architecture-centric, iterative, and risk-driven. It contains the use-case model and design for UC-01 through UC-06, plus a working Go implementation and end-to-end evidence for UC-03 and UC-05.
 
 ## Start here
 
@@ -27,5 +27,6 @@ Each use case has a small context package under `docs/use-cases/`. Shared archit
 | UC-03 | Deploy Application | Implemented and verified on `kind-local` and AWS |
 | UC-04 | View Deployment Result | Designed; a minimal query/UI path exists to support UC-03 execution tracking |
 | UC-05 | Remove Application from Environment | Implemented and verified on `kind-local` and AWS |
+| UC-06 | Đăng nhập bằng tài khoản nội bộ | Designed; not implemented |
 
 See [current state](docs/CURRENT_STATE.md) for the precise baseline and unresolved issues.

@@ -1,0 +1,34 @@
+@startuml
+title Step 5 - Auth Session State Machine
+
+hide empty description
+
+state "Active\n(derived)" as ACTIVE
+state "Idle expired\n(derived)" as IDLE_EXPIRED
+state "Absolute expired\n(derived)" as ABSOLUTE_EXPIRED
+state "Revoked\n(revoked_at set)" as REVOKED
+
+[*] --> ACTIVE : signIn [credential hợp lệ] /\ncreate auth_session; issue cookie
+ACTIVE --> ACTIVE : authenticateRequest [account ACTIVE;\nidle < 30m; now < expires_at] / touch last_seen_at
+ACTIVE --> IDLE_EXPIRED : authenticateRequest [idle >= 30m]
+ACTIVE --> ABSOLUTE_EXPIRED : authenticateRequest [now >= expires_at]
+ACTIVE --> REVOKED : signOut [CSRF hợp lệ] / set revoked_at
+ACTIVE --> REVOKED : resetLocalPassword / set revoked_at
+ACTIVE --> REVOKED : setLocalUserStatus(DISABLED) / set revoked_at
+
+IDLE_EXPIRED --> [*]
+ABSOLUTE_EXPIRED --> [*]
+REVOKED --> [*]
+
+note right of ACTIVE
+  ACTIVE không phải ENUM được persist.
+  Nó được suy ra từ revoked_at, expires_at,
+  last_seen_at và user_account.status.
+end note
+
+note bottom of REVOKED
+  Session đã revoke không được phục hồi.
+  Enable account không tạo lại session.
+end note
+
+@enduml

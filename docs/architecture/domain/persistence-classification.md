@@ -2,12 +2,12 @@
 id: PERSISTENCE-CLASSIFICATION
 artifact: persistence-classification
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Step 2: Persistence Classification
 
-Phân loại dưới đây bao phủ toàn bộ domain object trong [`domain-model.puml`](domain-model.puml). Với các object thuộc application lifecycle, `PERSISTENT` nghĩa là state cần tồn tại qua nhiều request/deployment execution và được quản lý bởi đúng một trong sáu repository boundary đã thống nhất (năm repository ban đầu cộng **Workload Instance Repository** được bổ sung cho việc triển khai theo tầng). `Catalog Version` và `Resource Definition` cũng là dữ liệu bền vững, nhưng là reference data thuộc catalog do platform quản lý và nằm ngoài phạm vi sáu repository này; UC-03 đọc chúng qua **Resource Definition Catalog**. `TRANSIENT` nghĩa là object chỉ được dựng/resolve trong một deployment execution và không được lưu như một domain record độc lập. `CLIENT-OWNED DTO` là dữ liệu presentation tạm do browser tab sở hữu; nó không phải domain object và không có backend repository/table.
+Phân loại dưới đây bao phủ toàn bộ domain object trong [`domain-model.puml`](domain-model.puml). Với các object thuộc application lifecycle, `PERSISTENT` nghĩa là state cần tồn tại qua nhiều request/deployment execution và được quản lý bởi một repository boundary đã thống nhất. UC-06 bổ sung các repository authentication riêng, không làm chúng thành một phần của application lifecycle. `Catalog Version` và `Resource Definition` cũng là dữ liệu bền vững, nhưng là reference data thuộc catalog do platform quản lý; UC-03 đọc chúng qua **Resource Definition Catalog**. `TRANSIENT` nghĩa là object chỉ tồn tại trong một execution/request và không được lưu như một domain record độc lập. `CLIENT-OWNED DTO` là dữ liệu presentation tạm do browser tab sở hữu; nó không phải domain object và không có backend repository/table.
 
 ## Client-owned draft DTOs
 
@@ -24,6 +24,11 @@ optimistic concurrency check.
 
 | Domain Object | Persistent/Transient | Repository (nếu persistent) | Lý do |
 |---|---|---|---|
+| Local User Account | PERSISTENT | User Account Repository | Identity, username chuẩn hóa và trạng thái phải tồn tại qua nhiều lần đăng nhập. |
+| Local Credential | PERSISTENT | User Account Repository | Encoded Argon2id hash cần dùng cho lần đăng nhập sau; password gốc không được persist. |
+| Auth Session | PERSISTENT | Auth Session Repository | Session phía server phải kiểm tra được qua nhiều request, có idle/absolute expiry và hỗ trợ thu hồi. |
+| Login Attempt | PERSISTENT | Login Attempt Repository | Rate-limit phải tồn tại qua request/process restart và áp dụng nhất quán; bucket chỉ giữ key hash cùng counter/thời hạn. |
+| Principal | TRANSIENT | — | Chỉ được dựng trong request context sau khi middleware xác thực session/account. |
 | Application Definition | PERSISTENT | Application Repository | Là identity bền vững của application và sở hữu các phiên bản định nghĩa. |
 | Application Definition Version | PERSISTENT | Application Repository | Mỗi lần lưu tạo một phiên bản bất biến; deployment trỏ tới phiên bản đã dùng nên phiên bản cũ phải được giữ nguyên, không sửa, không xóa. |
 | Workload | PERSISTENT | Application Repository | Được lưu theo từng phiên bản với ID cố định qua phiên bản; image repository và configuration requirements phải tồn tại qua các lần deploy. |

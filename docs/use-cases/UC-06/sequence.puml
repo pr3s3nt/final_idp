@@ -1,0 +1,98 @@
+@startuml
+title UC-06 - Đăng nhập bằng tài khoản nội bộ
+
+autonumber
+hide footbox
+
+actor Developer
+actor "Platform Operator" as Operator
+boundary "Login Web UI" as UI
+boundary "Local User CLI" as CLI
+control "Authentication API / Controller" as API
+control "Authentication Middleware" as Middleware
+control "Authentication Service" as Service
+control "Login Rate Limiter" as Limiter
+control "Password Hasher" as Hasher
+control "Session Manager" as Sessions
+entity "User Account Repository" as Users
+entity "Auth Session Repository" as SessionRepo
+entity "Login Attempt Repository" as AttemptRepo
+
+group Provision tài khoản trước lần đăng nhập đầu tiên
+  Operator -> CLI: createLocalUser(username, displayName)
+  CLI -> CLI: đọc + xác nhận password bằng prompt ẩn
+  CLI -> Service: createLocalUser(username, displayName, password)
+  Service -> Hasher: hash(password, Argon2id)
+  Hasher --> Service: encodedPasswordHash
+  Service -> Users: createAccountAndCredential(...)
+  Users --> Service: Local User Account ACTIVE
+  Service --> CLI: user đã được tạo
+end
+
+group Supporting account lifecycle (khi Operator yêu cầu)
+  Operator -> CLI: resetLocalPassword(username)
+  CLI -> CLI: đọc + xác nhận password mới bằng prompt ẩn
+  CLI -> Service: resetLocalPassword(username, newPassword)
+  Service -> Hasher: hash(newPassword, Argon2id)
+  Hasher --> Service: encodedPasswordHash
+  group Một database transaction
+    Service -> Users: replacePassword(userId, hash)
+    Service -> SessionRepo: revokeAll(userId)
+  end
+  Service --> CLI: password đã reset
+
+  Operator -> CLI: setLocalUserStatus(username, status)
+  CLI -> Service: setLocalUserStatus(username, status)
+  group Một database transaction
+    Service -> Users: setStatus(userId, status)
+    Service -> SessionRepo: revokeAll(userId) nếu DISABLED
+  end
+  Service --> CLI: status đã cập nhật
+end
+
+Developer -> Middleware: GET protectedPath (không có session hợp lệ)
+Middleware --> Developer: 303 /login?return_to=protectedPath
+Developer -> UI: mở trang đăng nhập
+UI --> Developer: form username/password + pre-auth CSRF nonce
+Developer -> UI: chọn Đăng nhập
+UI -> API: POST /auth/login\ncredentials + returnTo + pre-auth CSRF
+API -> API: validate Origin/Fetch Metadata + nonce
+API -> Service: signIn(..., requestSource)
+Service -> Limiter: check(normalizedUsername, requestSource)
+Limiter -> AttemptRepo: load/update attempt buckets
+AttemptRepo --> Limiter: allowed
+Service -> Users: findByNormalizedUsername(username)
+Users --> Service: account + encoded hash hoặc not found
+Service -> Hasher: verify(password, encoded hash/dummy hash)
+Hasher --> Service: valid / invalid
+
+alt account ACTIVE và password hợp lệ
+  Service -> Sessions: createSession(userId)
+  Sessions -> SessionRepo: save(tokenHash, csrfHash, expiries)
+  SessionRepo --> Sessions: session persisted
+  Sessions --> Service: raw token + raw CSRF token
+  Service --> API: success + session material
+  API --> UI: Set-Cookie session; redirect tới safe returnTo
+else thông tin không hợp lệ
+  Service -> Limiter: recordFailure(username, requestSource)
+  Limiter -> AttemptRepo: persist buckets
+  Service --> API: generic invalid-credentials result
+  API --> UI: cùng một lỗi đăng nhập, không tạo cookie
+end
+
+Developer -> Middleware: request được bảo vệ + session cookie
+Middleware -> Sessions: authenticateRequest(raw token)
+Sessions -> SessionRepo: findActiveByTokenHash(tokenHash)
+SessionRepo --> Sessions: session hoặc not found
+Sessions -> Users: findActiveAccount(session.userId)
+Users --> Sessions: account ACTIVE hoặc invalid
+Sessions --> Middleware: Principal hoặc unauthenticated
+Middleware --> Developer: chuyển request tới handler hoặc 401/redirect
+
+Developer -> UI: chọn Đăng xuất
+UI -> API: signOut() + CSRF token
+API -> Sessions: revokeCurrentSession(tokenHash)
+Sessions -> SessionRepo: set revokedAt
+API --> Developer: xóa cookie; redirect /login
+
+@enduml

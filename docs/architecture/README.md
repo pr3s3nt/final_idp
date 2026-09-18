@@ -2,7 +2,7 @@
 id: ARCHITECTURE-INDEX
 artifact: architecture-index
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Architecture index
@@ -19,7 +19,7 @@ Shared models are canonical here; use-case packages link to them rather than dup
 | Database tables, constraints, and ENUMs | [Database schema](database/schema.md) | [ERD](database/erd.puml) |
 | Operation pre/postconditions | [Operation contracts](contracts/operation-contracts.md) | — |
 | Lifecycle behavior | [State-machine guide](state-machines/README.md) | [`state-machines/`](state-machines/) |
-| Secret storage and workload materialization | [Security and secrets](security-and-secrets.md) | — |
+| Authentication, session, secret storage and workload materialization | [Security, authentication and secrets](security-and-secrets.md) | — |
 | Cross-artifact coverage | [Traceability matrix](../traceability/matrix.md) | — |
 
 ## Canonical ownership

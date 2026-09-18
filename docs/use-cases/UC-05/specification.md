@@ -3,7 +3,7 @@ id: UC-05
 artifact: use-case-specification
 status: current
 delivery_status: implemented-and-verified
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # UC-05 — Remove Application from Environment
@@ -20,6 +20,8 @@ Use case này tách khỏi UC-03 vì nó không triển khai phiên bản nào: 
 **Primary Actor:** Developer
 
 ## Tiền điều kiện
+
+Developer có Auth Session hợp lệ và Local User Account còn `ACTIVE` theo UC-06.
 
 Application đã từng được deploy thành công lên đúng environment và nơi triển khai được chọn.
 

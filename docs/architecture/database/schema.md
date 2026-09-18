@@ -2,12 +2,80 @@
 id: DATABASE-SCHEMA
 artifact: database-schema
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Step 3: Database / ERD
 
 Schema này hiện thực persistence classification đã được duyệt ở Step 2. Tên table/column dùng `snake_case`; `UUID` dùng cho identity và foreign key; `JSONB` chỉ dùng cho cấu trúc linh hoạt vốn đã là `Map`/`List` trong domain model. Các `TRANSIENT` execution object không được tạo table.
+
+## Authentication Repositories
+
+### `user_account`
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `user_id` | UUID | PK, NOT NULL | Identity ổn định của local user. |
+| `username` | VARCHAR(64) | NOT NULL, UNIQUE | Username đã trim và chuẩn hóa lowercase; constraint format theo UC-06. |
+| `display_name` | VARCHAR(255) | NOT NULL | Tên hiển thị trong UI/audit context. |
+| `status` | ENUM (`ACTIVE`, `DISABLED`) | NOT NULL | Trạng thái đăng nhập; `DISABLED` làm mọi session không hợp lệ. |
+| `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo account. |
+| `updated_at` | TIMESTAMP | NOT NULL | Thời điểm sửa gần nhất. |
+
+Không xóa account trong phạm vi UC-06. Disable giữ identity và lịch sử, đồng
+thời thu hồi mọi session trong cùng transaction.
+
+Constraint bổ sung: `CHECK (username = lower(btrim(username)))`, độ dài 3–64 và
+regex `^[a-z0-9][a-z0-9._-]{2,63}$`; `display_name = btrim(display_name)`, dài
+1–255 ký tự và không chứa control character.
+
+### `local_credential`
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `user_id` | UUID | PK, FK → `user_account.user_id`, NOT NULL | Account sở hữu duy nhất một local credential. |
+| `password_hash` | TEXT | NOT NULL | Encoded Argon2id hash gồm version, parameters và salt; không phải password có thể giải mã. |
+| `password_changed_at` | TIMESTAMP | NOT NULL | Thời điểm create/reset password gần nhất. |
+
+Password gốc không có cột tương ứng. Tạo account insert `user_account` và
+`local_credential` trong một transaction; reset credential và thu hồi session
+cũng thuộc một transaction.
+
+### `auth_session`
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `session_id` | UUID | PK, NOT NULL | Identity nội bộ dùng cho audit/chẩn đoán. |
+| `user_id` | UUID | FK → `user_account.user_id`, NOT NULL | Local User Account sở hữu session. |
+| `token_hash` | BYTEA | NOT NULL, UNIQUE, CHECK 32 byte | SHA-256 của opaque token 256-bit; raw token chỉ ở cookie. |
+| `csrf_token_hash` | BYTEA | NOT NULL, CHECK 32 byte | SHA-256/binding của CSRF token gắn với session. |
+| `created_at` | TIMESTAMP | NOT NULL | Thời điểm đăng nhập thành công. |
+| `last_seen_at` | TIMESTAMP | NOT NULL | Hoạt động gần nhất để kiểm tra idle timeout 30 phút. |
+| `expires_at` | TIMESTAMP | NOT NULL | Absolute expiry, đúng 8 giờ sau `created_at`. |
+| `revoked_at` | TIMESTAMP | NULL | Có giá trị khi logout, reset password hoặc disable account. |
+
+Index bắt buộc: `INDEX (user_id, revoked_at)` để thu hồi/tìm session của user và
+`INDEX (expires_at)` để dọn session hết hạn. Session hợp lệ khi `revoked_at IS
+NULL`, `expires_at > now()`, `last_seen_at > now() - 30 minutes` và account còn
+`ACTIVE`.
+
+Constraint bổ sung: `expires_at = created_at + INTERVAL '8 hours'`,
+`last_seen_at >= created_at`, và `revoked_at IS NULL OR revoked_at >= created_at`.
+
+### `login_attempt`
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `login_attempt_id` | UUID | PK, NOT NULL | Identity của bucket rate-limit. |
+| `scope` | ENUM (`ACCOUNT`, `SOURCE`) | NOT NULL | Bucket theo username chuẩn hóa hoặc nguồn request. |
+| `key_hash` | BYTEA | NOT NULL, CHECK 32 byte, UNIQUE (`scope`, `key_hash`) | HMAC-SHA-256 có namespace của key; không lưu username hoặc địa chỉ nguồn dạng thô. |
+| `window_started_at` | TIMESTAMP | NOT NULL | Đầu cửa sổ đếm hiện hành. |
+| `failure_count` | INT | NOT NULL, CHECK (`failure_count >= 0`) | Số lần đăng nhập thất bại trong cửa sổ. |
+| `blocked_until` | TIMESTAMP | NULL | Thời điểm cho phép thử lại; không phải khóa account vĩnh viễn. |
+| `expires_at` | TIMESTAMP | NOT NULL | Thời điểm bucket có thể được dọn. |
+
+`INDEX (expires_at)` hỗ trợ cleanup. Bảng không lưu password, raw token, request
+payload hoặc thông báo lỗi.
 
 ## Application Repository
 
@@ -439,6 +507,8 @@ Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, opera
 
 | Cột | Giá trị |
 |---|---|
+| `user_account.status` | `ACTIVE`, `DISABLED` |
+| `login_attempt.scope` | `ACCOUNT`, `SOURCE` |
 | `application_component.component_type` | `WORKLOAD`, `RESOURCE_REQUIREMENT`, `ENVIRONMENT_VARIABLE_DEFINITION`, `SECRET_DEFINITION`, `PLATFORM_REQUIREMENT` |
 | `dependency.target_type` | `WORKLOAD`, `RESOURCE` |
 | `configuration_value.value_source` | `DIRECT`, `RESOURCE_OUTPUT`, `WORKLOAD_OUTPUT` |
@@ -470,6 +540,10 @@ Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, opera
 
 | Domain object | Table / persistence mapping |
 |---|---|
+| Local User Account | `user_account` |
+| Local Credential | `local_credential` (PK/FK dùng chung `user_id`) |
+| Auth Session | `auth_session` |
+| Login Attempt | `login_attempt` |
 | Application Definition | `application_definition` |
 | Application Definition Version | `application_definition_version` |
 | Workload | `workload` (theo phiên bản) + ID cố định ở `application_component` |
@@ -504,6 +578,7 @@ Bảng này là nguồn chuẩn duy nhất cho literal ENUM; domain model, opera
 
 | Domain object | Lý do không tạo table |
 |---|---|
+| Principal | Dựng trong request context từ Auth Session + Local User Account đã kiểm tra. |
 | Deployment Graph | Dựng lại cho từng execution từ persistent sources. |
 | Resource Resolution | Quyết định trung gian; durable outcome là Resource Instance/reference. |
 | Infrastructure Plan | Plan được rebuild khi confirm; chỉ SHA-256 fingerprint và algorithm version của canonical plan được persist trên `deployment`. |

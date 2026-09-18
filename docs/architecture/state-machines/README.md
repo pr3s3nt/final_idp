@@ -2,22 +2,34 @@
 id: STATE-MACHINE-INDEX
 artifact: state-machine-index
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Step 5: State Machine
 
-Step này mô tả lifecycle có trạng thái và transition không tầm thường của ba aggregate root: **Deployment**, **Resource Instance** và **Workload Instance**. Tên state dễ đọc bám theo tiến trình UC-03/UC-04; literal viết hoa trong ngoặc là giá trị của cột `status`.
+Step này mô tả lifecycle có trạng thái và transition không tầm thường của **Auth Session**, **Deployment**, **Resource Instance** và **Workload Instance**. Tên state dễ đọc bám theo tiến trình UC-03/UC-04/UC-06; literal viết hoa trong ngoặc là giá trị của cột `status`, còn trạng thái Auth Session được suy ra từ timestamp và trạng thái account.
 
-Diagram sources: [Deployment](deployment.puml), [Resource Instance](resource-instance.puml), and [Workload Instance](workload-instance.puml).
+Diagram sources: [Auth Session](auth-session.puml), [Deployment](deployment.puml), [Resource Instance](resource-instance.puml), and [Workload Instance](workload-instance.puml).
 
-Mọi literal dùng đúng mục **Danh mục ENUM** trong `docs/architecture/database/schema.md`: `deployment.status` gồm `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED`, `FAILED`; `resource_instance.status` gồm `PLANNED`, `PROVISIONING`, `READY`, `FAILED`, `DESTROYED`, `UNLINKED`; `workload_instance.status` gồm `DEPLOYING`, `HEALTHY`, `FAILED`, `REMOVED`. Tên bước tiến trình của UC-04 (`deployment_step`) không phải literal của `deployment.status`; tập giá trị của chúng thuộc D4.
+Mọi literal dùng đúng mục **Danh mục ENUM** trong `docs/architecture/database/schema.md`: `user_account.status` gồm `ACTIVE`, `DISABLED`; `deployment.status` gồm `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED`, `FAILED`; `resource_instance.status` gồm `PLANNED`, `PROVISIONING`, `READY`, `FAILED`, `DESTROYED`, `UNLINKED`; `workload_instance.status` gồm `DEPLOYING`, `HEALTHY`, `FAILED`, `REMOVED`. Auth Session không có status enum; trạng thái của nó được suy ra từ `revoked_at`, `expires_at`, `last_seen_at` và account status.
 
-## Vì sao có ba state machine
+## Vì sao có bốn state machine
 
-**Deployment** cần state machine vì aggregate đi qua validation/confirmation, tạo job, thực thi nền theo tầng (reconcile, resolve configuration, publish, chờ healthy, lan truyền output, gỡ thành phần) và kết thúc thành công hoặc thất bại, với các transition/failure point đã được operation contract định nghĩa. Các bước bên trong một tầng là progress (`deployment_step`), không phải giá trị `deployment.status`. **Resource Instance** có lifecycle độc lập vì infrastructure có thể được create, update, reuse, liên kết tới resource dùng chung, hủy hoặc gỡ liên kết, và cần được theo dõi qua nhiều deployment. **Workload Instance** có lifecycle độc lập vì trạng thái workload đang chạy trên từng environment + target (deploying, healthy, failed, removed) được dùng cho deploy một phần, lan truyền output và UC-04, xuyên suốt nhiều deployment.
+**Auth Session** có lifecycle độc lập qua nhiều request: active, idle/absolute expiry hoặc bị revoke bởi logout/reset/disable; trạng thái được suy ra thay vì lưu enum. **Deployment** cần state machine vì aggregate đi qua validation/confirmation, tạo job, thực thi nền theo tầng và kết thúc thành công hoặc thất bại. **Resource Instance** có lifecycle độc lập vì infrastructure có thể được create, update, reuse, liên kết, hủy hoặc gỡ liên kết. **Workload Instance** có lifecycle độc lập vì trạng thái workload theo environment + target được dùng xuyên suốt nhiều deployment.
 
-Các domain object còn lại không cần state machine riêng. **Application Definition** và **Application Definition Version** không có `status`: mỗi lần lưu chỉ tạo một phiên bản bất biến. **Environment Configuration**, **Workload**, **Resource Requirement**, **Resource Definition**, **Workload Deployment**, **Deployment Context** và các configuration definition/binding cũng không có lifecycle enum hay transition nhiều bước. **Deployment Record** và **Deployment Step** là dữ liệu ghi nhận/snapshot của lifecycle Deployment, không phải lifecycle aggregate độc lập. **Deployment Execution Job** có trạng thái nhưng tập giá trị và cơ chế phục hồi chưa chốt (D6), nên chưa mô hình hóa state machine. Các object `Deployment Graph`, `Resource Resolution`, `Infrastructure Plan`, `Resource Output`, `Workload Output`, `Resolved Configuration` và `Resolved Specification` là execution-scoped/transient nên không tạo state machine persistent riêng; riêng Infrastructure Plan chỉ persist SHA-256 fingerprint và algorithm tương ứng trên `deployment`, không persist plan payload.
+Các domain object còn lại không cần state machine riêng. **Local User Account** chỉ có status `ACTIVE`/`DISABLED` do Operator đặt trực tiếp; không có workflow nhiều bước. **Application Definition** và **Application Definition Version** không có `status`: mỗi lần lưu chỉ tạo một phiên bản bất biến. **Environment Configuration**, **Workload**, **Resource Requirement**, **Resource Definition**, **Workload Deployment**, **Deployment Context** và các configuration definition/binding cũng không có lifecycle enum hay transition nhiều bước. **Deployment Record** và **Deployment Step** là dữ liệu ghi nhận/snapshot của lifecycle Deployment, không phải lifecycle aggregate độc lập. **Deployment Execution Job** có trạng thái nhưng tập giá trị và cơ chế phục hồi chưa chốt (D6), nên chưa mô hình hóa state machine. Các object execution-scoped/transient không tạo state machine persistent riêng.
+
+## Auth Session state mapping
+
+| Diagram state | Persistence condition | Operation/event đưa object vào state |
+|---|---|---|
+| Active | `revoked_at IS NULL`, chưa quá `expires_at`, idle dưới 30 phút và account `ACTIVE` | `signIn()` tạo session; `authenticateRequest()` hợp lệ cập nhật `last_seen_at`. |
+| Idle expired | `last_seen_at <= now() - 30 minutes` | `authenticateRequest()` từ chối session. |
+| Absolute expired | `expires_at <= now()` | `authenticateRequest()` từ chối session bất kể activity. |
+| Revoked | `revoked_at IS NOT NULL` | `signOut()`, `resetLocalPassword()` hoặc `setLocalUserStatus(DISABLED)` đặt timestamp. |
+
+Enable account không phục hồi session cũ. Session expired/revoked không quay lại
+Active; Developer phải đăng nhập để tạo session mới.
 
 ## Deployment state mapping
 
@@ -69,4 +81,4 @@ Mỗi workload (ID cố định) + environment + deployment target có đúng m�
 - Thứ tự Deployment bám main flow của `docs/use-cases/UC-03/sequence.puml`: create/validate/chia tầng/plan → confirm (tạo job, trả lời ngay) → Deployment Worker lấy job → với mỗi tầng: reconcile infrastructure → collect Resource Output → resolve configuration → generate/adapt/materialize manifest → publish CD state → chờ healthy → collect Workload Output → lan truyền thay đổi output → gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản → lưu record.
 - Các `deployment_step` bám UC-04 theo tầng và thành phần; chúng không phải chuỗi `deployment.status`. Tập bước và writer thuộc D4.
 - Failure semantics bám UC-03 A1/A2 và postconditions của `createDeployment`, `confirmDeployment`, `reconcileInfrastructure`, `resolveEnvironmentConfiguration`, `publishDesiredDeploymentState`, `collectWorkloadOutputs`, `propagateOutputChanges`, `saveDeploymentRecord`.
-- Persistent status nằm ở `deployment.status`, `resource_instance.status`, `workload_instance.status`, cùng `deployment_record.status` (D5), `deployment_step.status` (D4) và `deployment_execution_job.status` (D6); resolved outputs/config/specification vẫn là transient như Domain Model và ERD đã quy định.
+- Authentication lifecycle dùng `user_account.status` cùng `auth_session.revoked_at`/`expires_at`/`last_seen_at`; deployment lifecycle dùng `deployment.status`, `resource_instance.status`, `workload_instance.status`, cùng `deployment_record.status` (D5), `deployment_step.status` (D4) và `deployment_execution_job.status` (D6). Resolved outputs/config/specification vẫn là transient như Domain Model và ERD đã quy định.

@@ -1,0 +1,108 @@
+@startuml
+title VOPC - UC-06 Đăng nhập bằng tài khoản nội bộ
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "Boundary/UI" {
+  class "Login Web UI" as LoginUI <<boundary>> {
+    +showLogin(returnTo)
+    +submitCredentials(username, password)
+    +showGenericError()
+    +submitLogout(csrfToken)
+  }
+  class "Authentication API / Controller" as AuthAPI <<control>> {
+    +signIn(username, password, returnTo)
+    +signOut(sessionToken, csrfToken)
+  }
+  class "Authentication Middleware" as AuthMiddleware <<control>> {
+    +authenticateRequest(sessionToken)
+  }
+  class "Local User CLI" as UserCLI <<boundary>> {
+    +createLocalUser(username, displayName)
+    +resetLocalPassword(username)
+    +setLocalUserStatus(username, status)
+  }
+}
+
+package "Application / Security" {
+  class "Authentication Service" as AuthService <<control>> {
+    +signIn(username, password, requestSource)
+    +createLocalUser(username, displayName, password)
+    +resetLocalPassword(username, password)
+    +setLocalUserStatus(username, status)
+  }
+  class "Password Hasher" as PasswordHasher <<control>> {
+    +hash(password)
+    +verify(password, encodedHash)
+    +needsRehash(encodedHash)
+  }
+  class "Session Manager" as SessionManager <<control>> {
+    +createSession(userId)
+    +authenticateRequest(token)
+    +revokeCurrentSession(token)
+    +revokeAllSessions(userId)
+  }
+  class "Login Rate Limiter" as RateLimiter <<control>> {
+    +check(username, requestSource)
+    +recordFailure(username, requestSource)
+    +clearAccountFailures(username)
+  }
+  class "Principal" as Principal <<transient>> {
+    +userId: UUID
+    +username: String
+    +displayName: String
+  }
+}
+
+package "Persistence" {
+  class "User Account Repository" as UserRepo <<entity>> {
+    +createAccountAndCredential(account, credential)
+    +findByNormalizedUsername(username)
+    +findActiveAccount(userId)
+    +replacePassword(userId, passwordHash)
+    +setStatus(userId, status)
+  }
+  class "Auth Session Repository" as SessionRepo <<entity>> {
+    +save(session)
+    +findActiveByTokenHash(tokenHash)
+    +touch(sessionId, lastSeenAt)
+    +revoke(sessionId)
+    +revokeAll(userId)
+  }
+  class "Login Attempt Repository" as AttemptRepo <<entity>> {
+    +loadBuckets(accountKeyHash, sourceKeyHash)
+    +recordFailure(bucket)
+    +clearAccountBucket(accountKeyHash)
+    +deleteExpiredBuckets()
+  }
+}
+
+LoginUI --> AuthAPI
+AuthAPI --> AuthService
+AuthAPI --> SessionManager : logout
+AuthMiddleware --> SessionManager
+AuthMiddleware ..> Principal : attaches to request
+UserCLI --> AuthService
+AuthService --> PasswordHasher
+AuthService --> SessionManager
+AuthService --> RateLimiter
+AuthService --> UserRepo
+SessionManager --> SessionRepo
+SessionManager --> UserRepo : account status
+RateLimiter --> AttemptRepo
+
+note right of Principal
+  Chỉ tồn tại trong request context.
+  UC-01 đến UC-05 dùng Principal,
+  không phụ thuộc local credential.
+end note
+
+note right of SessionRepo
+  Chỉ token hash và CSRF binding được lưu.
+  Raw session token chỉ tồn tại trong cookie.
+end note
+
+@enduml

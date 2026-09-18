@@ -13,7 +13,7 @@ Quy ước đọc matrix:
 
 - **Class sở hữu** là class nhận đúng message mang tên system operation trong sequence diagram và khai báo operation đó trong VOPC. Khi cùng message đi qua Controller và Service, cả hai class nhận message được ghi lại; class xử lý nghiệp vụ nằm sau dấu `→`.
 - **Bảng DB liên quan** chỉ dùng tên table có thật trong Step 3. `CLIENT-OWNED DTO` nghĩa là operation chỉ sửa draft trong browser/`sessionStorage`; write vật lý chỉ xảy ra ở operation `save...()` sau đó và không có backend draft table. Dấu `—` nghĩa là artifact hiện tại không chỉ ra table nào bị truy cập hoặc thay đổi bởi operation đó.
-- **State ảnh hưởng** là “Có” khi operation xuất hiện như trigger/action/failure point trong một trong ba state machine ở Step 5 (Deployment, Resource Instance, Workload Instance). Operation read-only của UC-04 chỉ quan sát state nên được ghi “Không”.
+- **State ảnh hưởng** là “Có” khi operation xuất hiện như trigger/action/failure point trong một trong bốn state machine ở Step 5 (Auth Session, Deployment, Resource Instance, Workload Instance). Operation read-only của UC-04 chỉ quan sát state nên được ghi “Không”.
 - Tất cả đường dẫn sequence diagram là tương đối từ repository root.
 
 ## A. Main traceability matrix
@@ -71,6 +71,12 @@ Quy ước đọc matrix:
 | UC-05 | Luồng chính: Developer xác nhận gỡ | `confirmDeployment()` | `docs/use-cases/UC-05/sequence.puml`: Deployment API / Controller → Deployment Orchestrator (dùng lại operation của UC-03) | Deployment API / Controller → Deployment Orchestrator | Trong một transaction: CAS `deployment.status` sang `CONFIRMED` và tạo `deployment_execution_job` | **Có — Contract 5** | **Có** |
 | UC-05 | Luồng chính: Deployment Worker chạy các tầng gỡ theo thứ tự ngược | `removeWorkloadsAndInfrastructure()` | `docs/use-cases/UC-05/sequence.puml`: Deployment Worker → CD Integration, Workload Status Provider, Infrastructure Reconciler | Deployment Worker | Ghi `workload_instance` (`REMOVED`), `resource_instance` (`DESTROYED` khi `MANAGED`, `UNLINKED` khi `EXISTING`), `deployment_step`; đọc `delivery_repository` để xóa đúng phần desired state của environment | Không — thực thi; writer của `deployment_step` thuộc D4 | **Có** — Workload Instance và Resource Instance |
 | UC-05 | Luồng chính: lưu kết quả lần gỡ | `saveDeploymentRecord()` | `docs/use-cases/UC-05/sequence.puml`: Deployment Worker → Deployment Repository (dùng lại operation của UC-03) | Deployment Worker → Deployment Repository | Ghi `deployment_record` (thành phần đã gỡ, đã hủy, đã gỡ liên kết) và `deployment.status` trong cùng transaction | **Có — Contract 9** | **Có** |
+| UC-06 | Luồng chính/A1/A2/A4: Developer submit username/password | `signIn()` | `docs/use-cases/UC-06/sequence.puml`: Authentication API / Controller → Authentication Service → Rate Limiter/Hasher/Session Manager | Authentication API / Controller → Authentication Service | Đọc `user_account`, `local_credential`, đọc/ghi `login_attempt`; khi hợp lệ ghi `auth_session`, khi lỗi không tạo session | **Có — Contract 13** | **Có — Auth Session:** entry → Active |
+| UC-06 | Luồng chính/A3: middleware bảo vệ page/API | `authenticateRequest()` | `docs/use-cases/UC-06/sequence.puml`: Authentication Middleware → Session Manager → repositories | Authentication Middleware → Session Manager | Đọc `auth_session`, `user_account`; cập nhật `auth_session.last_seen_at` khi hợp lệ | **Có — Contract 14** | **Có — Auth Session:** Active self-transition hoặc → Idle/Absolute expired |
+| UC-06 | Luồng chính/A5: Developer chọn Đăng xuất | `signOut()` | `docs/use-cases/UC-06/sequence.puml`: Authentication API / Controller → Session Manager → Auth Session Repository | Authentication API / Controller → Session Manager | Kiểm tra CSRF binding và cập nhật `auth_session.revoked_at` | **Có — Contract 15** | **Có — Auth Session:** Active → Revoked |
+| UC-06 | Supporting flow: Platform Operator tạo account | `createLocalUser()` | `docs/use-cases/UC-06/sequence.puml`: Local User CLI → Authentication Service → Password Hasher/User Account Repository | Local User CLI → Authentication Service | Trong một transaction ghi `user_account`, `local_credential` | **Có — Contract 16** | Không |
+| UC-06 | Supporting flow: Platform Operator reset password | `resetLocalPassword()` | `docs/use-cases/UC-06/sequence.puml`: Local User CLI → Authentication Service → Password Hasher/User Account Repository/Auth Session Repository | Local User CLI → Authentication Service | Trong một transaction cập nhật `local_credential` và revoke mọi `auth_session` của user | **Có — Contract 17** | **Có — Auth Session:** mọi Active → Revoked |
+| UC-06 | Supporting flow: Platform Operator enable/disable account | `setLocalUserStatus()` | `docs/use-cases/UC-06/sequence.puml`: Local User CLI → Authentication Service → User Account Repository/Auth Session Repository | Local User CLI → Authentication Service | Cập nhật `user_account`; khi disable revoke mọi `auth_session` trong cùng transaction | **Có — Contract 18** | **Có — Auth Session:** disable đưa mọi Active → Revoked; enable không phục hồi |
 
 ## B. Coverage / completeness check
 
@@ -83,15 +89,28 @@ Quy ước đọc matrix:
 | UC-03 | 22 | 22 | PASS |
 | UC-04 | 9 | 9 | PASS |
 | UC-05 | 2 mới (+2 dùng lại của UC-03) | 2 mới + 2 dùng lại | PASS |
-| **Tổng** | **49** | **49** | **PASS** |
+| UC-06 | 6 | 6 | PASS |
+| **Tổng** | **55** | **55** | **PASS** |
 
-**Kết luận B1: PASS.** Cả 49/49 Step-2 system operation đều có message trong sequence diagram tương ứng. UC-05 thêm hai operation `createTeardown()` và `removeWorkloadsAndInfrastructure()`, cả hai xuất hiện trong `docs/use-cases/UC-05/sequence.puml`; `confirmDeployment()` và `saveDeploymentRecord()` được UC-05 dùng lại nguyên vẹn của UC-03. UC-03 thêm bốn operation `planDeploymentWaves()`, `waitForWorkloadsHealthy()`, `collectWorkloadOutputs()`, `propagateOutputChanges()`; các operation thực thi xuất hiện trong luồng Deployment Worker của `docs/use-cases/UC-03/sequence.puml`. `getDeploymentFailureDetail()` vẫn có đầy đủ flow UI → Controller → Service → Repository trong nhánh UC-04 A1.
+**Kết luận B1: PASS.** Cả 55/55 Step-2 system operation đều có message trong sequence diagram tương ứng. UC-06 thêm sáu operation cho sign-in, request authentication, sign-out và CLI account lifecycle. UC-05 thêm hai operation `createTeardown()` và `removeWorkloadsAndInfrastructure()`; `confirmDeployment()` và `saveDeploymentRecord()` được dùng lại từ UC-03.
 
 ### B2. Mọi class trong VOPC có operation hoặc được giải thích vai trò participant
 
 | VOPC class | Operation evidence hoặc justification | Kết quả |
 |---|---|---|
-| Web UI | Presentation boundary cho cả năm UC; trong UC-01/UC-02 còn sở hữu client draft operations (`createApplication()`, add/define, direct non-secret set và bind) | PASS |
+| Login Web UI | `showLogin()`, `submitCredentials()`, `submitLogout()`; không sở hữu credential/session persistence | PASS |
+| Authentication API / Controller | `signIn()`, `signOut()` và HTTP/cookie/CSRF mapping | PASS |
+| Authentication Middleware | `authenticateRequest()` và gắn Principal vào protected request | PASS |
+| Local User CLI | `createLocalUser()`, `resetLocalPassword()`, `setLocalUserStatus()` qua trusted terminal | PASS |
+| Authentication Service | `signIn()`, account create/reset/status orchestration | PASS |
+| Password Hasher | Internal `hash()`, `verify()`, `needsRehash()` với Argon2id | PASS |
+| Session Manager | Tạo/xác thực/thu hồi session và sinh Principal | PASS |
+| Login Rate Limiter | `check()`, `recordFailure()`, `clearAccountFailures()` | PASS |
+| Principal | Request-scoped transient identity; tách UC nghiệp vụ khỏi authentication provider | PASS |
+| User Account Repository | Account/credential create, lookup, reset và status transaction | PASS |
+| Auth Session Repository | Session save, lookup, touch và revoke | PASS |
+| Login Attempt Repository | Rate-limit bucket load/write/clear/cleanup | PASS |
+| Web UI | Presentation boundary cho UC-01 đến UC-05; trong UC-01/UC-02 còn sở hữu client draft operations (`createApplication()`, add/define, direct non-secret set và bind) | PASS |
 | Application Definition Draft / Environment Configuration Draft | Client-owned DTO mang complete form state và concurrency bases; không phải persistent domain object | PASS |
 | Browser sessionStorage | Client storage participant phục hồi non-sensitive draft trong cùng tab; Save/Discard xóa, plaintext Secret bị loại trừ | PASS |
 | Application API / Controller | UC-01 chỉ nhận load-for-edit `updateApplication()` và complete-draft `saveApplicationDefinition()`; không nhận từng field edit | PASS |
@@ -144,12 +163,15 @@ Quy ước đọc matrix:
 | Workload Instance Repository | Persistence holder: internal `findWorkloadInstances()`, `saveWorkloadInstances()`, `updateWorkloadInstances()`, `loadOutputFingerprintsAndRunningImages()` | PASS |
 | Deployment Repository | `persistDeployment(deployment, applicationDefinitionVersion, catalogVersion, workloadDeployments, deploymentContext, planFingerprint, planFingerprintAlgo, status)`, `findByIdWithPersistedInputs(deploymentId)`, `compareAndSetPlanFingerprint(...)`, `confirmDeploymentAndCreateJob(deploymentId, expectedStatus, overrides)`, `claimNextExecutionJob()`, atomic CAS `updateDeploymentStatus(deploymentId, expectedStatus, newStatus)`, `saveDeploymentRecord(deployment, workloadImages, infrastructureReferences, deliveryReferences, removedComponents)`, `getDeploymentDetail()`, `getDeploymentFailureDetail()`, `getDeploymentProgress()`, `getDeploymentImages()` và internal `findByApplication()` | PASS |
 
-**Kết luận B2: PASS.** UC-05 không thêm class nào vì `docs/use-cases/UC-05/vopc.puml` chỉ dùng lại các class của UC-03. ADR-016 thêm ba class hợp nhất là `Application Definition Draft`, `Environment Configuration Draft` và `Browser sessionStorage`, đưa tổng lên 53. Toàn bộ 53 class hợp nhất trong VOPC có operation cụ thể hoặc có justification rõ ràng là client-owned DTO/storage, presentation/persistence holder, active background process (Deployment Worker), integration implementation hay external participant; `getDeploymentFailureDetail()` hiện có owner ở Controller, Service và Repository.
+**Kết luận B2: PASS.** UC-06 thêm 12 participant authentication, đưa tổng từ 53 lên 65 class hợp nhất. Toàn bộ 65 class trong VOPC có operation cụ thể hoặc justification rõ ràng là transient identity, client-owned DTO/storage, presentation/persistence holder, active background process, integration implementation hay external participant.
 
 ### B3. Mọi PERSISTENT domain object có table và có operation ghi
 
 | Persistent domain object(s) | Table/mapping | Operation ghi | Kết quả |
 |---|---|---|---|
+| Local User Account; Local Credential | `user_account`, `local_credential` | `createLocalUser()`; `resetLocalPassword()`; `setLocalUserStatus()` | PASS (designed, not implemented) |
+| Auth Session | `auth_session` | `signIn()`, `authenticateRequest()` (`last_seen_at`), `signOut()`; reset/disable revoke all | PASS (designed, not implemented) |
+| Login Attempt | `login_attempt` | `signIn()` qua Login Rate Limiter | PASS (designed, not implemented) |
 | Application Definition; Application Definition Version; Workload; Resource Requirement; Environment Variable Definition; Secret Definition; Dependency | `application_definition`, `application_definition_version`, `application_component`, `workload`, `resource_requirement`, `environment_variable_definition`, `secret_definition`, `dependency` | `saveApplicationDefinition()` (insert phiên bản mới) | PASS |
 | Platform Requirement | `application_component` (`component_type = PLATFORM_REQUIREMENT`) | Deployment Worker qua internal repository message `ensurePlatformRequirements()` trước `reconcileInfrastructure()` | PASS |
 | Delivery Repository | `delivery_repository` | `publishDesiredDeploymentState()` qua `ensureDeliveryRepository()` + `saveDeliveryRepository()` ở lần deploy đầu của application | PASS |
@@ -163,12 +185,15 @@ Quy ước đọc matrix:
 | Deployment Record | `deployment_record` | `saveDeploymentRecord()` | PASS |
 | Deployment Step | `deployment_step` | Writer và thời điểm ghi chưa chốt | **OPEN (D4)** |
 
-**Kết luận B3: GAP được chấp nhận theo scope boundary, cùng một mục OPEN.** Tất cả persistent object đều có mapping table. Deployment aggregate, Deployment Execution Job, Resource Instance và Workload Instance đã có repository write path tường minh trong sequence/VOPC. Writer của `deployment_step` còn mở theo D4. `Catalog Version` và `Resource Definition` vẫn là platform-managed reference data, không có operation create/update/import trong năm Developer use case; đây là ranh giới phạm vi được chấp nhận, không được giải quyết theo chủ đích.
+**Kết luận B3: GAP được chấp nhận theo scope boundary, cùng một mục OPEN.** Tất cả persistent object đều có mapping table. Deployment aggregate, Deployment Execution Job, Resource Instance và Workload Instance đã có repository write path tường minh trong sequence/VOPC. Writer của `deployment_step` còn mở theo D4. `Catalog Version` và `Resource Definition` vẫn là platform-managed reference data, không có operation create/update/import trong các use case hiện tại; đây là ranh giới phạm vi được chấp nhận, không được giải quyết theo chủ đích.
 
 ### B4. Mọi table Step 3 được ít nhất một operation đọc hoặc ghi
 
 | Table(s) | Operation đọc/ghi đại diện | Kết quả |
 |---|---|---|
+| `user_account`, `local_credential` | W: `createLocalUser()`, `resetLocalPassword()`, `setLocalUserStatus()`; R: `signIn()`, `authenticateRequest()` | PASS (designed) |
+| `auth_session` | W: `signIn()`, `authenticateRequest()`, `signOut()`, reset/disable; R: `authenticateRequest()` | PASS (designed) |
+| `login_attempt` | R/W: `signIn()` qua Login Rate Limiter; cleanup theo `expires_at` | PASS (designed) |
 | `application_definition` | W: `saveApplicationDefinition()`; R: `updateApplication()`, `createDeployment()` | PASS |
 | `application_definition_version`, `application_component` | W: `saveApplicationDefinition()` (insert phiên bản mới, thành phần mới), `ensurePlatformRequirements()` (Platform Requirement); R: `updateApplication()`, `loadConfigurationRequirements()`, `createDeployment()`, `confirmDeployment()` | PASS |
 | `workload` | W: `saveApplicationDefinition()`; R: `loadConfigurationRequirements()`, `createDeployment()` | PASS |
@@ -176,9 +201,9 @@ Quy ước đọc matrix:
 | `environment_variable_definition`, `secret_definition`, `dependency` | W: `saveApplicationDefinition()`; R: `loadConfigurationRequirements()`/`buildDeploymentGraph()` | PASS |
 | `application_specification` | W: `generateApplicationSpecification()` | PASS |
 | `environment_configuration`, `environment_variable`, `configuration_value`, `secret` | W: `saveEnvironmentConfiguration()`; R: `createDeployment()`/`resolveEnvironmentConfiguration()` | PASS |
-| `catalog_version` | R: `loadDeploymentContext()` (danh sách phiên bản catalog), `resolveResourceDefinitions()`; không có writer trong năm UC | PASS cho tiêu chí read-or-write |
+| `catalog_version` | R: `loadDeploymentContext()` (danh sách phiên bản catalog), `resolveResourceDefinitions()`; không có writer trong các UC hiện tại | PASS cho tiêu chí read-or-write |
 | `delivery_repository` | W: `publishDesiredDeploymentState()` ở lần deploy đầu của application; R: mọi lần publish sau và bước gỡ | PASS |
-| `resource_definition` | R: output catalog queries và `resolveResourceDefinitions()`; không có writer trong năm UC | PASS cho tiêu chí read-or-write |
+| `resource_definition` | R: output catalog queries và `resolveResourceDefinitions()`; không có writer trong các UC hiện tại | PASS cho tiêu chí read-or-write |
 | `resource_instance` | W: `reconcileInfrastructure()`, `propagateOutputChanges()`; R: `planInfrastructureChanges()`, `collectResourceOutputs()`, `getInfrastructureStatus()` | PASS |
 | `workload_instance` | W: `publishDesiredDeploymentState()`, `propagateOutputChanges()`; R: `createDeployment()` (phiên bản và workload đang chạy), `collectWorkloadOutputs()`, `getDeploymentDetail()` | PASS |
 | `deployment`, `workload_deployment`, `deployment_context` | W: `createDeployment()` persist fingerprint + algorithm, `confirmDeployment()` refresh fingerprint khi plan đổi và CAS status, `propagateOutputChanges()` (workload `CASCADED`), cùng các `updateDeploymentStatus()` của Deployment Worker; R: confirm rebuild, Deployment Worker và các query UC-04 | PASS |
@@ -187,7 +212,7 @@ Quy ước đọc matrix:
 | `deployment_step` | W: writer chưa chốt (D4); R: `getDeploymentProgress()`, `getDeploymentFailureDetail()` | PASS cho tiêu chí read-or-write (writer: D4) |
 | `deployment_record_resource_instance` | W: `saveDeploymentRecord()`; R: detail/infrastructure status path của UC-04 | PASS |
 
-**Kết luận B4: PASS.** Cả 25 table trong ERD đều có ít nhất một read hoặc write path. `catalog_version` và `resource_definition` chỉ có read path, được ghi nhận riêng là GAP ở tiêu chí B3; writer của `deployment_step` thuộc D4.
+**Kết luận B4: PASS.** Cả 29 table trong ERD đều có ít nhất một read hoặc write path. Bốn bảng authentication mới có path đã thiết kế nhưng chưa triển khai. `catalog_version` và `resource_definition` chỉ có read path, được ghi nhận riêng là GAP ở tiêu chí B3; writer của `deployment_step` thuộc D4.
 
 ### B5. Mọi Operation Contract tương ứng một Step-2 operation có thật
 
@@ -204,25 +229,33 @@ Quy ước đọc matrix:
 | 9 | `saveDeploymentRecord()` | PASS |
 | 10 | `collectWorkloadOutputs()` | PASS |
 | 11 | `propagateOutputChanges()` | PASS |
+| 12 | `createTeardown()` | PASS |
+| 13 | `signIn()` | PASS |
+| 14 | `authenticateRequest()` | PASS |
+| 15 | `signOut()` | PASS |
+| 16 | `createLocalUser()` | PASS |
+| 17 | `resetLocalPassword()` | PASS |
+| 18 | `setLocalUserStatus()` | PASS |
 
-**Kết luận B5: PASS.** Có 11/11 contract, tất cả đều cross-reference đúng một operation trong Step 2; không có contract “mồ côi”. Contract 5 nay bao gồm việc tạo job cùng transaction với CAS; contract 6–11 do Deployment Worker gọi.
+**Kết luận B5: PASS.** Có 18/18 contract, tất cả đều cross-reference đúng một operation trong Step 2; không có contract “mồ côi”. Contract 13–18 thuộc UC-06 và đang ở trạng thái thiết kế, chưa phải bằng chứng implementation.
 
-### B6. Ba state machine được drive bởi operation có trong matrix
+### B6. Bốn state machine được drive bởi operation có trong matrix
 
 | State machine | Step-2 operation drive lifecycle | Kết quả |
 |---|---|---|
+| Auth Session | `signIn()`, `authenticateRequest()`, `signOut()`, `resetLocalPassword()`, `setLocalUserStatus()` | PASS |
 | Deployment | `createDeployment()`, `validateDeploymentInput()`, `buildDeploymentGraph()`, `planDeploymentWaves()`, `resolveResourceDefinitions()`, `planInfrastructureChanges()`, `confirmDeployment()`, `applyInfrastructureOverrides()`, `reconcileInfrastructure()`, `collectResourceOutputs()`, `resolveEnvironmentConfiguration()`, `generateResolvedApplicationSpecification()`, `generateKubernetesManifest()`, `adaptManifestForTarget()`, `materializeEnvironmentConfiguration()`, `materializeSecretConfiguration()`, `publishDesiredDeploymentState()`, `waitForWorkloadsHealthy()`, `collectWorkloadOutputs()`, `propagateOutputChanges()`, `saveDeploymentRecord()` | PASS |
 | Resource Instance | `planInfrastructureChanges()`, `reconcileInfrastructure()`, `collectResourceOutputs()`, `propagateOutputChanges()` | PASS |
 | Workload Instance | `publishDesiredDeploymentState()`, `waitForWorkloadsHealthy()`, `collectWorkloadOutputs()`, `propagateOutputChanges()` | PASS |
 
-**Kết luận B6: PASS.** Mọi system operation được nêu trên transition/action của ba state machine đều xuất hiện trong main matrix. `provisioner apply/destroy success/failure` là internal event nằm trong `reconcileInfrastructure()`; `claimNextExecutionJob()` là internal repository message mà Deployment Worker dùng để chuyển `CONFIRMED` → `DEPLOYING`, không phải một Step-2 system operation riêng.
+**Kết luận B6: PASS.** Mọi system operation được nêu trên transition/action của bốn state machine đều xuất hiện trong main matrix. `provisioner apply/destroy success/failure` là internal event nằm trong `reconcileInfrastructure()`; `claimNextExecutionJob()` là internal repository message mà Deployment Worker dùng để chuyển `CONFIRMED` → `DEPLOYING`, không phải một Step-2 system operation riêng.
 
 ## C. Gaps / Notes
 
 ### Gaps
 
 1. **RESOLVED — UC-04 orphan operation:** `getDeploymentFailureDetail()` đã có nhánh A1 UI → Controller → Service → Repository, đọc failure fields từ `deployment_step` và `deployment_record`, đồng thời được khai báo trong VOPC/design class diagram.
-2. **ACCEPTED SCOPE BOUNDARY — NOT RESOLVED BY DESIGN:** `Catalog Version` và `Resource Definition` là catalog `PERSISTENT (platform-managed)` nhưng không có Step-2 operation create/update/import trong năm Developer use case. Writer thuộc platform administration ngoài phạm vi hiện tại; không bổ sung writer giả vào các UC này.
+2. **ACCEPTED SCOPE BOUNDARY — NOT RESOLVED BY DESIGN:** `Catalog Version` và `Resource Definition` là catalog `PERSISTENT (platform-managed)` nhưng không có Step-2 operation create/update/import trong các use case hiện tại. Writer thuộc platform administration ngoài phạm vi; không bổ sung writer giả vào các UC này.
 3. **RESOLVED — UC-03 Deployment persistence:** Sequence/VOPC đã có `persistDeployment(..., AWAITING_CONFIRMATION)` cho aggregate ban đầu, `confirmDeploymentAndCreateJob()` cho transition `CONFIRMED` (kèm job), `updateDeploymentStatus()` của Deployment Worker cho `DEPLOYING` và `SUCCEEDED`/`FAILED`; `saveDeploymentRecord()` persist delivery reference, thành phần đã gỡ và failure.
 4. **RESOLVED — Gap 4, transient Infrastructure Plan across requests:** `createDeployment()` canonicalize/hash plan và persist chỉ `plan_fingerprint` + algorithm; `confirmDeployment()` rebuild từ persisted inputs + current catalog/Resource Instance state, trả `PLAN_CHANGED` để review lại khi mismatch, và chỉ apply overrides + atomic status CAS + reconcile khi match. Fingerprint hash phiên bản catalog, action của từng resource, Resource Definition identity cùng các field `provisioner_reference`, `supported_contexts`, `default_parameters`, `allowed_overrides`, `requires`, referenced Resource Instance identity và deployment target. Resolved parameters được suy ra một cách tất định từ `default_parameters` kết hợp Deployment Context; allowed-overrides **definition** được suy ra một cách tất định từ `allowed_overrides`. Resource Definition của một phiên bản catalog không đổi (vấn đề 12), nên thay đổi catalog chỉ đi vào plan khi Developer chọn phiên bản catalog khác. Scope: fingerprint không bao phủ Developer-selected override values (được validate theo `allowed_overrides` sau match); đây chỉ là application-level defense-in-depth, còn shared-resource contention/drift cần Resource-Instance-level version/optimistic lock hoặc per-resource reconcile lock, cộng provisioner idempotency (ví dụ Terraform refresh + plan), đều ngoài phạm vi fingerprint.
 
@@ -252,4 +285,4 @@ This section links UC-01 design operations to code and tests. Code paths are rel
 
 ## Overall acceptance
 
-**Kết quả tổng thể: PASS có điều kiện.** Design hiện trace được 49/49 Step-2 operations, 53/53 VOPC classes, 25/25 tables theo tiêu chí read-or-write, 12/12 operation contracts và 3/3 state machines (UC-05 dùng lại state machine Deployment, thêm nhánh vào bằng `createTeardown()`). Gap 1, Gap 3, Gap 4 và D01 trong Gap 5 đã đóng; Gap 2 vẫn cố ý không giải quyết vì writer của `Catalog Version`/`Resource Definition` thuộc platform administration ngoài năm Developer use case. Kết quả chỉ là coverage/traceability ở mức tài liệu: các mục hoãn D02–D12 còn lại, trong đó có writer của `deployment_step` (D4), vẫn mở và phải được giải quyết trước khi coi thiết kế là hoàn chỉnh.
+**Kết quả tổng thể: PASS có điều kiện.** Design hiện trace được 55/55 Step-2 operations, 65/65 VOPC classes, 29/29 tables theo tiêu chí read-or-write, 18/18 operation contracts và 4/4 state machines. UC-06 mới chỉ là thiết kế, không phải bằng chứng implementation; IMP-013 vẫn mở. Gap 2 vẫn cố ý không giải quyết vì writer của `Catalog Version`/`Resource Definition` thuộc platform administration ngoài phạm vi hiện tại. Các mục backlog còn lại vẫn phải được giải quyết theo phạm vi tương ứng.

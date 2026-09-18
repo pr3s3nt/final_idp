@@ -5,6 +5,45 @@ left to right direction
 skinparam classAttributeIconSize 0
 hide methods
 
+class "Local User Account" as LocalUserAccount <<aggregate root>> {
+  userId: String
+  username: String
+  displayName: String
+  status: ACTIVE | DISABLED
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+class "Local Credential" as LocalCredential <<entity>> {
+  passwordHash: String
+  passwordChangedAt: DateTime
+}
+
+class "Auth Session" as AuthSession <<aggregate root>> {
+  sessionId: String
+  tokenHash: Bytes
+  csrfTokenHash: Bytes
+  createdAt: DateTime
+  lastSeenAt: DateTime
+  expiresAt: DateTime
+  revokedAt: DateTime [0..1]
+}
+
+class "Login Attempt" as LoginAttempt <<aggregate root>> {
+  scope: ACCOUNT | SOURCE
+  keyHash: Bytes
+  windowStartedAt: DateTime
+  failureCount: Integer
+  blockedUntil: DateTime [0..1]
+  expiresAt: DateTime
+}
+
+class "Principal" as Principal <<transient>> {
+  userId: String
+  username: String
+  displayName: String
+}
+
 class "Application Definition" as ApplicationDefinition <<aggregate root>> {
   applicationId: String
   name: String
@@ -276,6 +315,22 @@ class "Deployment Step" as DeploymentStep <<entity>> {
   startedAt: DateTime [0..1]
   completedAt: DateTime [0..1]
 }
+
+' Authentication aggregate and request identity
+LocalUserAccount "1" *-- "1" LocalCredential : credential
+AuthSession "0..*" --> "1" LocalUserAccount : belongs to
+AuthSession "1" ..> "0..1" Principal : produces after validation
+
+note right of LocalCredential
+  Stores only an encoded Argon2id hash with
+  salt and parameters. Plaintext is never persisted.
+end note
+
+note right of AuthSession
+  Stores token/CSRF hashes only. The raw session token
+  stays in an HttpOnly cookie. Reset password or disable
+  atomically revokes all sessions for the account.
+end note
 
 ' Application Definition aggregate
 ApplicationDefinition "1" *-- "1..*" ApplicationDefinitionVersion : immutable versions

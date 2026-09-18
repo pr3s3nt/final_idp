@@ -3,7 +3,7 @@ id: UC-02
 artifact: use-case-specification
 status: current
 delivery_status: designed
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # UC-02 — Configure Application Environment
@@ -26,6 +26,8 @@ Lấy từ output của một workload khác.
 **Primary Actor:** Developer
 
 ## Tiền điều kiện
+
+Developer có Auth Session hợp lệ và Local User Account còn `ACTIVE` theo UC-06.
 
 Application đã được khai báo trong UC-01.
 

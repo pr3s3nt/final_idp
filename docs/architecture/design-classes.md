@@ -2,12 +2,12 @@
 id: DESIGN-CLASS-INDEX
 artifact: design-class-and-vopc-index
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # VOPC / Design Class Diagram
 
-Tài liệu này mô tả **View Of Participating Classes (VOPC)** cho năm use case của Internal Developer Platform. [`design-class-diagram.puml`](design-class-diagram.puml) là góc nhìn hợp nhất toàn hệ thống; VOPC của từng use case nằm cạnh specification và realization trong `docs/use-cases/UC-*/vopc.puml`.
+Tài liệu này mô tả **View Of Participating Classes (VOPC)** cho sáu use case của Internal Developer Platform. [`design-class-diagram.puml`](design-class-diagram.puml) là góc nhìn hợp nhất toàn hệ thống; VOPC của từng use case nằm cạnh specification và realization trong `docs/use-cases/UC-*/vopc.puml`.
 
 ## Cách đọc diagram
 
@@ -35,6 +35,10 @@ Tài liệu này mô tả **View Of Participating Classes (VOPC)** cho năm use 
 
 | Class | Layer | Responsibility |
 |---|---|---|
+| Login Web UI | Boundary/UI | Thu username/password, trình bày lỗi chung và trạng thái session; không lưu credential hoặc session token bằng code ứng dụng. |
+| Authentication API / Controller | Boundary/UI | Nhận sign-in/sign-out, validate return path, cookie và CSRF, rồi ánh xạ kết quả thành redirect/HTTP response. |
+| Authentication Middleware | Boundary/UI | Bảo vệ page/API, xác thực session và gắn `Principal` trung lập vào request context. |
+| Local User CLI | Boundary/UI | Tạo/reset/enable/disable local user qua terminal tin cậy với hidden password prompt. |
 | Web UI | Boundary/UI | Nhận thao tác của Developer và hiển thị application, configuration, deployment plan cùng deployment result. |
 | Application API / Controller | Boundary/UI | Nhận request tạo/cập nhật Application Definition và chuyển sang Application Service. |
 | Environment Configuration API / Controller | Boundary/UI | Nhận request chọn environment, gán value/reference và lưu Environment Configuration. |
@@ -45,6 +49,11 @@ Tài liệu này mô tả **View Of Participating Classes (VOPC)** cho năm use 
 | Deployment Orchestrator | Application services | Điều phối phần UC-03 và UC-05 trong request của Developer (UC-05 lập plan gỡ bỏ theo thứ tự ngược, không nhận phiên bản hay image): tải form (gồm các phiên bản catalog), tạo deployment theo phiên bản Application Definition và phiên bản catalog, dựng graph, chia tầng, lập plan; khi xác nhận thì đổi trạng thái và tạo job trong một transaction rồi trả lời ngay. |
 | Deployment Worker | Application services | Tiến trình chạy nền lấy job và điều phối phần thực thi của UC-03 và UC-05: triển khai theo tầng, chờ workload healthy, thu output, lan truyền thay đổi output, gỡ/hủy/gỡ liên kết thành phần không còn trong phiên bản, lưu Deployment Record. |
 | Deployment Query Service | Application services | Điều phối query path UC-04 và thu thập dữ liệu từ repository cùng status provider. |
+| Authentication Service | Application services | Điều phối local sign-in, account provisioning/reset/status; không trả lỗi giúp phân biệt account không tồn tại, disabled hay password sai. |
+| Password Hasher | Domain components | Tạo/verify encoded Argon2id hash và phát hiện hash cần nâng tham số. |
+| Session Manager | Domain components | Sinh/hash token, tạo/kiểm tra/thu hồi server-side session và tạo `Principal`. |
+| Login Rate Limiter | Domain components | Áp dụng bucket theo username chuẩn hóa và nguồn request mà không giữ credential hoặc raw identifier. |
+| Principal | Domain components | Identity transient trong request context, tách use case nghiệp vụ khỏi local credential/session provider. |
 | Application Definition Validator | Domain components | Kiểm tra workload, resource, dependency, port, image repository và configuration requirement. |
 | Application Specification Generator | Domain components | Chuyển Application Definition đã lưu thành application specification như `score.yaml`. |
 | Resource Output Catalog / Resource Definition Query | Domain components | Liệt kê output thường và sensitive output hợp lệ của logical resource. |
@@ -85,14 +94,18 @@ Tài liệu này mô tả **View Of Participating Classes (VOPC)** cho năm use 
 | Resource Instance Repository | Persistence | Lưu/đọc Resource Instance theo chủ sở hữu (application + environment + resource requirement hoặc cụm/network + target): trạng thái, reference, liên kết tới thứ có sẵn, dấu vân tay output, dấu vân tay đầu vào lần apply gần nhất và infrastructure status. |
 | Workload Instance Repository | Persistence | Lưu/đọc trạng thái hiện hành của từng workload theo environment và target: workload deployment đang chạy, trạng thái, dấu vân tay output. |
 | Deployment Repository | Persistence | Lưu deployment theo phiên bản Application Definition và phiên bản catalog, job triển khai (kèm override) và Deployment Record; cung cấp history, detail, progress cùng actual image version. |
+| User Account Repository | Persistence | Lưu/đọc Local User Account và Local Credential; tạo/reset/status atomically với session revocation khi cần. |
+| Auth Session Repository | Persistence | Lưu token/CSRF hash và lifecycle session; lookup, touch và revoke một/toàn bộ session. |
+| Login Attempt Repository | Persistence | Lưu bucket rate-limit có thời hạn theo account/source key hash. |
 
 ## Phạm vi từng file
 
 | File | Nội dung |
 |---|---|
-| [`design-class-diagram.puml`](design-class-diagram.puml) | Consolidated design class diagram của toàn bộ UC-01 đến UC-05. |
+| [`design-class-diagram.puml`](design-class-diagram.puml) | Consolidated design class diagram của toàn bộ UC-01 đến UC-06. |
 | [`docs/use-cases/UC-01/vopc.puml`](../use-cases/UC-01/vopc.puml) | Participating classes cho Create / Configure Application. |
 | [`docs/use-cases/UC-02/vopc.puml`](../use-cases/UC-02/vopc.puml) | Participating classes cho Configure Application Environment. |
 | [`docs/use-cases/UC-03/vopc.puml`](../use-cases/UC-03/vopc.puml) | Participating classes cho Deploy Application. |
 | [`docs/use-cases/UC-04/vopc.puml`](../use-cases/UC-04/vopc.puml) | Participating classes cho View Deployment Result. |
 | [`docs/use-cases/UC-05/vopc.puml`](../use-cases/UC-05/vopc.puml) | Participating classes cho Remove Application from Environment. |
+| [`docs/use-cases/UC-06/vopc.puml`](../use-cases/UC-06/vopc.puml) | Participating classes cho Đăng nhập bằng tài khoản nội bộ. |

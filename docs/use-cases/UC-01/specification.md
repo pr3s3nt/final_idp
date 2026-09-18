@@ -3,7 +3,7 @@ id: UC-01
 artifact: use-case-specification
 status: current
 delivery_status: implemented
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # UC-01 — Create / Configure Application
@@ -31,9 +31,9 @@ Environment Variable và Secret mà từng workload cần.
 
 ## Tiền điều kiện
 
-Developer đã đăng nhập.
-
-Developer có quyền tạo hoặc chỉnh sửa application.
+Developer có Auth Session hợp lệ và Local User Account còn `ACTIVE` theo UC-06.
+Trong phạm vi hiện tại, mọi local user `ACTIVE` đều có quyền tạo hoặc chỉnh sửa
+application; phân quyền chi tiết chưa thuộc UC-01/UC-06.
 
 ## Hậu điều kiện
 

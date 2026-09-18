@@ -2,17 +2,22 @@
 id: DOMAIN-OBJECTS
 artifact: domain-model-description
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Step 2: Domain Objects
 
-Tài liệu này mô tả domain model được rút ra từ các bảng **Dữ liệu chính**, business rules của UC-01 đến UC-05 và các main-flow sequence diagram. Model chỉ chứa business entity, value object, generated artifact và execution-time data holder; không chứa Boundary, Controller, Service, Validator, Resolver, Generator, Adapter hay Repository.
+Tài liệu này mô tả domain model được rút ra từ các bảng **Dữ liệu chính**, business rules của UC-01 đến UC-06 và các main-flow sequence diagram. Model chỉ chứa business entity, value object, generated artifact và execution-time data holder; không chứa Boundary, Controller, Service, Validator, Resolver, Generator, Adapter hay Repository.
 
-Các aggregate root chính là **Application Definition**, **Environment Configuration**, **Deployment**, **Resource Instance** và **Workload Instance**. `Catalog Version` và các `Resource Definition` của nó là dữ liệu catalog độc lập do platform quản lý; `Application Specification` là artifact được sinh từ `Application Definition`.
+Các aggregate root chính là **Local User Account**, **Auth Session**, **Login Attempt**, **Application Definition**, **Environment Configuration**, **Deployment**, **Resource Instance** và **Workload Instance**. `Catalog Version` và các `Resource Definition` của nó là dữ liệu catalog độc lập do platform quản lý; `Application Specification` là artifact được sinh từ `Application Definition`.
 
 | Domain Object | Thuộc tính chính | Mô tả | Aggregate nó thuộc về |
 |---|---|---|---|
+| Local User Account | `userId`, `username`, `displayName`, `status`, `createdAt`, `updatedAt` | Identity nội bộ dùng cho UC-06. Username được chuẩn hóa và duy nhất; `status` là `ACTIVE` hoặc `DISABLED`. Không chứa password hoặc role. | **Local User Account** (aggregate root) |
+| Local Credential | `passwordHash`, `passwordChangedAt` | Credential Argon2id thuộc đúng một Local User Account. Chỉ giữ encoded hash có salt/parameters; không giữ password gốc hay password có thể giải mã. | Local User Account |
+| Auth Session | `sessionId`, `tokenHash`, `csrfTokenHash`, `createdAt`, `lastSeenAt`, `expiresAt`, `revokedAt` | Phiên phía server của một local user. Chỉ giữ hash của opaque session token và CSRF binding; raw session token chỉ ở cookie. Nhiều session có thể cùng thuộc một account nhưng được lookup/touch/revoke độc lập. | **Auth Session** (aggregate root), tham chiếu Local User Account |
+| Login Attempt | `scope`, `keyHash`, `windowStartedAt`, `failureCount`, `blockedUntil`, `expiresAt` | Bucket rate-limit có thời hạn theo account key hoặc request-source key đã hash; không chứa username/IP thô, password hoặc request payload. | **Login Attempt** (aggregate root) |
+| Principal | `userId`, `username`, `displayName` | Identity transient do Authentication Middleware tạo sau khi xác thực session và account. Các use case nghiệp vụ chỉ nhận object này, không đọc credential/session. | Request-scoped, transient |
 | Application Definition | `applicationId`, `name`, `description`, `createdAt`, `updatedAt` | Identity của application; sở hữu các phiên bản định nghĩa. Nội dung cấu trúc logic (workload, resource, dependency, configuration requirement) nằm trong từng Application Definition Version. | **Application Definition** (aggregate root) |
 | Application Definition Version | `versionId`, `versionNumber`, `createdAt` | Một phiên bản **bất biến** của cấu trúc logic, được tạo mỗi lần Developer lưu ở UC-01; không bao giờ bị sửa hay xóa. UC-03 deploy đúng một phiên bản vào một environment. | Application Definition |
 | Workload | `workloadId`, `name`, `type`, `imageRepository`, `port`, `exposedOutputs` | Một workload trong một phiên bản. `workloadId` là **ID cố định qua các phiên bản** (đổi tên vẫn giữ ID). Chỉ giữ image repository; image tag/version cụ thể thuộc deployment. `exposedOutputs` là các output logic có thể được tham chiếu, ví dụ `endpoint`. | Application Definition (qua Application Definition Version) |
@@ -49,6 +54,10 @@ Các aggregate root chính là **Application Definition**, **Environment Configu
 
 ## Invariants chính
 
+- Mỗi Local User Account có đúng một Local Credential và có `0..*` Auth Session; username chuẩn hóa là duy nhất.
+- Password gốc và raw session token không thuộc persistent domain model. Reset password hoặc disable account thu hồi mọi Auth Session hiện hành của account trong cùng transaction.
+- Auth Session chỉ tạo `Principal` khi chưa bị thu hồi, chưa quá 8 giờ tuyệt đối, chưa idle quá 30 phút và account còn `ACTIVE`.
+- Mọi local user `ACTIVE` có cùng quyền trong thiết kế hiện tại; domain model chưa có Role hoặc Permission.
 - Một `Application Definition` có `1..*` Application Definition Version; mỗi phiên bản có `1..*` Workload, `0..*` Resource Requirement và `0..*` Dependency.
 - Application Definition Version là bất biến: đã tạo thì không bị sửa hay xóa. Workload, Resource Requirement, Environment Variable Definition và Secret Definition giữ ID cố định qua các phiên bản.
 - `Environment Variable Definition` và `Secret Definition` luôn thuộc đúng một Workload.

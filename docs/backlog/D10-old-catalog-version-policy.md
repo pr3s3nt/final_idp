@@ -2,7 +2,7 @@
 id: D10
 artifact: deferred-issue
 status: deferred
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 source_record: "git:f58765e:docs/archive/consolidated/deferred-issues-log.md"
 ---
 
@@ -22,7 +22,7 @@ Theo vấn đề 12, catalog có phiên bản bất biến và Developer chọn 
 
 ### Câu hỏi cần chốt khi giải quyết
 
-1. Phiên bản catalog có trạng thái (vd `ACTIVE`, `DEPRECATED`, `BLOCKED`) không, và ai đổi trạng thái (platform administration nằm ngoài năm Developer use case)?
+1. Phiên bản catalog có trạng thái (vd `ACTIVE`, `DEPRECATED`, `BLOCKED`) không, và ai đổi trạng thái (platform administration nằm ngoài các use case hiện tại)?
 2. Deployment đang chạy trên phiên bản bị khóa thì deploy một phần có bị chặn không, hay chỉ chặn chọn phiên bản đó cho deployment mới?
 3. Có cần màn hình cho platform xem application nào đang dùng phiên bản nào không?
 

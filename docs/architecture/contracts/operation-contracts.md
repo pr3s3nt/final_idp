@@ -2,14 +2,20 @@
 id: OPERATION-CONTRACTS
 artifact: operation-contracts
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Step 4: Operation Contracts
 
-Tài liệu này đặc tả các system operation quan trọng của UC-01 đến UC-03 và UC-05 theo kiểu Larman. Tên domain object dùng đúng Step 2; tên table/column `snake_case` dùng đúng Step 3. Các nhãn trạng thái như `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED` và `FAILED` dùng đúng literal trong mục **Danh mục ENUM** của `docs/architecture/database/schema.md`; literal thuộc các mục hoãn (D3–D6) chỉ là giá trị dự kiến.
+Tài liệu này đặc tả các system operation quan trọng của UC-01 đến UC-03, UC-05 và UC-06 theo kiểu Larman. Tên domain object dùng đúng Step 2; tên table/column `snake_case` dùng đúng Step 3. Các nhãn trạng thái như `AWAITING_CONFIRMATION`, `CONFIRMED`, `DEPLOYING`, `SUCCEEDED`, `FAILED`, `ACTIVE` và `DISABLED` dùng đúng literal trong mục **Danh mục ENUM** của `docs/architecture/database/schema.md`; literal thuộc các mục hoãn (D3–D6) chỉ là giá trị dự kiến.
 
 Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastructure Plan, `Resource Output`, `Workload Output`, `Resolved Configuration` và `Resolved Specification` là `TRANSIENT`; postcondition có thể tạo chúng trong execution hiện tại nhưng không tạo table/row tương ứng. Mọi postcondition bên dưới mô tả state sau khi operation hoàn tất, không mô tả trình tự gọi component. Từ contract 6 trở đi, operation do **Deployment Worker** chạy nền gọi, sau khi job triển khai đã được tạo ở contract 5. Cấu trúc chi tiết của plan (D3), việc ghi `deployment_step` (D4), việc tách trạng thái CD (D5) và phục hồi worker (D6) chưa được đặc tả ở đây.
+
+Các operation bắt nguồn từ request của Developer trong UC-01 đến UC-05 giả
+định Authentication Middleware đã tạo `Principal` từ Auth Session hợp lệ theo
+UC-06. Contract không lặp lại cookie/password vì use case nghiệp vụ không phụ
+thuộc cơ chế xác thực; operation nội bộ và operation nền của Deployment Worker
+dùng trusted execution context đã được tạo từ request/job hợp lệ.
 
 ## 1. `saveApplicationDefinition()`
 
@@ -289,3 +295,81 @@ Các execution-scoped object `Deployment Graph`, `Resource Resolution`, Infrastr
   - Việc thực thi thuộc `confirmDeployment()` (dùng chung với UC-03) và Deployment Worker; operation này chỉ lập plan.
 - **Scope boundaries**:
   - Operation chỉ tác động tới đúng một `(application, environment, deployment target)`. Application Definition, các phiên bản, Environment Configuration của mọi environment, `Delivery Repository` và cặp khóa của application không nằm trong postcondition của bất kỳ contract nào của UC-05: chúng được giữ lại.
+
+## 13. `signIn()`
+
+- **Operation**: `signIn(username, password, returnTo, requestSource)`
+- **Cross References**: UC-06 – luồng chính; A1 thông tin không hợp lệ; A2 rate limit; A4 return path không an toàn.
+- **Preconditions**:
+  - Request đến từ login action public qua HTTPS ở production hoặc development profile cho phép HTTP rõ ràng.
+  - Pre-auth CSRF nonce cùng Origin/Fetch Metadata đã được HTTP boundary kiểm tra.
+  - `username` và `password` có mặt trong request nhưng chưa được ghi vào log/metric. `returnTo` có thể rỗng.
+- **Postconditions**:
+  - Username được chuẩn hóa; rate-limit bucket `ACCOUNT` và `SOURCE` được kiểm tra trước khi verify.
+  - Khi một `user_account` `ACTIVE` tồn tại và Argon2id verify thành công, một `auth_session` được insert với token/CSRF hash, `last_seen_at = created_at`, `expires_at = created_at + 8 hours`, `revoked_at = NULL`. Raw token/CSRF chỉ được trả cho HTTP boundary sau khi commit.
+  - Cookie session tuân thủ thuộc tính của UC-06. Redirect chỉ dùng `returnTo` khi đó là đường dẫn nội bộ an toàn; nếu không dùng `/ui/applications`.
+  - Bucket account được clear sau thành công. Hash có tham số cũ có thể được nâng cấp atomically sau khi verify thành công mà không đổi password.
+- **Exceptions / Guarantees**:
+  - Account không tồn tại dùng dummy hash để verify; account không tồn tại, `DISABLED` hoặc password sai đều trả cùng lỗi và không tạo session. Failure được ghi vào bucket nhưng password không được persist.
+  - Khi vượt threshold, trả `429` và không verify/tạo session. Không đặt khóa vĩnh viễn trên `user_account`.
+  - Lỗi persist session không được gửi cookie. Raw token không vào database, URL, log hoặc response body.
+
+## 14. `authenticateRequest()`
+
+- **Operation**: `authenticateRequest(sessionToken)`
+- **Cross References**: UC-06 – bước middleware bảo vệ request; A3 session/account không hợp lệ.
+- **Preconditions**:
+  - Route đã được phân loại public hoặc protected. Operation chỉ chạy cho protected route và nhận token từ cookie đúng tên/profile.
+- **Postconditions**:
+  - SHA-256 của token được dùng để tìm `auth_session`; raw token không được persist.
+  - Khi session chưa revoke, chưa quá `expires_at`, chưa idle quá 30 phút và `user_account.status = ACTIVE`, `last_seen_at` được cập nhật và một `Principal(userId, username, displayName)` transient được gắn vào request context.
+  - Không domain state nghiệp vụ nào bị thay đổi ngoài `last_seen_at`.
+- **Exceptions / Guarantees**:
+  - Token thiếu/không khớp, session hết hạn/revoked/idle hoặc account `DISABLED` không tạo Principal. Browser navigation redirect tới login với safe return path; API trả JSON `401`. Nếu cookie có mặt nhưng không hợp lệ, response xóa cookie đó.
+  - So sánh token/CSRF hash dùng constant-time comparison khi áp dụng; không log raw token hoặc hash đầy đủ.
+
+## 15. `signOut()`
+
+- **Operation**: `signOut(sessionToken, csrfToken)`
+- **Cross References**: UC-06 – bước Developer chọn Đăng xuất; A5 CSRF không hợp lệ.
+- **Preconditions**:
+  - Request là `POST`; CSRF token hợp lệ và gắn với session hiện tại.
+- **Postconditions**:
+  - Session hiện tại có `revoked_at` được đặt nếu nó còn tồn tại; response luôn xóa cookie và redirect về login.
+  - Các session khác của cùng user không đổi.
+- **Exceptions / Guarantees**:
+  - CSRF sai trả `403` và không revoke session. Sau khi CSRF hợp lệ, logout là idempotent đối với session đã revoke/hết hạn.
+
+## 16. `createLocalUser()`
+
+- **Operation**: `createLocalUser(username, displayName, password)`
+- **Cross References**: UC-06 – supporting flow của Platform Operator; A6 provision thất bại.
+- **Preconditions**:
+  - Operation chỉ được gọi từ trusted CLI. Password đến từ hidden prompt có xác nhận, không từ argument/environment.
+  - Username và password thỏa quy tắc UC-06, password không thuộc denylist, và username chuẩn hóa chưa tồn tại.
+- **Postconditions**:
+  - Trong một transaction, insert `user_account` `ACTIVE` và đúng một `local_credential` chứa encoded Argon2id hash; không tạo session.
+- **Exceptions / Guarantees**:
+  - Duplicate/invalid input hoặc hashing/persistence error rollback toàn bộ; password gốc không được log/persist.
+
+## 17. `resetLocalPassword()`
+
+- **Operation**: `resetLocalPassword(username, newPassword)`
+- **Cross References**: UC-06 – supporting flow của Platform Operator; A6.
+- **Preconditions**:
+  - Trusted CLI đã đọc/confirm password bằng hidden prompt; account tồn tại; password thỏa policy và denylist.
+- **Postconditions**:
+  - Trong một transaction, `local_credential.password_hash` và `password_changed_at` được cập nhật, đồng thời mọi `auth_session` chưa revoke của user được đặt `revoked_at`.
+- **Exceptions / Guarantees**:
+  - Account không tồn tại, password invalid hoặc bất kỳ write nào lỗi làm transaction rollback; không có trạng thái credential/session chỉ cập nhật một phần.
+
+## 18. `setLocalUserStatus()`
+
+- **Operation**: `setLocalUserStatus(username, status)`
+- **Cross References**: UC-06 – supporting flow enable/disable local user.
+- **Preconditions**:
+  - Trusted CLI gọi operation; account tồn tại; `status` là `ACTIVE` hoặc `DISABLED`.
+- **Postconditions**:
+  - `user_account.status` và `updated_at` được cập nhật. Khi chuyển sang `DISABLED`, mọi session chưa revoke được thu hồi trong cùng transaction. Khi chuyển sang `ACTIVE`, không session nào được tạo hoặc phục hồi.
+- **Exceptions / Guarantees**:
+  - Account không tồn tại hoặc transaction lỗi không làm thay đổi status/session. Operation lặp lại với status hiện tại là idempotent.

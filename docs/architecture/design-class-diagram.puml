@@ -7,6 +7,23 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 package "Boundary/UI" {
+  class "Login Web UI" as LoginUI <<boundary>> {
+    +showLogin(returnTo)
+    +submitCredentials(username, password)
+    +submitLogout(csrfToken)
+  }
+  class "Authentication API / Controller" as AuthAPI <<control>> {
+    +signIn(username, password, returnTo)
+    +signOut(sessionToken, csrfToken)
+  }
+  class "Authentication Middleware" as AuthMiddleware <<control>> {
+    +authenticateRequest(sessionToken)
+  }
+  class "Local User CLI" as LocalUserCLI <<boundary>> {
+    +createLocalUser(username, displayName)
+    +resetLocalPassword(username)
+    +setLocalUserStatus(username, status)
+  }
   class "Web UI" as WebUI <<boundary>> {
     -currentApplicationId: String
     -selectedEnvironment: String
@@ -60,6 +77,12 @@ package "Boundary/UI" {
 }
 
 package "Application services" {
+  class "Authentication Service" as AuthenticationService <<control>> {
+    +signIn(username, password, requestSource)
+    +createLocalUser(username, displayName, password)
+    +resetLocalPassword(username, password)
+    +setLocalUserStatus(username, status)
+  }
   class "Application Service" as ApplicationService <<control>> {
     -applicationRepository: ApplicationRepository
     -specificationRepository: SpecificationRepository
@@ -106,6 +129,27 @@ package "Application services" {
 }
 
 package "Domain components" {
+  class "Password Hasher" as PasswordHasher <<control>> {
+    +hash(password)
+    +verify(password, encodedHash)
+    +needsRehash(encodedHash)
+  }
+  class "Session Manager" as SessionManager <<control>> {
+    +createSession(userId)
+    +authenticateRequest(token)
+    +revokeCurrentSession(token)
+    +revokeAllSessions(userId)
+  }
+  class "Login Rate Limiter" as LoginRateLimiter <<control>> {
+    +check(username, requestSource)
+    +recordFailure(username, requestSource)
+    +clearAccountFailures(username)
+  }
+  class "Principal" as Principal <<transient>> {
+    +userId: String
+    +username: String
+    +displayName: String
+  }
   class "Application Definition Validator" as ApplicationDefinitionValidator <<control>> {
     -validationRules: List
     +validateApplicationDefinition(applicationDefinition)
@@ -265,6 +309,26 @@ package "External systems" {
 }
 
 package "Persistence" {
+  class "User Account Repository" as UserAccountRepository <<entity>> {
+    +createAccountAndCredential(account, credential)
+    +findByNormalizedUsername(username)
+    +findActiveAccount(userId)
+    +replacePassword(userId, passwordHash)
+    +setStatus(userId, status)
+  }
+  class "Auth Session Repository" as AuthSessionRepository <<entity>> {
+    +save(session)
+    +findActiveByTokenHash(tokenHash)
+    +touch(sessionId, lastSeenAt)
+    +revoke(sessionId)
+    +revokeAll(userId)
+  }
+  class "Login Attempt Repository" as LoginAttemptRepository <<entity>> {
+    +loadBuckets(accountKeyHash, sourceKeyHash)
+    +recordFailure(bucket)
+    +clearAccountBucket(accountKeyHash)
+    +deleteExpiredBuckets()
+  }
   class "Application Repository" as ApplicationRepository <<entity>> {
     -applicationDefinitionVersions: Collection
     +findLatestVersion(applicationId)
@@ -330,6 +394,20 @@ package "Persistence" {
     +getDeploymentImages(deploymentId)
   }
 }
+
+LoginUI "1" --> "1" AuthAPI : UC-06
+AuthAPI "1" --> "1" AuthenticationService : sign in/account result
+AuthAPI "1" --> "1" SessionManager : sign out
+AuthMiddleware "1" --> "1" SessionManager
+AuthMiddleware ..> Principal : attach to request
+LocalUserCLI "1" --> "1" AuthenticationService
+AuthenticationService ..> PasswordHasher
+AuthenticationService "1" --> "1" SessionManager
+AuthenticationService "1" --> "1" LoginRateLimiter
+AuthenticationService "1" --> "1" UserAccountRepository
+SessionManager "1" --> "1" AuthSessionRepository
+SessionManager "1" --> "1" UserAccountRepository
+LoginRateLimiter "1" --> "1" LoginAttemptRepository
 
 WebUI "1" --> "1" ApplicationAPI : UC-01
 WebUI "1" --> "1" EnvironmentAPI : UC-02

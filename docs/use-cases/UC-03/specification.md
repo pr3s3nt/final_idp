@@ -3,7 +3,7 @@ id: UC-03
 artifact: use-case-specification
 status: current
 delivery_status: implemented-and-verified
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # UC-03 — Deploy Application
@@ -41,6 +41,7 @@ Image tag/version được xác định tại thời điểm deployment, không 
 
 ## 3. Tiền điều kiện
 
+- Developer có Auth Session hợp lệ và Local User Account còn `ACTIVE` theo UC-06.
 - Phiên bản Application Definition được chọn tồn tại, hợp lệ và các quan hệ depends on không tạo thành vòng.
 - Workload cần deploy có Image Repository.
 - Environment Configuration cần thiết của environment đã được cấu hình và khớp với phiên bản được chọn.

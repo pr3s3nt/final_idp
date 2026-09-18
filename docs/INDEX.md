@@ -2,7 +2,7 @@
 id: DOC-INDEX
 artifact: documentation-index
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Documentation index
@@ -43,6 +43,7 @@ multiple concerns, combine the corresponding rows.
 | Change deployment or deployment planning | [UC-03 context](use-cases/UC-03/README.md) |
 | Change deployment-result or status presentation | [UC-04 context](use-cases/UC-04/README.md) |
 | Change application removal from an environment | [UC-05 context](use-cases/UC-05/README.md) |
+| Change authentication, login, logout, session, or local user provisioning | [UC-06 context](use-cases/UC-06/README.md) |
 | Change the shared domain model or architecture | [Architecture index](architecture/README.md) |
 | Change a database table, column, constraint, or literal enumeration | [Database schema](architecture/database/schema.md) |
 | Understand why a design choice was made | [Decision index](decisions/README.md) |
