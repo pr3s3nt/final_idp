@@ -2,14 +2,21 @@
 id: UC-02-CONTEXT
 artifact: use-case-context
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # UC-02 context — Configure Application Environment
 
 ## Delivery state
 
-Designed. The current Go implementation imports Environment Configuration data as fixtures; it does not implement the complete UC-02 interaction flow.
+Implemented and covered by automated tests. The Configuration page lives at
+`/ui/applications/{applicationId}/configuration` and saves through the
+Environment Configuration API; fixtures still import Environment Configuration
+data for the demo applications. The page has not been exercised in a deployed
+browser environment, and the staged-Secret lifetime of
+[D07](../../backlog/D07-orphaned-secret.md) is still unresolved. The latest
+evidence is the
+[UC-02 verification record](../../verification/2026-09-18-uc02-environment-configuration.md).
 
 ## Read in this order
 

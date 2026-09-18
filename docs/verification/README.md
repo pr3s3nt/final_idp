@@ -19,5 +19,6 @@ Verification records capture what was executed in a particular environment on a 
 | 2026-09-18 | UC-01 React editor, API and optimistic save | [UC-01 editor](2026-09-18-uc01-react-editor.md) |
 | 2026-09-18 | UC-01 component-focused Application Builder presentation | [UC-01 Application Builder](2026-09-18-uc01-application-builder.md) |
 | 2026-09-18 | UC-06 local accounts, sessions, route protection and React login | [UC-06 local authentication](2026-09-18-uc06-local-authentication.md) |
+| 2026-09-18 | UC-02 environment configuration service, API and Configuration page | [UC-02 environment configuration](2026-09-18-uc02-environment-configuration.md) |
 
 The removed consolidated evidence predecessor and its mapping to these snapshots are recorded in the [documentation reconciliation](../implementation/documentation-reconciliation.md). Add future executions as new immutable files rather than appending unrelated rounds to an existing snapshot.

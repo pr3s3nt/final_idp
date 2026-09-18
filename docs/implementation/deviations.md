@@ -11,7 +11,7 @@ This file lists current differences that an AI agent must not infer away. Histor
 
 | ID | Difference | Authority/action |
 |---|---|---|
-| IMP-001 | UC-02 is designed but the current executable imports its data through fixtures rather than implementing its complete interaction. The fixture importer also still writes UC-01 application versions without the UC-01 validator. | Keep the UC-02 specification as required future scope; do not describe fixture import as UC-02 delivery or as a UC-01 Save. |
+| IMP-001 | The fixture importer writes Environment Configurations and UC-01 application versions directly, without the UC-02 Save path or the UC-01 validator. UC-02 itself is implemented. | Treat fixture import as demo seeding only; do not describe it as a UC-01 or UC-02 Save, and do not infer required behaviour from what the importer accepts. |
 | IMP-002 | UC-04 has a minimal query/UI path needed for deployment tracking, not a proven implementation of every specified query scenario. | Treat UC-04 as partially implemented until its traceability and test coverage are completed. |
 | IMP-003 | Worker crash recovery is not fully implemented or exercised. | [D06](../backlog/D06-worker-recovery.md) remains authoritative. |
 | IMP-004 | Teardown can mark workload removal without definitive cluster verification in some unavailable-cluster paths. | [D13](../backlog/D13-teardown-removal-verification.md) remains authoritative. |

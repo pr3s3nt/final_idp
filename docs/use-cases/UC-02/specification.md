@@ -2,7 +2,7 @@
 id: UC-02
 artifact: use-case-specification
 status: current
-delivery_status: designed
+delivery_status: implemented
 last_reviewed: 2026-09-18
 ---
 

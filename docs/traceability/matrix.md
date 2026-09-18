@@ -91,9 +91,9 @@ Quy ước đọc matrix:
 | UC-04 | 9 | 9 | PASS |
 | UC-05 | 2 mới (+2 dùng lại của UC-03) | 2 mới + 2 dùng lại | PASS |
 | UC-06 | 6 | 6 | PASS |
-| **Tổng** | **55** | **55** | **PASS** |
+| **Tổng** | **56** | **56** | **PASS** |
 
-**Kết luận B1: PASS.** Cả 55/55 Step-2 system operation đều có message trong sequence diagram tương ứng. UC-06 thêm sáu operation cho sign-in, request authentication, sign-out và CLI account lifecycle. UC-05 thêm hai operation `createTeardown()` và `removeWorkloadsAndInfrastructure()`; `confirmDeployment()` và `saveDeploymentRecord()` được dùng lại từ UC-03.
+**Kết luận B1: PASS.** Cả 56/56 Step-2 system operation đều có message trong sequence diagram tương ứng. UC-02 thêm `selectCatalogVersionAndTarget()` theo ADR-020. UC-06 thêm sáu operation cho sign-in, request authentication, sign-out và CLI account lifecycle. UC-05 thêm hai operation `createTeardown()` và `removeWorkloadsAndInfrastructure()`; `confirmDeployment()` và `saveDeploymentRecord()` được dùng lại từ UC-03.
 
 ### B2. Mọi class trong VOPC có operation hoặc được giải thích vai trò participant
 
@@ -284,7 +284,23 @@ This section links UC-01 design operations to code and tests. Code paths are rel
 | `generateApplicationSpecification()` | `backend/internal/domain/appspec`, `backend/internal/persistence/specification_repository.go` | `appspec/generator_test.go`; `TestUC01CreateApplication` (integration) |
 | HTTP status and problem contract (200, 201, 404, 409, 422) | `backend/internal/web/applications.go`, `writeError` in `server.go` | `backend/internal/web/applications_test.go` |
 
-## E. UC-06 implementation and automated tests
+## E. UC-02 implementation and automated tests
+
+This section links UC-02 design operations to code and tests. Code paths are relative to `idp/`; the detailed evidence is in the [UC-02 verification record](../verification/2026-09-18-uc02-environment-configuration.md).
+
+| Operation or rule | Implementation | Automated tests |
+|---|---|---|
+| `selectEnvironment()` and `loadConfigurationRequirements()` | `backend/internal/service/configuration.go`, `backend/internal/web/configuration.go` | `backend/internal/web/configuration_test.go`; `TestSelectEnvironmentLoadsRequirementsBasesAndCatalogChoices` (integration) |
+| `selectCatalogVersionAndTarget()` and clearing Resource Output bindings when either changes | `frontend/src/features/environment-configuration/draft/reducer.ts`, `pages/ConfigurationPage.tsx` | `frontend/src/features/environment-configuration/draft/reducer.test.ts`; `ConfigurationPage.test.tsx` |
+| `requestResourceOutputs()` resolving one Resource Definition, and `requestWorkloadOutputs()`, both filtered by declared dependencies | `backend/internal/service/configuration.go` using `domain/resourceresolver` | `TestResourceOutputsComeFromTheDefinitionTheTargetResolves` (integration); `configuration_test.go`; page tests for normal versus sensitive outputs |
+| `setDirectConfigurationValue()` for a variable in the draft, and secure Secret staging | `frontend/src/features/environment-configuration/draft/reducer.ts`; `ConfigurationService.StageSecret` with `integration/secretstore` | `reducer.test.ts`; `TestStagedSecretKeepsPlaintextOutOfTheDatabase` (integration); page test for the opaque reference |
+| `bindResourceOutput()` and `bindWorkloadOutput()` | `frontend/src/features/environment-configuration/components/BindingField.tsx`, `draft/reducer.ts` | `reducer.test.ts`; `ConfigurationPage.test.tsx` |
+| `validateEnvironmentConfiguration()` and A1 | `backend/internal/domain/configvalidator`; client copy in `frontend/src/features/environment-configuration/draft/validation.ts` | `configvalidator/validator_test.go`; `TestInvalidOutputReferenceIsRejectedAndWritesNothing` (integration); page tests for blocked Save and Review |
+| `saveEnvironmentConfiguration()` with `saveIfBasesMatch()` and A2 `DRAFT_CONFLICT` | `backend/internal/persistence/environment_configuration_repository.go`, `backend/internal/service/configuration.go` | `TestSaveWithCurrentBasesWritesAndAdvancesTheRevision`, `TestSaveWithAStaleRevisionIsRejectedAndWritesNothing`, `TestSaveWithAStaleApplicationVersionIsRejected` (integration); page test for the conflict panel |
+| Client-owned draft in `sessionStorage` without a plaintext Secret | `frontend/src/features/environment-configuration/draft/storage.ts`, `hooks/useConfigurationDraft.ts` | `frontend/src/features/environment-configuration/draft/storage.test.ts` |
+| HTTP status and problem contract (200, 201, 401, 409, 422) | `backend/internal/web/configuration.go`, `writeError` in `server.go` | `backend/internal/web/configuration_test.go` |
+
+## F. UC-06 implementation and automated tests
 
 Code paths dưới đây tương đối với `idp/`; bằng chứng thực thi chi tiết nằm trong
 [verification record UC-06](../verification/2026-09-18-uc06-local-authentication.md).
@@ -301,4 +317,4 @@ Code paths dưới đây tương đối với `idp/`; bằng chứng thực thi 
 
 ## Overall acceptance
 
-**Kết quả tổng thể: PASS có điều kiện.** Design hiện trace được 55/55 Step-2 operations, 65/65 VOPC classes, 29/29 tables theo tiêu chí read-or-write, 18/18 operation contracts và 4/4 state machines. UC-06 đã có code, unit/component test và PostgreSQL integration test; real-browser/deployed-environment verification chưa chạy. Gap 2 vẫn cố ý không giải quyết vì writer của `Catalog Version`/`Resource Definition` thuộc platform administration ngoài phạm vi hiện tại. Các mục backlog còn lại, gồm D15 về cô lập draft giữa user, vẫn phải được giải quyết theo phạm vi tương ứng.
+**Kết quả tổng thể: PASS có điều kiện.** Design hiện trace được 56/56 Step-2 operations, 65/65 VOPC classes, 29/29 tables theo tiêu chí read-or-write, 18/18 operation contracts và 4/4 state machines. UC-02 và UC-06 đều đã có code, unit/component test và PostgreSQL integration test; real-browser/deployed-environment verification chưa chạy cho cả hai. Gap 2 vẫn cố ý không giải quyết vì writer của `Catalog Version`/`Resource Definition` thuộc platform administration ngoài phạm vi hiện tại. Các mục backlog còn lại, gồm D15 về cô lập draft giữa user, vẫn phải được giải quyết theo phạm vi tương ứng.
