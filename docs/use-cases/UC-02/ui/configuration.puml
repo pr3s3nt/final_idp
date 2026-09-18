@@ -1,0 +1,49 @@
+@startuml
+title UC-02 desktop web — Workspace cấu hình một workload
+
+skinparam backgroundColor #F3F5F8
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #D8DEE8
+  FontColor #182230
+}
+
+rectangle "Route React web\n/ui/applications/{applicationId}/configuration" as Browser {
+  rectangle "Vùng header\n← shop-app  |  Configuration  |  Version 3 · Unsaved changes · kept in this tab  |  Discard  |  Save configuration" as HeaderBar
+
+  rectangle "Thanh lựa chọn phạm vi\n\nEnvironment [staging]   Platform catalog version [v2]   Deployment target [kind-local]\n\nPhiên bản catalog và deployment target chỉ quyết định resource có những output nào.\nChúng không được lưu cùng configuration; UC-03 kiểm tra lại khi deploy." as Scope
+
+  rectangle "Điều hướng theo workload\n\nWORKLOADS\n  ● backend     1 vấn đề\n  ○ frontend\n\nREVIEW\n  Review        1 vấn đề" as Navigation
+
+  rectangle "Workspace workload đang được chọn\n\nbackend\n─────────────────────────────────────────────────────────\nEnvironment variables\n\n  DB_HOST *\n  Source    [Resource output]\n  Resource  [postgresql]        ← chỉ resource mà backend depends on\n  Output    [host]              ← chỉ output của definition đã resolve\n\nSecrets\n\n  DB_PASSWORD *              secret\n  Source    [Secret value]\n  Value     [••••••••]  Store secret\n  ⚠ Đã nhập nhưng chưa lưu" as Workspace
+
+  HeaderBar -[hidden]down- Scope
+  Scope -[hidden]down- Navigation
+  Navigation -[hidden]right- Workspace
+}
+
+note right of Workspace
+  Mỗi requirement hỏi đúng một câu trước:
+  giá trị này đến từ đâu. Control còn lại
+  chỉ hiện sau khi đã chọn nguồn.
+
+  Environment Variable chỉ chọn được output thường.
+  Secret chỉ chọn được output nhạy cảm.
+
+  Chọn nguồn và nhập giá trị chỉ cập nhật draft
+  do browser sở hữu. Chỉ tải output, Store secret
+  và Save mới gọi API.
+end note
+
+note bottom of Scope
+  Đổi Environment là mở một Environment Configuration khác,
+  nên phải xác nhận khi draft có thay đổi chưa lưu.
+
+  Đổi catalog version hoặc deployment target xóa resource và
+  output của các binding Resource Output, vì output có thể
+  không còn tồn tại ở lựa chọn mới.
+end note
+
+@enduml

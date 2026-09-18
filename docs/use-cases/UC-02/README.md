@@ -15,8 +15,9 @@ Designed. The current Go implementation imports Environment Configuration data a
 
 1. [Specification](specification.md)
 2. [Use Case Realization](realization.md)
-3. [Sequence diagram](sequence.puml)
-4. [VOPC](vopc.puml)
+3. [Configuration UI design](ui/README.md)
+4. [Sequence diagram](sequence.puml)
+5. [VOPC](vopc.puml)
 
 ## Shared artifacts
 

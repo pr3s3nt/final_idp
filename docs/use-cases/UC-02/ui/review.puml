@@ -1,0 +1,30 @@
+@startuml
+title UC-02 desktop web — Workspace Review chỉ đọc
+
+skinparam backgroundColor #F3F5F8
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #D8DEE8
+  FontColor #182230
+}
+
+rectangle "Review trước khi Save" as Browser {
+  rectangle "Validation summary\n\n1 vấn đề đang chặn Save\n  • backend · DB_PASSWORD: đã nhập giá trị nhưng chưa bấm Store secret\n\nMỗi dòng đưa Developer tới đúng workspace chứa vấn đề." as Summary
+
+  rectangle "Tổng hợp cấu hình của environment\n\nWorkload   Requirement    Nguồn              Giá trị\n─────────────────────────────────────────────────────────────\nbackend    DB_HOST        Resource output    postgresql.host\nbackend    DB_PASSWORD    Secret value       (chưa lưu)\nfrontend   BACKEND_URL    Workload output    backend.endpoint" as Summary2
+
+  rectangle "Phạm vi đang áp dụng\n\nEnvironment staging · Catalog v2 · Target kind-local\n\nCatalog version và target không được lưu.\nLưu cấu hình không deploy application." as Scope
+
+  Summary -[hidden]down- Summary2
+  Summary2 -[hidden]down- Scope
+}
+
+note right of Summary2
+  Bảng chỉ đọc. Giá trị Secret không bao giờ
+  được hiển thị lại, kể cả khi đã lưu:
+  cột Giá trị chỉ cho biết đã có tham chiếu hay chưa.
+end note
+
+@enduml

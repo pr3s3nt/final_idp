@@ -38,7 +38,7 @@ Catalog Version và deployment target trong draft chỉ dùng để chọn Resou
 
 ### Boundary/UI
 
-- **Web UI** - Sở hữu `EnvironmentConfigurationDraft`, cho Developer chọn environment, nhập giá trị configuration và chọn nguồn từ Resource Output hoặc Workload Output; serialize/restore phần không nhạy cảm trong `sessionStorage` và gửi toàn bộ draft khi Save.
+- **Web UI** - Sở hữu `EnvironmentConfigurationDraft`, cho Developer chọn environment, nhập giá trị configuration và chọn nguồn từ Resource Output hoặc Workload Output; serialize/restore phần không nhạy cảm trong `sessionStorage` và gửi toàn bộ draft khi Save. Bố cục màn hình, quy tắc tương tác và trạng thái được định nghĩa trong [Configuration UI design](ui/README.md).
 
 - **Environment Configuration API / Controller** - Tải durable state/catalog data, nhận secure Secret staging request khi cần và nhận toàn bộ draft khi Save; không nhận từng field/binding edit thông thường.
 
@@ -72,6 +72,7 @@ UC-02 chưa cần Configuration Resolver. Hệ thống chỉ lưu reference như
 
 ## Detailed design artifacts
 
+- [Configuration UI design](ui/README.md)
 - [Sequence diagram](sequence.puml)
 - [VOPC](vopc.puml)
 - [Operation contracts](../../architecture/contracts/operation-contracts.md)

@@ -1,0 +1,58 @@
+@startuml
+title UC-02 desktop web — Trạng thái trang Configuration và phục hồi
+
+hide empty description
+
+state "Đang tải" as Loading
+state "Load thất bại" as LoadFailed
+state "Draft sạch" as Clean
+state "Draft được phục hồi" as Restored
+state "Draft có thay đổi" as Dirty
+state "Secret chờ staging" as PendingSecret
+state "Review có vấn đề" as ReviewWithProblems
+state "Đang lưu" as Saving
+state "Conflict" as Conflict
+
+[*] --> Loading : mở trang Configuration
+
+Loading --> Clean : đã tải requirement và cấu hình hiện hành
+Loading --> Restored : đã phục hồi draft của tab, cùng phiên bản
+Loading --> LoadFailed : request thất bại
+LoadFailed --> Loading : Try again
+
+Clean --> Dirty : chọn nguồn giá trị hoặc nhập giá trị
+Restored --> Dirty : tiếp tục chỉnh sửa
+Dirty --> Dirty : đổi catalog version hoặc target / xóa binding Resource Output
+Dirty --> PendingSecret : nhập giá trị Secret
+PendingSecret --> Dirty : Store secret / draft chỉ giữ tham chiếu
+PendingSecret --> Dirty : xóa trống ô nhập Secret
+
+Dirty --> ReviewWithProblems : Save [validation local thất bại]
+Dirty --> Saving : Save [validation local thành công]
+ReviewWithProblems --> Dirty : sửa một vấn đề
+ReviewWithProblems --> Saving : Save [hợp lệ]
+
+Saving --> Clean : Save thành công / xóa draft, hiển thị revision mới
+Saving --> Dirty : Save thất bại / giữ draft
+Saving --> Conflict : DRAFT_CONFLICT / giữ draft
+Saving --> ReviewWithProblems : backend validation thất bại
+
+Conflict --> Loading : xác nhận Reload configuration
+
+Dirty --> Loading : xác nhận Discard
+Dirty --> Loading : xác nhận đổi Environment
+Clean --> Loading : đổi Environment
+Clean --> [*] : rời trang
+
+note right of PendingSecret
+  Save bị chặn khi Secret đã nhập mà chưa staging.
+  Giá trị Secret không bao giờ vào sessionStorage;
+  chỉ tham chiếu opaque được giữ lại.
+end note
+
+note bottom of Conflict
+  Không tự động merge. Reload configuration chỉ
+  bỏ draft sau khi Developer xác nhận rõ ràng.
+end note
+
+@enduml
