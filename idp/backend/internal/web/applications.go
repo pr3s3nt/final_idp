@@ -2,12 +2,8 @@ package web
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 
-	"idp/internal/domain"
 	"idp/internal/service"
 )
 
@@ -51,16 +47,10 @@ func (s *Server) apiSaveApplicationDefinitionVersion(w http.ResponseWriter, r *h
 
 func (s *Server) saveApplicationDefinition(w http.ResponseWriter, r *http.Request, applicationID string) {
 	var draft service.ApplicationDefinitionDraft
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDraftBytes))
 	// Unknown fields (for example an image version or a Secret value) are
 	// rejected rather than silently dropped.
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&draft); err != nil {
-		writeError(w, domain.Reject(domain.CodeInvalidInput, "invalid application definition draft: %v", err))
-		return
-	}
-	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		writeError(w, domain.Reject(domain.CodeInvalidInput, "the request body must contain one JSON object"))
+	if err := decodeJSON(w, r, maxDraftBytes, &draft); err != nil {
+		writeError(w, err)
 		return
 	}
 	saved, err := s.Apps.SaveApplicationDefinition(r.Context(), applicationID, draft)

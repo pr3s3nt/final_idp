@@ -29,6 +29,8 @@ type Server struct {
 	Registry imageregistry.Checker
 	// Apps serves the UC-01 Application Definition API.
 	Apps ApplicationDefinitions
+	// Configs serves the UC-02 Environment Configuration API.
+	Configs EnvironmentConfigurations
 	// FrontendDir is the built React bundle served under /ui/ (ADR-017).
 	FrontendDir string
 	// Auth is the UC-06 local authentication service. A nil service fails closed;
@@ -82,6 +84,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/application-definitions/{applicationId}", s.apiGetApplicationDefinition)
 	mux.HandleFunc("POST /api/application-definitions", s.apiCreateApplicationDefinition)
 	mux.HandleFunc("POST /api/application-definitions/{applicationId}/versions", s.apiSaveApplicationDefinitionVersion)
+
+	// UC-02 Environment Configuration API. Field and binding edits stay in the
+	// browser; these routes load state, query the catalog, stage a Secret and Save.
+	mux.HandleFunc("GET /api/environment-configurations/{applicationId}/{environment}", s.apiSelectEnvironment)
+	mux.HandleFunc("GET /api/environment-configurations/{applicationId}/{environment}/resources/{resourceId}/outputs", s.apiResourceOutputs)
+	mux.HandleFunc("GET /api/environment-configurations/{applicationId}/{environment}/workloads/{targetWorkloadId}/outputs", s.apiWorkloadOutputs)
+	mux.HandleFunc("POST /api/environment-configurations/{applicationId}/{environment}/secrets", s.apiStageSecret)
+	mux.HandleFunc("PUT /api/environment-configurations/{applicationId}/{environment}", s.apiSaveEnvironmentConfiguration)
 	// Web UI
 	mux.HandleFunc("GET /{$}", s.pageApplications)
 	mux.HandleFunc("GET /apps/{app}/deploy", s.pageForm)

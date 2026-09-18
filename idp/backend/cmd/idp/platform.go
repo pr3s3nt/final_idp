@@ -69,6 +69,7 @@ func runPlatform(ctx context.Context, cfg *config.Config, db *persistence.DB, cm
 	case "serve":
 		query := &service.QueryService{Repositories: repos, Orch: orch, Kube: kube, CD: cdProvider, ResourceOutputs: outputs}
 		apps := &service.ApplicationService{Apps: repos.Apps, Specs: &persistence.SpecificationRepository{DB: db}}
+		configs := &service.ConfigurationService{Apps: repos.Apps, Configs: repos.Configs, Catalog: repos.Catalog, Secrets: secrets}
 		authKey := sha256.Sum256([]byte("login-rate:" + cfg.AuthHMACKey))
 		authService, err := authentication.NewService(&persistence.AuthenticationRepository{DB: db}, authKey[:])
 		if err != nil {
@@ -77,7 +78,7 @@ func runPlatform(ctx context.Context, cfg *config.Config, db *persistence.DB, cm
 		authService.AccountAttemptLimit = cfg.AuthAccountLimit
 		authService.SourceAttemptLimit = cfg.AuthSourceLimit
 		authService.AttemptWindow = cfg.AuthAttemptWindow
-		srv := &web.Server{Orch: orch, Query: query, Registry: registry, Apps: apps, FrontendDir: cfg.FrontendDir,
+		srv := &web.Server{Orch: orch, Query: query, Registry: registry, Apps: apps, Configs: configs, FrontendDir: cfg.FrontendDir,
 			Auth: authService, AuthDevelopmentCookies: cfg.AuthDevelopmentCookies}
 		httpServer := &http.Server{Addr: cfg.ListenAddr, Handler: srv.Handler()}
 		go func() {
