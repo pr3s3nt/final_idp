@@ -3,11 +3,21 @@ import { httpApplicationApi, type ApplicationApi } from '../features/application
 import { ErrorBoundary } from '../shared/ui/ErrorBoundary';
 import { ApplicationEditorPage } from '../features/application-definition/pages/ApplicationEditorPage';
 import { ApplicationListPage } from '../features/application-definition/pages/ApplicationListPage';
+import { ConfigurationPage } from '../features/environment-configuration/pages/ConfigurationPage';
+import { httpConfigurationApi, type ConfigurationApi } from '../features/environment-configuration/api/client';
 import { LoginPage } from '../features/authentication/pages/LoginPage';
 import { httpAuthenticationApi, type AuthenticationApi } from '../features/authentication/api/client';
 import { linkHandler, parseRoute, useLocation } from './router';
 
-export function App({ api = httpApplicationApi, authenticationApi = httpAuthenticationApi }: { api?: ApplicationApi; authenticationApi?: AuthenticationApi }) {
+export function App({
+  api = httpApplicationApi,
+  authenticationApi = httpAuthenticationApi,
+  configurationApi = httpConfigurationApi,
+}: {
+  api?: ApplicationApi;
+  authenticationApi?: AuthenticationApi;
+  configurationApi?: ConfigurationApi;
+}) {
   const location = useLocation();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState('');
@@ -23,6 +33,9 @@ export function App({ api = httpApplicationApi, authenticationApi = httpAuthenti
       break;
     case 'edit':
       page = <ApplicationEditorPage key={location.key} api={api} applicationId={route.applicationId} savedVersion={location.state.savedVersion} />;
+      break;
+    case 'configuration':
+      page = <ConfigurationPage key={location.key} api={configurationApi} applicationId={route.applicationId} />;
       break;
     default:
       page = (

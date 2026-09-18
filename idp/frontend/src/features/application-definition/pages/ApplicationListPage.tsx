@@ -76,6 +76,10 @@ export function ApplicationListPage({ api }: { api: ApplicationApi }) {
                       <a href={path} onClick={linkHandler(path)} aria-label={`Edit ${a.name}`}>
                         Edit
                       </a>
+                      {' · '}
+                      <a href={`${path}/configuration`} onClick={linkHandler(`${path}/configuration`)} aria-label={`Configure ${a.name}`}>
+                        Configure
+                      </a>
                     </td>
                   </tr>
                 );

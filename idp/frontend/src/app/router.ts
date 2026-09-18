@@ -7,6 +7,7 @@ export type Route =
   | { name: 'list' }
   | { name: 'new' }
   | { name: 'edit'; applicationId: string }
+  | { name: 'configuration'; applicationId: string }
   | { name: 'not-found' };
 
 export interface NavigationState {
@@ -27,6 +28,8 @@ export function parseRoute(pathname: string): Route {
   if (path === '/ui/login') return { name: 'login' };
   if (path === '/ui' || path === '/ui/applications') return { name: 'list' };
   if (path === '/ui/applications/new') return { name: 'new' };
+  const configuration = /^\/ui\/applications\/([^/]+)\/configuration$/.exec(path);
+  if (configuration?.[1]) return { name: 'configuration', applicationId: decodeURIComponent(configuration[1]) };
   const match = /^\/ui\/applications\/([^/]+)$/.exec(path);
   if (match?.[1]) return { name: 'edit', applicationId: decodeURIComponent(match[1]) };
   return { name: 'not-found' };
