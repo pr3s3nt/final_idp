@@ -10,11 +10,11 @@ skinparam rectangle {
   FontColor #1F2328
 }
 
-rectangle "IDP" as Header
+rectangle "IDP" as HeaderBar
 
 rectangle "Sign in to IDP\n\nUse the local account provided by your Platform Operator.\n\n[Session expired or signed-out message]\n\nUsername\n┌──────────────────────────────────┐\n│ username                         │\n└──────────────────────────────────┘\n\nPassword\n┌──────────────────────────────────┐\n│ ••••••••••••••••                 │\n└──────────────────────────────────┘\n\n[ Sign in ]" as LoginPanel
 
-Header -[hidden]down- LoginPanel
+HeaderBar -[hidden]down- LoginPanel
 
 note right of LoginPanel
   Panel tối đa khoảng 28rem.

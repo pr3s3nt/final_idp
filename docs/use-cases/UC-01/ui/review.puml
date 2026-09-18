@@ -11,7 +11,7 @@ skinparam rectangle {
 }
 
 rectangle "Route React web\n/ui/applications/{applicationId}" as Browser {
-  rectangle "Vùng header\n← Applications  |  shop-app  |  Version 2 · Unsaved  |  Discard  |  Save application" as Header
+  rectangle "Vùng header\n← Applications  |  shop-app  |  Version 2 · Unsaved  |  Discard  |  Save application" as HeaderBar
 
   rectangle "Điều hướng Application Builder\n\nOverview\n● backend       1 lỗi\n○ frontend      1 lỗi\n◆ postgresql\n\nReview          2 lỗi" as Navigation
 
@@ -24,7 +24,7 @@ rectangle "Route React web\n/ui/applications/{applicationId}" as Browser {
     Topology -[hidden]down- Summary
   }
 
-  Header -[hidden]down- Navigation
+  HeaderBar -[hidden]down- Navigation
   Navigation -[hidden]right- Review
 }
 

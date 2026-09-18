@@ -56,7 +56,17 @@ Do not combine these roles in one new document.
 
 ## Diagrams
 
-PlantUML is the editable source. Every important diagram must be reachable from a textual context document that explains its purpose, scope, key participants, and invariants. Generated images are optional and are not canonical without their source.
+PlantUML is the editable source. Every important diagram must be reachable from a textual context document that explains its purpose, scope, key participants, and invariants. A rendered image is never canonical without its source.
+
+Each `.puml` file under `docs/` is committed together with a rendered `<name>.png` beside it, so a diagram can be read without installing PlantUML. Regenerate the image in the same change that edits the source:
+
+```bash
+plantuml -tpng -o . docs/use-cases/UC-02/ui/*.puml
+```
+
+Rendered output outside `docs/` stays out of the repository.
+
+Two PlantUML pitfalls have already cost a broken diagram here. `interface` is a class-diagram keyword: in a sequence diagram it parses until the first `==` divider and then fails, so declare `participant "..." as X <<interface>>` instead. `Header` is the page-header directive, so a relation line starting with an element aliased `Header` is read as header text; use another alias such as `HeaderBar`.
 
 ## Semantic removal gate
 

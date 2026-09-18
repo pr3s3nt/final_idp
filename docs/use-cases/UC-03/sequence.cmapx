@@ -1,0 +1,16 @@
+<map id="sequence_map" name="sequence_map">
+<area shape="rect" id="id1" href="affected" title="affected" alt="" coords="112,3839,168,3852"/>
+<area shape="rect" id="id2" href="managed" title="managed" alt="" coords="3630,7875,3686,7888"/>
+<area shape="rect" id="id3" href="affected" title="affected" alt="" coords="38,3914,94,3926"/>
+<area shape="rect" id="id4" href="shared" title="shared" alt="" coords="3556,8037,3674,8050"/>
+<area shape="rect" id="id5" href="rebuiltPlanFingerprint" title="rebuiltPlanFingerprint" alt="" coords="28,3585,153,3598"/>
+<area shape="rect" id="id6" href="wave" title="wave" alt="" coords="1804,5786,1929,5799"/>
+<area shape="rect" id="id7" href="rebuiltPlanFingerprint" title="rebuiltPlanFingerprint" alt="" coords="102,3422,232,3435"/>
+<area shape="rect" id="id8" href="Resource" title="Resource" alt="" coords="4075,5271,4219,5284"/>
+<area shape="rect" id="id9" href="status" title="status" alt="" coords="18,2740,198,2753"/>
+<area shape="rect" id="id10" href="status" title="status" alt="" coords="92,2665,277,2678"/>
+<area shape="rect" id="id11" href="the" title="the" alt="" coords="6805,6381,7072,6394"/>
+<area shape="rect" id="id12" href="wave" title="wave" alt="" coords="1804,5203,2114,5216"/>
+<area shape="rect" id="id13" href="deployed" title="deployed" alt="" coords="1804,7704,2148,7717"/>
+<area shape="rect" id="id14" href="Resource" title="Resource" alt="" coords="4001,5404,4378,5417"/>
+</map>

@@ -5,6 +5,10 @@ Thumbs.db
 .idea/
 .vscode/
 
-# PlantUML rendered output (chỉ giữ text .puml)
+# PlantUML rendered output. Diagrams under docs/ are committed next to their
+# .puml source so they can be read without a PlantUML installation; rendered
+# output anywhere else stays out of the repository.
 *.png
 *.svg
+!docs/**/*.png
+!docs/**/*.svg

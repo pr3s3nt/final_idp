@@ -11,13 +11,13 @@ skinparam rectangle {
 }
 
 rectangle "Route React web\n/ui/applications/{applicationId}" as Browser {
-  rectangle "Vùng header\n← Applications  |  shop-app  |  Version 2 · Unsaved  |  Discard  |  Save application" as Header
+  rectangle "Vùng header\n← Applications  |  shop-app  |  Version 2 · Unsaved  |  Discard  |  Save application" as HeaderBar
 
   rectangle "Điều hướng Application Builder\n\nAPPLICATION\n  Overview\n\nWORKLOADS\n  ● backend    2 lỗi\n  ○ frontend\n  + Add workload\n\nRESOURCES\n  ◆ postgresql\n  + Add resource\n\nREVIEW\n  Review       2 lỗi" as Navigation
 
   rectangle "Workspace Workload đang được chọn\n\nWorkload / backend                         Remove workload\n─────────────────────────────────────────────────────────\nGeneral\n  Workload name · Workload type\n  Image repository · Application port\n\nOutputs\n  endpoint                                      Remove\n\nConfiguration requirements\n  Environment variables             Secrets\n  DB_HOST · Required                DB_PASSWORD · Required\n\nDependencies\n  backend depends on postgresql" as Workspace
 
-  Header -[hidden]down- Navigation
+  HeaderBar -[hidden]down- Navigation
   Navigation -[hidden]right- Workspace
 }
 

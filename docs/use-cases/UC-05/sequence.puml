@@ -17,14 +17,14 @@ control "Infrastructure Planner" as InfraPlanner
 entity "Resource Instance Repository" as ResourceRepo
 entity "Workload Instance Repository" as WorkloadRepo
 control "Deployment Worker" as Worker <<background>>
-interface "CD Integration / CD Provider Interface" as CDIntegration <<interface>>
+participant "CD Integration / CD Provider Interface" as CDIntegration <<interface>>
 control "Concrete CD Provider" as CDProvider
 entity "Delivery Repository Registry" as DeliveryRepo
 boundary "CD System" as CDSystem
-interface "Workload Status Provider / Kubernetes Adapter" as WorkloadStatusProvider <<interface>>
+participant "Workload Status Provider / Kubernetes Adapter" as WorkloadStatusProvider <<interface>>
 boundary "Kubernetes Cluster" as Kubernetes
 control "Infrastructure Reconciler" as InfraReconciler
-interface "Provisioner Adapter / Provisioner Interface" as Provisioner <<interface>>
+participant "Provisioner Adapter / Provisioner Interface" as Provisioner <<interface>>
 boundary "Terraform/OpenTofu Runner" as IaCRunner
 
 == Developer asks to remove the application from one environment ==
