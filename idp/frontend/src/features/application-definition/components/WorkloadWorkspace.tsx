@@ -1,57 +1,15 @@
 import type { Dispatch } from 'react';
-import { componentLabel, type ApplicationDraft, type ResourceDraft, type WorkloadDraft } from '../draft/model';
+import { componentLabel, type ApplicationDraft, type WorkloadDraft } from '../draft/model';
 import type { ConfigGroup, DraftAction } from '../draft/reducer';
 import { fieldDomId, RowErrors, SelectField, TextField, type ProblemsByField } from '../../../shared/ui/Field';
+import { labelOf } from './labels';
 
-interface WorkspaceProps {
+interface Props {
   draft: ApplicationDraft;
+  workload: WorkloadDraft;
   dispatch: Dispatch<DraftAction>;
   problems: ProblemsByField;
-}
-
-function labelOf(kind: string, name: string) {
-  return name ? `${kind} ${name}` : `unnamed ${kind.toLowerCase()}`;
-}
-
-export function OverviewWorkspace({ draft, dispatch, problems }: WorkspaceProps) {
-  return (
-    <section className="workspace-panel" aria-labelledby="workspace-overview-title">
-      <div className="workspace-heading">
-        <div>
-          <p className="eyebrow">Application</p>
-          <h2 id="workspace-overview-title">Overview</h2>
-          <p className="muted">Name this application and describe what it provides. Environments and image versions are chosen later.</p>
-        </div>
-      </div>
-      <div className="form-section">
-        <h3>Application information</h3>
-        <div className="grid">
-          <TextField
-            field="name"
-            label="Application name"
-            required
-            value={draft.name}
-            problems={problems}
-            hint="Lowercase letters, digits and '-', for example shop-app."
-            onChange={(value) => dispatch({ type: 'setApplication', field: 'name', value })}
-          />
-          <TextField
-            field="description"
-            label="Description"
-            multiline
-            value={draft.description}
-            problems={problems}
-            className="wide"
-            onChange={(value) => dispatch({ type: 'setApplication', field: 'description', value })}
-          />
-        </div>
-      </div>
-      <div className="boundary-note">
-        <strong>This defines the application, not a deployment.</strong>
-        <p>UC-01 records workloads, logical resources and configuration requirements. It does not choose an environment, image tag or Secret value.</p>
-      </div>
-    </section>
-  );
+  onRemove: () => void;
 }
 
 function ConfigList({ workload, group, dispatch, problems }: { workload: WorkloadDraft; group: ConfigGroup; dispatch: Dispatch<DraftAction>; problems: ProblemsByField }) {
@@ -143,7 +101,7 @@ function WorkloadDependencies({ draft, workload, dispatch, problems }: { draft: 
   );
 }
 
-export function WorkloadWorkspace({ draft, workload, dispatch, problems, onRemove }: WorkspaceProps & { workload: WorkloadDraft; onRemove: () => void }) {
+export function WorkloadWorkspace({ draft, workload, dispatch, problems, onRemove }: Props) {
   const base = `workloads.${workload.id}`;
   const label = labelOf('Workload', workload.name);
   return (
@@ -208,108 +166,6 @@ export function WorkloadWorkspace({ draft, workload, dispatch, problems, onRemov
       <div className="form-section">
         <h3>Dependencies</h3>
         <WorkloadDependencies draft={draft} workload={workload} dispatch={dispatch} problems={problems} />
-      </div>
-    </section>
-  );
-}
-
-export function ResourceWorkspace({ resource, dispatch, problems, onRemove }: WorkspaceProps & { resource: ResourceDraft; onRemove: () => void }) {
-  const label = labelOf('Resource', resource.name);
-  return (
-    <section className="workspace-panel" aria-labelledby="workspace-resource-title" aria-label={label}>
-      <div className="workspace-heading">
-        <div>
-          <p className="eyebrow">Logical resource</p>
-          <h2 id="workspace-resource-title">{resource.name || 'Unnamed resource'}</h2>
-          <p className="muted">Describe the capability the application needs. Provisioning is decided at deployment.</p>
-        </div>
-        <button type="button" className="secondary danger" onClick={onRemove}>
-          Remove resource
-        </button>
-      </div>
-      <div className="form-section">
-        <h3>Resource information</h3>
-        <div className="grid">
-          <TextField field={`resources.${resource.id}.name`} label="Resource name" required value={resource.name} problems={problems} onChange={(value) => dispatch({ type: 'updateResource', id: resource.id, field: 'name', value })} />
-          <TextField field={`resources.${resource.id}.type`} label="Resource type" required list="resource-types" value={resource.type} problems={problems} onChange={(value) => dispatch({ type: 'updateResource', id: resource.id, field: 'type', value })} />
-        </div>
-        <datalist id="resource-types">
-          <option value="PostgreSQL" />
-          <option value="Redis" />
-        </datalist>
-      </div>
-    </section>
-  );
-}
-
-function Topology({ draft }: { draft: ApplicationDraft }) {
-  if (draft.workloads.length === 0 && draft.resources.length === 0) return <p className="empty-inline">Add a workload or resource to see the topology.</p>;
-  return (
-    <div className="topology" aria-label="Read-only application topology">
-      <div className="topology-nodes">
-        {draft.workloads.map((workload) => (
-          <div className="topology-node workload-node" key={workload.id}>
-            <span className="component-symbol" aria-hidden="true">●</span>
-            <span><small>Workload</small><strong>{workload.name || 'unnamed'}</strong></span>
-          </div>
-        ))}
-        {draft.resources.map((resource) => (
-          <div className="topology-node resource-node" key={resource.id}>
-            <span className="component-symbol" aria-hidden="true">◆</span>
-            <span><small>Resource</small><strong>{resource.name || 'unnamed'}</strong></span>
-          </div>
-        ))}
-      </div>
-      <div className="topology-relations">
-        <h4>Relationships</h4>
-        {draft.dependencies.length === 0 ? (
-          <p className="empty-inline">Components are independent.</p>
-        ) : (
-          <ul>
-            {draft.dependencies.map((dependency) => (
-              <li key={dependency.id}><strong>{componentLabel(draft, dependency.sourceId)}</strong> <span>depends on →</span> <strong>{componentLabel(draft, dependency.targetId)}</strong></li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function ReviewWorkspace({ draft }: { draft: ApplicationDraft }) {
-  return (
-    <section className="workspace-panel" aria-labelledby="workspace-review-title">
-      <div className="workspace-heading">
-        <div>
-          <p className="eyebrow">Final check</p>
-          <h2 id="workspace-review-title">Review application</h2>
-          <p className="muted">Confirm the structure before saving a new immutable version.</p>
-        </div>
-      </div>
-      <div className="form-section">
-        <h3>Topology <span className="read-only-badge">Read only</span></h3>
-        <Topology draft={draft} />
-      </div>
-      <div className="form-section">
-        <h3>Component summary</h3>
-        <p className="summary-counts">{draft.workloads.length} {draft.workloads.length === 1 ? 'workload' : 'workloads'} · {draft.resources.length} {draft.resources.length === 1 ? 'resource' : 'resources'} · {draft.dependencies.length} {draft.dependencies.length === 1 ? 'dependency' : 'dependencies'}</p>
-        {draft.workloads.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th scope="col">Workload</th><th scope="col">Runtime</th><th scope="col">Outputs</th><th scope="col">Configuration</th></tr></thead>
-              <tbody>
-                {draft.workloads.map((workload) => (
-                  <tr key={workload.id}>
-                    <td><strong>{workload.name || 'unnamed'}</strong></td>
-                    <td>{workload.type || '—'}{workload.port ? ` · port ${workload.port}` : ''}</td>
-                    <td>{workload.outputs.map((output) => output.name || 'unnamed').join(', ') || '—'}</td>
-                    <td>{workload.variables.length} variables · {workload.secrets.length} secrets</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </section>
   );

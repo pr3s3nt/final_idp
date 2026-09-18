@@ -3,7 +3,10 @@ import type { ApplicationApi } from '../api/client';
 import type { Problem } from '../api/types';
 import { BuilderNavigation, workspaceForField, type Workspace } from '../components/BuilderNavigation';
 import { groupProblems } from '../../../shared/ui/Field';
-import { OverviewWorkspace, ResourceWorkspace, ReviewWorkspace, WorkloadWorkspace } from '../components/Sections';
+import { OverviewWorkspace } from '../components/OverviewWorkspace';
+import { ResourceWorkspace } from '../components/ResourceWorkspace';
+import { ReviewWorkspace } from '../components/ReviewWorkspace';
+import { WorkloadWorkspace } from '../components/WorkloadWorkspace';
 import { ValidationSummary } from '../components/ValidationSummary';
 import { draftFromDto, draftToDto, emptyDraft, newResource, newWorkload, type ApplicationDraft } from '../draft/model';
 import { draftReducer, type DraftAction } from '../draft/reducer';
@@ -302,7 +305,7 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
           )}
           {selected.kind === 'overview' && <OverviewWorkspace draft={draft} dispatch={edit} problems={problemsByField} />}
           {selected.kind === 'workload' && workload && <WorkloadWorkspace draft={draft} workload={workload} dispatch={edit} problems={problemsByField} onRemove={() => removeWorkload(workload.id)} />}
-          {selected.kind === 'resource' && resource && <ResourceWorkspace draft={draft} resource={resource} dispatch={edit} problems={problemsByField} onRemove={() => removeResource(resource.id)} />}
+          {selected.kind === 'resource' && resource && <ResourceWorkspace resource={resource} dispatch={edit} problems={problemsByField} onRemove={() => removeResource(resource.id)} />}
           {selected.kind === 'review' && <ReviewWorkspace draft={draft} />}
         </div>
       </div>
