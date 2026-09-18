@@ -44,6 +44,8 @@ server (`idp serve`) serves `dist/` under `/ui/`; see the
 | `src/draft/model.ts`, `reducer.ts` | `ApplicationDefinitionDraft` in the browser and its local edit actions |
 | `src/draft/storage.ts` | `sessionStorage` adapter with schema version and shape checks |
 | `src/draft/validation.ts` | Client-side UC-01 rules for fast feedback; the backend re-validates |
-| `src/pages/` | Application list and editor pages |
-| `src/components/` | Editor sections, fields and validation summary |
+| `src/pages/` | Application list and editor state/orchestration |
+| `src/components/BuilderNavigation.tsx` | Component-focused builder navigation and validation routing |
+| `src/components/Sections.tsx` | Overview, Workload, Resource and read-only Review workspaces |
+| `src/components/Field.tsx`, `ValidationSummary.tsx` | Accessible fields and validation navigation |
 | `src/router.ts` | Minimal History API router for `/ui/` paths |

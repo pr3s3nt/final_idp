@@ -16,39 +16,53 @@ const stored = (id: string | null) => sessionStorage.getItem(draftKey(id));
 
 async function fillNewApplication(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/^Application name/), 'orders-app');
-  await user.click(screen.getByRole('button', { name: 'Add workload' }));
-  const workload = screen.getByRole('listitem', { name: 'unnamed workload' });
-  await user.type(within(workload).getByLabelText(/^Workload name/), 'api');
-  await user.type(within(workload).getByLabelText(/^Workload type/), 'Backend Service');
-  await user.type(within(workload).getByLabelText(/^Image repository/), 'registry.company.local/orders-api');
-  await user.type(within(workload).getByLabelText(/^Port/), '8080');
-  await user.click(screen.getByRole('button', { name: 'Add output to workload api' }));
+  await user.click(screen.getByRole('button', { name: /Add workload/ }));
+  await user.type(screen.getByLabelText(/^Workload name/), 'api');
+  await user.type(screen.getByLabelText(/^Workload type/), 'Backend Service');
+  await user.type(screen.getByLabelText(/^Image repository/), 'registry.company.local/orders-api');
+  await user.type(screen.getByLabelText(/^Application port/), '8080');
+  await user.click(screen.getByRole('button', { name: /Add output/ }));
   await user.type(screen.getByLabelText('Output 1 name'), 'endpoint');
 
-  await user.click(screen.getByRole('button', { name: 'Add resource' }));
-  const resource = screen.getByRole('listitem', { name: 'unnamed resource' });
-  await user.type(within(resource).getByLabelText(/^Resource name/), 'ordersdb');
-  await user.type(within(resource).getByLabelText(/^Resource type/), 'PostgreSQL');
+  await user.click(screen.getByRole('button', { name: /Add resource/ }));
+  await user.type(screen.getByLabelText(/^Resource name/), 'ordersdb');
+  await user.type(screen.getByLabelText(/^Resource type/), 'PostgreSQL');
 
-  await user.click(screen.getByRole('button', { name: 'Add Environment Variable to workload api' }));
+  await user.click(screen.getByRole('button', { name: 'api' }));
+  await user.click(screen.getByRole('button', { name: /Add variable/ }));
   await user.type(screen.getByLabelText('Environment Variable name'), 'DB_HOST');
-  await user.click(screen.getByRole('button', { name: 'Add Secret to workload api' }));
+  await user.click(screen.getByRole('button', { name: /Add secret/ }));
   await user.type(screen.getByLabelText('Secret name'), 'DB_PASSWORD');
-
-  const newDependency = screen.getByRole('group', { name: 'New dependency' });
-  await user.selectOptions(within(newDependency).getByLabelText('Workload'), 'Workload api');
-  await user.selectOptions(within(newDependency).getByLabelText('Depends on'), 'Resource ordersdb');
-  await user.click(screen.getByRole('button', { name: 'Add dependency' }));
+  await user.click(screen.getByRole('button', { name: /Add dependency/ }));
+  await user.selectOptions(screen.getByLabelText('Component'), 'Resource ordersdb');
 }
 
 describe('create application', () => {
+  test('adds components into focused workspaces and reviews a read-only topology', async () => {
+    const { user } = open('/ui/applications/new');
+    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByLabelText(/^Workload name/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Add workload/ }));
+    expect(screen.getByRole('heading', { name: 'Unnamed workload' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Workload name/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Configuration requirements' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Dependencies' })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/^Workload name/), 'api');
+    await user.click(screen.getByRole('button', { name: 'Review' }));
+    expect(screen.getByRole('heading', { name: 'Review application' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Read-only application topology')).toHaveTextContent('api');
+    expect(screen.queryByLabelText(/^Workload name/)).not.toBeInTheDocument();
+  });
+
   test('builds a complete draft locally and saves it in one request', async () => {
     const { api, user } = open('/ui/applications/new');
     await fillNewApplication(user);
 
     expect(api.saveApplication).not.toHaveBeenCalled();
     expect(api.loadApplication).not.toHaveBeenCalled();
-    expect(screen.getByText('Unsaved changes (kept in this browser tab)')).toBeInTheDocument();
+    expect(screen.getByText('Unsaved changes · kept in this tab')).toBeInTheDocument();
     expect(JSON.parse(stored(null) ?? '{}').draft.name).toBe('orders-app');
 
     await user.click(screen.getByRole('button', { name: 'Save application' }));
@@ -80,13 +94,16 @@ describe('create application', () => {
     const summary = await screen.findByRole('alert');
     expect(within(summary).getByRole('heading')).toHaveTextContent('2 problems prevent saving');
     expect(within(summary).getByText(/An application needs at least one workload/)).toBeInTheDocument();
-    const name = screen.getByLabelText(/^Application name/);
-    expect(name).toHaveAttribute('aria-invalid', 'true');
-    expect(name).toHaveAccessibleDescription(/must use lowercase letters/);
+    const builder = screen.getByRole('navigation', { name: 'Application builder' });
+    expect(within(builder).getByRole('button', { name: /Overview.*1 problem/ })).toBeInTheDocument();
+    expect(within(builder).getByRole('button', { name: /Review.*2 problems/ })).toHaveAttribute('aria-current', 'page');
     expect(api.saveApplication).not.toHaveBeenCalled();
 
     await user.click(within(summary).getByRole('button', { name: /Application name "Orders App"/ }));
+    const name = screen.getByLabelText(/^Application name/);
     expect(name).toHaveFocus();
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription(/must use lowercase letters/);
 
     await user.clear(name);
     await user.type(name, 'orders-app');
@@ -103,16 +120,16 @@ describe('create application', () => {
     expect(screen.getByText(/Restored unsaved changes kept in this browser tab/)).toBeInTheDocument();
 
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
     await waitFor(() => expect(screen.getByLabelText(/^Application name/)).toHaveValue(''));
     expect(stored(null)).toBeNull();
-    expect(screen.getByText('No unsaved changes')).toBeInTheDocument();
+    expect(screen.getByText('Saved')).toBeInTheDocument();
   });
 
   test('offers no way to enter a Secret value', async () => {
     const { user, container } = open('/ui/applications/new');
-    await user.click(screen.getByRole('button', { name: 'Add workload' }));
-    await user.click(screen.getByRole('button', { name: 'Add Secret to unnamed workload' }));
+    await user.click(screen.getByRole('button', { name: /Add workload/ }));
+    await user.click(screen.getByRole('button', { name: /Add secret/ }));
     expect(container.querySelector('input[type="password"]')).toBeNull();
     expect(screen.queryByLabelText(/secret value/i)).toBeNull();
     expect(JSON.stringify(JSON.parse(stored(null) ?? '{}'))).not.toMatch(/"value"/);
@@ -122,14 +139,17 @@ describe('create application', () => {
 describe('edit application', () => {
   test('loads the latest version, edits locally and saves a new version with stable IDs', async () => {
     const { api, user } = open(`/ui/applications/${APP_ID}`);
-    const workload = await screen.findByRole('listitem', { name: 'Workload backend' });
-    expect(screen.getByText('Editing from version 2. Saving creates version 3.')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'backend' }));
+    expect(screen.getByText('Version 2 · next save creates version 3')).toBeInTheDocument();
 
-    const name = within(workload).getByLabelText(/^Workload name/);
+    const name = screen.getByLabelText(/^Workload name/);
     await user.clear(name);
     await user.type(name, 'api');
-    await user.click(screen.getByRole('button', { name: 'Remove resource postgresql' }));
-    expect(screen.getByText(/No dependencies/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'postgresql' }));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: 'Remove resource' }));
+    await user.click(screen.getByRole('button', { name: 'Review' }));
+    expect(screen.getByText(/Components are independent/)).toBeInTheDocument();
     expect(api.loadApplication).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole('button', { name: 'Save application' }));
@@ -160,10 +180,11 @@ describe('edit application', () => {
       })),
     });
     const { user } = open(`/ui/applications/${APP_ID}`, api);
-    await screen.findByRole('listitem', { name: 'Workload backend' });
+    await screen.findByRole('button', { name: 'backend' });
     await user.type(screen.getByLabelText('Description'), '!');
     await user.click(screen.getByRole('button', { name: 'Save application' }));
-    await screen.findByText('1 problem prevents saving');
+    const summary = await screen.findByText('1 problem prevents saving');
+    await user.click(within(summary.closest('[role="alert"]') as HTMLElement).getByRole('button', { name: /already used by another application/ }));
     expect(screen.getByLabelText(/^Application name/)).toHaveAccessibleDescription(/already used by another application/);
   });
 
@@ -185,12 +206,16 @@ describe('edit application', () => {
     expect(JSON.parse(stored(APP_ID) ?? '{}').draft.description).toBe('my change');
     expect(api.saveApplication).toHaveBeenCalledTimes(1);
 
+    await user.click(screen.getByRole('button', { name: 'Copy draft JSON' }));
+    expect(await screen.findByText('Draft JSON copied.')).toBeInTheDocument();
+    expect(await navigator.clipboard.readText()).toContain('"description": "my change"');
+
     api.loadApplication.mockResolvedValueOnce({ kind: 'ok', data: { ...shopDto(3), description: 'their change' } });
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await user.click(screen.getByRole('button', { name: 'Discard my draft and load the latest version' }));
+    await user.click(screen.getByRole('button', { name: 'Load latest version' }));
     expect(confirm).toHaveBeenCalled();
     await waitFor(() => expect(screen.getByLabelText('Description')).toHaveValue('their change'));
-    expect(screen.getByText('Editing from version 3. Saving creates version 4.')).toBeInTheDocument();
+    expect(screen.getByText('Version 3 · next save creates version 4')).toBeInTheDocument();
     expect(stored(APP_ID)).toBeNull();
   });
 
@@ -212,7 +237,7 @@ describe('edit application', () => {
     expect(await screen.findByRole('heading', { name: 'The application could not be loaded' })).toBeInTheDocument();
     api.loadApplication.mockResolvedValueOnce({ kind: 'ok', data: shopDto() });
     await user.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('listitem', { name: 'Workload backend' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'backend' })).toBeInTheDocument();
   });
 });
 
@@ -222,7 +247,7 @@ describe('application list', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Loading applications');
     await user.click(await screen.findByRole('link', { name: 'Edit shop-app' }));
     expect(window.location.pathname).toBe(`/ui/applications/${APP_ID}`);
-    expect(await screen.findByRole('listitem', { name: 'Workload backend' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'backend' })).toBeInTheDocument();
   });
 
   test('shows the empty state', async () => {

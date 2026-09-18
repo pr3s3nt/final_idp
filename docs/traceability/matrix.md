@@ -2,7 +2,7 @@
 id: TRACEABILITY-MATRIX
 artifact: traceability-matrix
 status: current
-last_reviewed: 2026-09-17
+last_reviewed: 2026-09-18
 ---
 
 # Step 6: Traceability
@@ -242,11 +242,11 @@ This section links UC-01 design operations to code and tests. Code paths are rel
 
 | Operation or rule | Implementation | Automated tests |
 |---|---|---|
-| `createApplication()`, `addWorkload()`, `addResourceRequirement()`, `defineConfigurationRequirement()`, `defineDependency()` | `frontend/src/draft/reducer.ts`, `frontend/src/components/Sections.tsx` | `frontend/src/draft/reducer.test.ts`; `ApplicationEditorPage.test.tsx` "builds a complete draft locally and saves it in one request" |
+| `createApplication()`, `addWorkload()`, `addResourceRequirement()`, `defineConfigurationRequirement()`, `defineDependency()` | `frontend/src/draft/reducer.ts`, `frontend/src/components/BuilderNavigation.tsx`, `frontend/src/components/Sections.tsx` | `frontend/src/draft/reducer.test.ts`; `ApplicationEditorPage.test.tsx` tests focused component workspaces, read-only Review topology and one-request Save |
 | Draft in `sessionStorage`: restore after refresh, Discard, clear after Save, discard incompatible data | `frontend/src/draft/storage.ts`, `frontend/src/pages/ApplicationEditorPage.tsx` | `frontend/src/draft/storage.test.ts`; editor tests for restore, Discard, Save success and Save failure |
 | `updateApplication()` | `backend/internal/web/applications.go`, `backend/internal/service/application.go`, `ApplicationRepository.LatestVersion` | `backend/internal/web/applications_test.go`; `TestUC01CreateApplication` (integration) |
 | `validateApplicationDefinition()` and A1, including naming and uniqueness rules | `backend/internal/domain/appvalidator`; client copy in `frontend/src/draft/validation.ts` | `appvalidator/validator_test.go`; `frontend/src/draft/validation.test.ts`; `TestUC01InvalidDraftWritesNothing` (integration) |
-| `saveApplicationDefinition()` with `saveNewVersionIfBaseMatches()`, stable IDs and A2 `DRAFT_CONFLICT` | `backend/internal/persistence/application_save.go` | `TestUC01EditCreatesNewVersionWithStableIDs`, `TestUC01StaleBaseVersionIsDraftConflict`, `TestUC01ConcurrentSavesFromSameBase`, `TestUC01RejectsForeignComponentIDAndTakenName` (integration); editor DRAFT_CONFLICT test |
+| `saveApplicationDefinition()` with `saveNewVersionIfBaseMatches()`, stable IDs and A2 `DRAFT_CONFLICT` | `backend/internal/persistence/application_save.go`; conflict recovery presentation in `frontend/src/pages/ApplicationEditorPage.tsx` | `TestUC01EditCreatesNewVersionWithStableIDs`, `TestUC01StaleBaseVersionIsDraftConflict`, `TestUC01ConcurrentSavesFromSameBase`, `TestUC01RejectsForeignComponentIDAndTakenName` (integration); editor DRAFT_CONFLICT test verifies draft preservation, JSON copy and confirmed reload |
 | `generateApplicationSpecification()` | `backend/internal/domain/appspec`, `backend/internal/persistence/specification_repository.go` | `appspec/generator_test.go`; `TestUC01CreateApplication` (integration) |
 | HTTP status and problem contract (200, 201, 404, 409, 422) | `backend/internal/web/applications.go`, `writeError` in `server.go` | `backend/internal/web/applications_test.go` |
 

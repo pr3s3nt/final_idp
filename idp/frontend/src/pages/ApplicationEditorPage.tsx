@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ApplicationApi } from '../api/client';
 import type { Problem } from '../api/types';
+import { BuilderNavigation, workspaceForField, type Workspace } from '../components/BuilderNavigation';
 import { groupProblems } from '../components/Field';
-import {
-  ApplicationInfoSection,
-  ConfigurationSection,
-  DependenciesSection,
-  OverviewSection,
-  ResourcesSection,
-  WorkloadsSection,
-} from '../components/Sections';
+import { OverviewWorkspace, ResourceWorkspace, ReviewWorkspace, WorkloadWorkspace } from '../components/Sections';
 import { ValidationSummary } from '../components/ValidationSummary';
-import { draftFromDto, draftToDto, emptyDraft, type ApplicationDraft } from '../draft/model';
+import { draftFromDto, draftToDto, emptyDraft, newResource, newWorkload, type ApplicationDraft } from '../draft/model';
 import { draftReducer, type DraftAction } from '../draft/reducer';
 import { loadDraft, removeDraft, saveDraft } from '../draft/storage';
 import { validateDraft } from '../draft/validation';
@@ -36,24 +30,26 @@ function fingerprint(draft: ApplicationDraft): string {
   return JSON.stringify(draftToDto(draft));
 }
 
+function draftJson(draft: ApplicationDraft): string {
+  return JSON.stringify(draftToDto(draft), null, 2);
+}
+
 export function ApplicationEditorPage({ api, applicationId, savedVersion }: Props) {
-  // A new application starts from an empty draft, or the draft this tab kept.
   const [storedNew] = useState(() => (applicationId === null ? loadDraft(null) : null));
   const [draft, dispatch] = useReducer(draftReducer, null, () => storedNew?.draft ?? emptyDraft());
   const [phase, setPhase] = useState<Phase>(applicationId ? { kind: 'loading' } : { kind: 'ready' });
   const [baseline, setBaseline] = useState(() => fingerprint(emptyDraft()));
   const [restored, setRestored] = useState<Restored | null>(storedNew ? { savedAt: storedNew.savedAt, staleBase: null } : null);
+  const [selected, setSelected] = useState<Workspace>({ kind: 'overview' });
   const [showClientErrors, setShowClientErrors] = useState(false);
   const [serverProblems, setServerProblems] = useState<Problem[]>([]);
   const [saveFailed, setSaveFailed] = useState<Problem[] | null>(null);
   const [conflict, setConflict] = useState<Problem[] | null>(null);
+  const [copyStatus, setCopyStatus] = useState('');
   const [saving, setSaving] = useState(false);
-  const [newSource, setNewSource] = useState('');
-  const [newTarget, setNewTarget] = useState('');
   const [attempt, setAttempt] = useState(0);
   const summaryRef = useRef<HTMLDivElement>(null);
 
-  // Editing loads the latest version once, then restores this tab's draft if any.
   useEffect(() => {
     if (applicationId === null) return;
     let cancelled = false;
@@ -77,6 +73,7 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
         dispatch({ type: 'replace', draft: loaded });
       }
       setBaseline(fingerprint(loaded));
+      setSelected({ kind: 'overview' });
       setPhase({ kind: 'ready' });
     });
     return () => {
@@ -86,7 +83,6 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
 
   const dirty = phase.kind === 'ready' && fingerprint(draft) !== baseline;
 
-  // Keep the non-sensitive draft of this tab in sessionStorage while it has changes.
   useEffect(() => {
     if (phase.kind !== 'ready') return;
     if (dirty) saveDraft(draft);
@@ -103,12 +99,17 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
   const shownProblems = [...(showClientErrors ? clientProblems : []), ...serverProblems];
   const problemsByField = groupProblems(shownProblems);
 
+  const openReviewAndFocus = () => {
+    setSelected({ kind: 'review' });
+    window.setTimeout(() => summaryRef.current?.focus(), 0);
+  };
+
   const save = async () => {
     setShowClientErrors(true);
     setServerProblems([]);
     setSaveFailed(null);
     if (clientProblems.length > 0) {
-      requestAnimationFrame(() => summaryRef.current?.focus());
+      openReviewAndFocus();
       return;
     }
     setSaving(true);
@@ -123,10 +124,11 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
       }
       case 'conflict':
         setConflict(result.problems);
+        setCopyStatus('');
         return;
       case 'validation':
         setServerProblems(result.problems);
-        requestAnimationFrame(() => summaryRef.current?.focus());
+        openReviewAndFocus();
         return;
       default:
         setSaveFailed(result.problems);
@@ -139,11 +141,56 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
     navigate(applicationId ? `/ui/applications/${encodeURIComponent(applicationId)}` : '/ui/applications/new');
   };
 
-  const title = applicationId ? `Edit ${draft.name || 'application'}` : 'Create application';
+  const addWorkload = () => {
+    const workload = newWorkload();
+    edit({ type: 'addWorkload', workload });
+    setSelected({ kind: 'workload', id: workload.id });
+  };
+
+  const addResource = () => {
+    const resource = newResource();
+    edit({ type: 'addResource', resource });
+    setSelected({ kind: 'resource', id: resource.id });
+  };
+
+  const removeWorkload = (id: string) => {
+    const workload = draft.workloads.find((item) => item.id === id);
+    if (!window.confirm(`Remove workload ${workload?.name || 'unnamed'} and its dependencies?`)) return;
+    edit({ type: 'removeWorkload', id });
+    const next = draft.workloads.find((item) => item.id !== id);
+    setSelected(next ? { kind: 'workload', id: next.id } : { kind: 'overview' });
+  };
+
+  const removeResource = (id: string) => {
+    const resource = draft.resources.find((item) => item.id === id);
+    if (!window.confirm(`Remove resource ${resource?.name || 'unnamed'} and its dependencies?`)) return;
+    edit({ type: 'removeResource', id });
+    const next = draft.resources.find((item) => item.id !== id);
+    setSelected(next ? { kind: 'resource', id: next.id } : { kind: 'overview' });
+  };
+
+  const copyDraft = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(draftJson(draft));
+      setCopyStatus('Draft JSON copied.');
+    } catch {
+      setCopyStatus('Copy was not available. Download the draft instead.');
+    }
+  };
+
+  const downloadDraft = () => {
+    const url = URL.createObjectURL(new Blob([draftJson(draft)], { type: 'application/json' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${draft.name || 'application'}-draft.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (phase.kind === 'loading') {
     return (
-      <p role="status" className="muted">
+      <p role="status" className="muted loading-state">
         Loading the latest application version…
       </p>
     );
@@ -152,13 +199,13 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
     return (
       <div className="banner banner-error" role="alert">
         <h1>{phase.notFound ? 'Application not found' : 'The application could not be loaded'}</h1>
-        <p>{phase.problems.map((p) => p.message).join(' ')}</p>
+        <p>{phase.problems.map((problem) => problem.message).join(' ')}</p>
         {!phase.notFound && (
           <button
             type="button"
             onClick={() => {
               setPhase({ kind: 'loading' });
-              setAttempt((n) => n + 1);
+              setAttempt((value) => value + 1);
             }}
           >
             Try again
@@ -171,78 +218,93 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
     );
   }
 
+  const workload = selected.kind === 'workload' ? draft.workloads.find((item) => item.id === selected.id) : undefined;
+  const resource = selected.kind === 'resource' ? draft.resources.find((item) => item.id === selected.id) : undefined;
+  const draftStatus = saving ? 'Saving…' : restored && dirty ? 'Restored draft' : dirty ? 'Unsaved changes · kept in this tab' : 'Saved';
+  const versionStatus = draft.baseVersion ? `Version ${draft.baseVersion} · next save creates version ${draft.baseVersion + 1}` : 'New application · first save creates version 1';
+
   return (
     <form
-      className="editor"
+      className="editor-shell"
       aria-labelledby="editor-title"
       noValidate
-      onSubmit={(e) => {
-        e.preventDefault();
+      onSubmit={(event) => {
+        event.preventDefault();
         void save();
       }}
     >
-      <div className="page-header">
-        <div>
-          <a href="/ui/applications" onClick={linkHandler('/ui/applications')}>
+      <header className="editor-header">
+        <div className="editor-identity">
+          <a href="/ui/applications" onClick={linkHandler('/ui/applications')} className="back-link">
             ← Applications
           </a>
-          <h1 id="editor-title">{title}</h1>
-          <p className="muted">{draft.baseVersion ? `Editing from version ${draft.baseVersion}. Saving creates version ${draft.baseVersion + 1}.` : 'Saving creates version 1.'}</p>
+          <div>
+            <h1 id="editor-title">{draft.name || (applicationId ? 'Unnamed application' : 'New application')}</h1>
+            <p className="editor-meta"><span>{versionStatus}</span><span className={dirty ? 'status-dirty' : 'status-saved'}>{draftStatus}</span></p>
+          </div>
         </div>
-      </div>
-
-      {savedVersion !== undefined && !dirty && (
-        <div className="banner banner-success" role="status">
-          Saved version {savedVersion}. The draft was cleared. Running environments change only when this version is deployed.
-        </div>
-      )}
-      {restored && (
-        <div className="banner banner-info" role="status">
-          Restored unsaved changes kept in this browser tab since {new Date(restored.savedAt).toLocaleString()}.
-          {restored.staleBase && (
-            <strong>
-              {' '}
-              The draft started from version {restored.staleBase.draftBase}, but version {restored.staleBase.latest} is now the latest. Saving will report a conflict.
-            </strong>
-          )}
-        </div>
-      )}
-      {conflict && (
-        <div className="banner banner-error" role="alert">
-          <h2>Someone saved a newer version first</h2>
-          <p>{conflict.map((p) => p.message).join(' ')}</p>
-          <p>Nothing was saved and your changes are still here. Note them, then load the latest version and apply them again.</p>
-          <button type="button" onClick={() => reload('Discard your draft and load the latest version? Your unsaved changes will be lost.')}>
-            Discard my draft and load the latest version
+        <div className="header-actions">
+          <button type="button" className="secondary" disabled={saving || !dirty} onClick={() => reload('Discard all unsaved changes?')}>
+            Discard
+          </button>
+          <button type="submit" disabled={saving} aria-busy={saving}>
+            {saving ? 'Saving…' : 'Save application'}
           </button>
         </div>
-      )}
-      {saveFailed && (
-        <div className="banner banner-error" role="alert">
-          <h2>Save failed</h2>
-          <p>{saveFailed.map((p) => p.message).join(' ')}</p>
-          <p>Your changes are still here. Try saving again.</p>
+      </header>
+
+      <div className="editor-notices">
+        {savedVersion !== undefined && !dirty && (
+          <div className="banner banner-success" role="status">
+            Saved version {savedVersion}. The draft was cleared. Running environments change only when this version is deployed.
+          </div>
+        )}
+        {restored && (
+          <div className="banner banner-info" role="status">
+            Restored unsaved changes kept in this browser tab since {new Date(restored.savedAt).toLocaleString()}.
+            {restored.staleBase && (
+              <strong> The draft started from version {restored.staleBase.draftBase}, but version {restored.staleBase.latest} is now the latest. Saving will report a conflict.</strong>
+            )}
+          </div>
+        )}
+        {conflict && (
+          <div className="banner banner-error conflict-panel" role="alert">
+            <h2>Someone saved a newer version first</h2>
+            <p>{conflict.map((problem) => problem.message).join(' ')}</p>
+            <p>Nothing was saved and your draft is still in this tab. Keep a copy before loading the latest version if you need to reapply these changes.</p>
+            <div className="conflict-actions">
+              <button type="button" className="secondary" onClick={() => void copyDraft()}>Copy draft JSON</button>
+              {typeof URL.createObjectURL === 'function' && <button type="button" className="secondary" onClick={downloadDraft}>Download draft JSON</button>}
+              <button type="button" onClick={() => reload('Discard your draft and load the latest version? Your unsaved changes will be lost.')}>Load latest version</button>
+            </div>
+            {copyStatus && <p role="status" className="copy-status">{copyStatus}</p>}
+          </div>
+        )}
+        {saveFailed && (
+          <div className="banner banner-error" role="alert">
+            <h2>Save failed</h2>
+            <p>{saveFailed.map((problem) => problem.message).join(' ')}</p>
+            <p>Your changes are still here. Use Save application to try again.</p>
+          </div>
+        )}
+      </div>
+
+      <div className="builder-layout">
+        <BuilderNavigation draft={draft} selected={selected} problems={shownProblems} onSelect={setSelected} onAddWorkload={addWorkload} onAddResource={addResource} />
+        <div className="builder-workspace">
+          {selected.kind === 'review' && (
+            <ValidationSummary
+              ref={summaryRef}
+              problems={shownProblems}
+              title={`${shownProblems.length} ${shownProblems.length === 1 ? 'problem prevents' : 'problems prevent'} saving`}
+              onSelectField={(field) => setSelected(workspaceForField(draft, field))}
+            />
+          )}
+          {selected.kind === 'overview' && <OverviewWorkspace draft={draft} dispatch={edit} problems={problemsByField} />}
+          {selected.kind === 'workload' && workload && <WorkloadWorkspace draft={draft} workload={workload} dispatch={edit} problems={problemsByField} onRemove={() => removeWorkload(workload.id)} />}
+          {selected.kind === 'resource' && resource && <ResourceWorkspace draft={draft} resource={resource} dispatch={edit} problems={problemsByField} onRemove={() => removeResource(resource.id)} />}
+          {selected.kind === 'review' && <ReviewWorkspace draft={draft} />}
         </div>
-      )}
-      <ValidationSummary ref={summaryRef} problems={shownProblems} title={`${shownProblems.length} ${shownProblems.length === 1 ? 'problem prevents' : 'problems prevent'} saving`} />
-
-      <ApplicationInfoSection draft={draft} dispatch={edit} problems={problemsByField} />
-      <WorkloadsSection draft={draft} dispatch={edit} problems={problemsByField} />
-      <ResourcesSection draft={draft} dispatch={edit} problems={problemsByField} />
-      <ConfigurationSection draft={draft} dispatch={edit} problems={problemsByField} />
-      <DependenciesSection draft={draft} dispatch={edit} problems={problemsByField} newSource={newSource} newTarget={newTarget} setNewSource={setNewSource} setNewTarget={setNewTarget} />
-      <OverviewSection draft={draft} />
-
-      <div className="actions">
-        <span role="status" className="muted">
-          {saving ? 'Saving…' : dirty ? 'Unsaved changes (kept in this browser tab)' : 'No unsaved changes'}
-        </span>
-        <button type="button" className="secondary" disabled={saving || !dirty} onClick={() => reload('Discard all unsaved changes?')}>
-          Discard changes
-        </button>
-        <button type="submit" disabled={saving} aria-busy={saving}>
-          {saving ? 'Saving…' : 'Save application'}
-        </button>
       </div>
     </form>
   );

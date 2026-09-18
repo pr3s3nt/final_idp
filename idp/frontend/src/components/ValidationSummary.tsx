@@ -5,6 +5,7 @@ import { fieldDomId } from './Field';
 interface Props {
   problems: Problem[];
   title: string;
+  onSelectField?: (field: string) => void;
 }
 
 function focusField(field: string) {
@@ -15,7 +16,7 @@ function focusField(field: string) {
 }
 
 /** Lists every problem; a problem tied to an input moves focus to it. */
-export const ValidationSummary = forwardRef<HTMLDivElement, Props>(function ValidationSummary({ problems, title }, ref) {
+export const ValidationSummary = forwardRef<HTMLDivElement, Props>(function ValidationSummary({ problems, title, onSelectField }, ref) {
   if (problems.length === 0) return null;
   return (
     <div className="banner banner-error" role="alert" tabIndex={-1} ref={ref}>
@@ -24,7 +25,15 @@ export const ValidationSummary = forwardRef<HTMLDivElement, Props>(function Vali
         {problems.map((p, i) => (
           <li key={i}>
             {p.field ? (
-              <button type="button" className="link" onClick={() => focusField(p.field ?? '')}>
+              <button
+                type="button"
+                className="link"
+                onClick={() => {
+                  const field = p.field ?? '';
+                  onSelectField?.(field);
+                  window.setTimeout(() => focusField(field), 0);
+                }}
+              >
                 {p.message}
               </button>
             ) : (
