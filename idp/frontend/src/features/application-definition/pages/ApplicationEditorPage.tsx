@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { ApplicationApi } from '../api/client';
 import type { Problem } from '../api/types';
 import { BuilderNavigation, workspaceForField, type Workspace } from '../components/BuilderNavigation';
@@ -8,10 +8,12 @@ import { ResourceWorkspace } from '../components/ResourceWorkspace';
 import { ReviewWorkspace } from '../components/ReviewWorkspace';
 import { WorkloadWorkspace } from '../components/WorkloadWorkspace';
 import { ValidationSummary } from '../components/ValidationSummary';
-import { draftFromDto, draftToDto, emptyDraft, newResource, newWorkload, type ApplicationDraft } from '../draft/model';
-import { draftReducer, type DraftAction } from '../draft/reducer';
-import { loadDraft, removeDraft, saveDraft } from '../draft/storage';
+import { draftToDto, newResource, newWorkload } from '../draft/model';
+import type { DraftAction } from '../draft/reducer';
+import { removeDraft } from '../draft/storage';
 import { validateDraft } from '../draft/validation';
+import { useApplicationDraft } from '../hooks/useApplicationDraft';
+import { useDraftExport } from '../hooks/useDraftExport';
 import { linkHandler, navigate } from '../../../app/router';
 
 interface Props {
@@ -21,82 +23,22 @@ interface Props {
   savedVersion?: number;
 }
 
-type Phase = { kind: 'loading' } | { kind: 'load-failed'; problems: Problem[]; notFound: boolean } | { kind: 'ready' };
-
-interface Restored {
-  savedAt: string;
-  staleBase: { draftBase: number; latest: number } | null;
-}
-
-/** Comparable form of a draft; ignores client-only keys such as output IDs. */
-function fingerprint(draft: ApplicationDraft): string {
-  return JSON.stringify(draftToDto(draft));
-}
-
-function draftJson(draft: ApplicationDraft): string {
-  return JSON.stringify(draftToDto(draft), null, 2);
-}
-
 export function ApplicationEditorPage({ api, applicationId, savedVersion }: Props) {
-  const [storedNew] = useState(() => (applicationId === null ? loadDraft(null) : null));
-  const [draft, dispatch] = useReducer(draftReducer, null, () => storedNew?.draft ?? emptyDraft());
-  const [phase, setPhase] = useState<Phase>(applicationId ? { kind: 'loading' } : { kind: 'ready' });
-  const [baseline, setBaseline] = useState(() => fingerprint(emptyDraft()));
-  const [restored, setRestored] = useState<Restored | null>(storedNew ? { savedAt: storedNew.savedAt, staleBase: null } : null);
+  const { draft, dispatch, phase, dirty, restored, retry } = useApplicationDraft(api, applicationId);
+  const { copyStatus, clearStatus, copyDraft, downloadDraft, canDownload } = useDraftExport(draft);
   const [selected, setSelected] = useState<Workspace>({ kind: 'overview' });
   const [showClientErrors, setShowClientErrors] = useState(false);
   const [serverProblems, setServerProblems] = useState<Problem[]>([]);
   const [saveFailed, setSaveFailed] = useState<Problem[] | null>(null);
   const [conflict, setConflict] = useState<Problem[] | null>(null);
-  const [copyStatus, setCopyStatus] = useState('');
   const [saving, setSaving] = useState(false);
-  const [attempt, setAttempt] = useState(0);
   const summaryRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (applicationId === null) return;
-    let cancelled = false;
-    api.loadApplication(applicationId).then((result) => {
-      if (cancelled) return;
-      if (result.kind !== 'ok') {
-        setPhase({ kind: 'load-failed', problems: result.problems, notFound: result.kind === 'not-found' });
-        return;
-      }
-      const loaded = draftFromDto(result.data);
-      const latest = result.data.baseVersion;
-      const stored = loadDraft(applicationId);
-      if (stored) {
-        const draftBase = stored.draft.baseVersion;
-        dispatch({ type: 'replace', draft: stored.draft });
-        setRestored({
-          savedAt: stored.savedAt,
-          staleBase: latest !== null && draftBase !== null && draftBase !== latest ? { draftBase, latest } : null,
-        });
-      } else {
-        dispatch({ type: 'replace', draft: loaded });
-      }
-      setBaseline(fingerprint(loaded));
-      setSelected({ kind: 'overview' });
-      setPhase({ kind: 'ready' });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, applicationId, attempt]);
-
-  const dirty = phase.kind === 'ready' && fingerprint(draft) !== baseline;
-
-  useEffect(() => {
-    if (phase.kind !== 'ready') return;
-    if (dirty) saveDraft(draft);
-    else removeDraft(applicationId);
-  }, [draft, dirty, phase.kind, applicationId]);
 
   const edit = useCallback((action: DraftAction) => {
     dispatch(action);
     setServerProblems([]);
     setSaveFailed(null);
-  }, []);
+  }, [dispatch]);
 
   const clientProblems = useMemo(() => validateDraft(draft), [draft]);
   const shownProblems = [...(showClientErrors ? clientProblems : []), ...serverProblems];
@@ -127,7 +69,7 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
       }
       case 'conflict':
         setConflict(result.problems);
-        setCopyStatus('');
+        clearStatus();
         return;
       case 'validation':
         setServerProblems(result.problems);
@@ -172,25 +114,6 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
     setSelected(next ? { kind: 'resource', id: next.id } : { kind: 'overview' });
   };
 
-  const copyDraft = async () => {
-    try {
-      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
-      await navigator.clipboard.writeText(draftJson(draft));
-      setCopyStatus('Draft JSON copied.');
-    } catch {
-      setCopyStatus('Copy was not available. Download the draft instead.');
-    }
-  };
-
-  const downloadDraft = () => {
-    const url = URL.createObjectURL(new Blob([draftJson(draft)], { type: 'application/json' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${draft.name || 'application'}-draft.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
   if (phase.kind === 'loading') {
     return (
       <p role="status" className="muted loading-state">
@@ -204,13 +127,7 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
         <h1>{phase.notFound ? 'Application not found' : 'The application could not be loaded'}</h1>
         <p>{phase.problems.map((problem) => problem.message).join(' ')}</p>
         {!phase.notFound && (
-          <button
-            type="button"
-            onClick={() => {
-              setPhase({ kind: 'loading' });
-              setAttempt((value) => value + 1);
-            }}
-          >
+          <button type="button" onClick={retry}>
             Try again
           </button>
         )}{' '}
@@ -277,7 +194,7 @@ export function ApplicationEditorPage({ api, applicationId, savedVersion }: Prop
             <p>Nothing was saved and your draft is still in this tab. Keep a copy before loading the latest version if you need to reapply these changes.</p>
             <div className="conflict-actions">
               <button type="button" className="secondary" onClick={() => void copyDraft()}>Copy draft JSON</button>
-              {typeof URL.createObjectURL === 'function' && <button type="button" className="secondary" onClick={downloadDraft}>Download draft JSON</button>}
+              {canDownload && <button type="button" className="secondary" onClick={downloadDraft}>Download draft JSON</button>}
               <button type="button" onClick={() => reload('Discard your draft and load the latest version? Your unsaved changes will be lost.')}>Load latest version</button>
             </div>
             {copyStatus && <p role="status" className="copy-status">{copyStatus}</p>}
